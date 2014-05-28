@@ -1,0 +1,298 @@
+{
+
+	Int_t CA = 56;
+	Int_t CB = 9;
+	
+/*	CA = 119;
+	CB = 10;*/
+	//CA+=64; CB+=64;
+	
+	CA = 113; CB = 1; //A
+	CA = 114; CB = 0; //B
+	//CA = 115; CB = 5; //C
+	//CA = 118; CB = 3; //D
+	//CA = 125; CB = 10; //E
+	CA = 122; CB = 15;
+//	CA = 119; CB = 9;
+
+	Float_t T = 6250;
+	FILE * ctrTable = fopen("ctr.txt", "w");
+	Float_t step1;      lmData->SetBranchAddress("step1", &step1);   
+	Float_t step2;      lmData->SetBranchAddress("step2", &step2);   
+	Float_t fTime1;		lmData->SetBranchAddress("time1", &fTime1);
+	Float_t crystal1;	lmData->SetBranchAddress("crystal1", &crystal1);
+	Float_t tot1;		lmData->SetBranchAddress("tot1", &tot1);
+	Float_t fTime2;		lmData->SetBranchAddress("time2", &fTime2);
+	Float_t crystal2;	lmData->SetBranchAddress("crystal2", &crystal2);
+	Float_t tot2;		lmData->SetBranchAddress("tot2", &tot2);
+	Float_t delta;		lmData->SetBranchAddress("delta", &delta);
+	Float_t n1;		lmData->SetBranchAddress("n1", &n1);
+	Float_t n2;		lmData->SetBranchAddress("n1", &n2);
+	Float_t fTimediff;
+	
+	gStyle->SetPalette(1);
+	gStyle->SetOptFit(1);
+	TCanvas *c = new TCanvas();
+	c->Divide(3,1);
+	
+	
+    
+	Int_t nBinsToT = 500;
+	TH2F * hToTx = new TH2F("hToTx", "ToT", nBinsToT, 0, 500, nBinsToT, 0, 500);
+	hToTx->GetXaxis()->SetTitle("Crystal 1 ToT (ns)");
+	hToTx->GetYaxis()->SetTitle("Crystal 2 ToT (ns)");
+		
+	Double_t tBinWidth = 50E-12;
+	Double_t wMax = 10E-9;
+	TH1F *hDelta = new TH1F("delta", "delta", 2*wMax/tBinWidth, -wMax, wMax);	
+	TH1F *hDeltaTW1 = new TH1F("delta_tw1", "delta_tw1", 2*wMax/tBinWidth, -wMax, wMax);
+	TH1F *hDeltaTW2 = new TH1F("delta_tw2", "delta_tw2", 2*wMax/tBinWidth, -wMax, wMax);	
+	
+	TH2F *hDD = new TH2F("hDD", "hDD", 500, 0, 2*T*1E-12, 160, -2E-9, 2E-9);
+	hDD->GetXaxis()->SetTitle("#frac{t1+t2}{2} (s)");
+	hDD->GetYaxis()->SetTitle("t1-t2 (s)");
+
+	TProfile *pTW1 = new TProfile("pTW1", "Time Walk 1", nBinsToT, 0, 500);
+	pTW1->GetXaxis()->SetTitle("Crystal 1 ToT (ns)");
+	pTW1->GetYaxis()->SetTitle("Time difference (s)");
+	
+	TProfile *pTW1 = new TProfile("pTW2", "Time Walk 1", nBinsToT, 0, 500);
+	pTW2->GetXaxis()->SetTitle("Crystal 2 ToT (ns)");
+	pTW2->GetYaxis()->SetTitle("Time difference (s)");
+	
+
+	
+	Int_t stepBegin = 0;
+      Int_t nEvents = lmData->GetEntries();
+
+    do {
+        hToTx->Reset();
+        hDelta->Reset();
+	pTW1->Reset();
+	pTW2->Reset();
+	hDD->Reset();
+        
+        lmData->GetEntry(stepBegin);
+        Float_t currentStep1 = step1;
+        Float_t currentStep2 = step2;
+        
+        Int_t stepEnd = stepBegin + 1;
+        while(stepEnd < nEvents) {
+		lmData->GetEntry(stepEnd);	    
+		if(step1 != currentStep1 || step2 != currentStep2) 
+			break;
+		
+		if((CA == -1 || crystal1 == CA) && (CB == -1 || crystal2 == CB)) {
+			hToTx->Fill(tot1, tot2);
+		}
+            
+            stepEnd++;
+            
+        }
+        
+        printf("Step (%6.3f %6.3f) event range: %d to %d\n", currentStep1, currentStep2, stepBegin, stepEnd);
+		TH1 *hToT1 = hToTx->ProjectionX("hToT1");
+		TH1 *hToT2 = hToTx->ProjectionY("hToT2");
+        
+        TSpectrum *spectrum = new TSpectrum();
+        spectrum->Search(hToT1, 3, " ",  0.2);
+        Int_t nPeaks = spectrum->GetNPeaks();
+        if (nPeaks == 0) {
+            printf("No peaks in hToT1!!!\n");
+            stepBegin = stepEnd; continue;
+        }
+        Float_t *xPositions = spectrum->GetPositionX();
+        Float_t x1_psc = 0;
+	Float_t x1_pe = 0;
+        for(Int_t i = 0; i < nPeaks; i++) {
+            if(xPositions[i] > x1_pe) {
+				if(x1_pe > x1_psc)
+				x1_psc = x1_pe;
+				x1_pe = xPositions[i];
+			}
+        } 
+
+
+        TSpectrum *spectrum = new TSpectrum();
+        spectrum->Search(hToT2, 3, " ",  0.2);
+        Int_t nPeaks = spectrum->GetNPeaks();
+        if (nPeaks == 0) {
+            printf("No peaks in hToT2!!!\n");
+            stepBegin = stepEnd; continue;
+        }
+        Float_t *xPositions = spectrum->GetPositionX();
+        Float_t x2_psc = 0;
+	Float_t x2_pe = 0;
+        for(Int_t i = 0; i < nPeaks; i++) {
+            if(xPositions[i] > x2_pe) {
+				if(x2_pe > x2_psc)
+					x2_psc = x2_pe;
+				x2_pe = xPositions[i];
+			}
+        } 
+		
+	Float_t x1 = x1_pe;
+	Float_t x2 = x2_pe;
+	
+
+	hToT1->Fit("gaus", "", "", x1-10, x1+10);
+	if(hToT1->GetFunction("gaus") == NULL) { stepBegin = stepEnd;   continue; }
+	x1 = hToT1->GetFunction("gaus")->GetParameter(1);
+        Float_t sigma1 = hToT1->GetFunction("gaus")->GetParameter(2);
+
+	hToT2->Fit("gaus", "", "", x2-10, x2+10);
+	if(hToT2->GetFunction("gaus") == NULL) { stepBegin = stepEnd;   continue; }
+	x2 = hToT2->GetFunction("gaus")->GetParameter(1);
+        Float_t sigma2 = hToT2->GetFunction("gaus")->GetParameter(2);
+	
+	
+/*
+	Float_t x1, x2; x1 = 73; x2 = 86;
+	Float_t sigma1, sigma2; sigma1 = sigma2 = 20;*/
+	
+	Float_t sN = 1.0;
+	
+	
+// 	for(Int_t i = stepBegin; i < stepEnd; i++) {
+// 		lmData->GetEntry(i);
+// 		if((CA != -1 && crystal1 != CA) || (CB != -1 && crystal2 != CB)) continue;
+// 		
+// 		if((tot1 < (x1 - sN*sigma1)) || (tot1 > (x1 + sN*sigma1))) 
+// 		continue;
+// 
+// 		if((tot2 < (x2 - sN*sigma2)) || (tot2 > (x2 + sN*sigma2))) 
+// 		continue;
+// 		
+// 		
+// 		hDD->Fill(fmod(((fTime1+fTime2)/2), 2*T)*1E-12, delta*1E-12);
+// 		
+// 	}
+// 	
+// 	TF1 *fSinus = new TF1("fSinus", "[0]*cos(2*TMath::Pi()*320E6*x + [1]) + [2]");
+// 	TProfile *pDD = hDD->ProfileX("hDD_pfx_1");
+// 	pDD->Fit(fSinus);
+// 	TF1 *fSinus1 = pDD->GetFunction("fSinus");
+// 	hDD->Reset();
+// 
+
+//	for(Int_t i = stepBegin; i < stepEnd; i++) {
+//		lmData->GetEntry(i);
+//		if((CA != -1 && crystal1 != CA) || (CB != -1 && crystal2 != CB)) continue;
+//
+//		if((tot1 < (x1 - sN*sigma1)) || (tot1 > (x1 + sN*sigma1))) continue;
+//
+//		if((tot2 < (x2 - sN*sigma2)) || (tot2 > (x2 + sN*sigma2))) continue;
+//
+//		pTW1->Fill(tot1, +delta*1E-12);
+//		pTW2->Fill(tot2, -delta*1E-12);
+ //       }        
+        
+//	pTW1->GetXaxis()->SetRangeUser(x1 - sN*sigma1, x1 + sN*sigma1);	
+//	pTW2->GetXaxis()->SetRangeUser(x2 - sN*sigma2, x2 + sN*sigma2);
+//
+//	
+ //	pTW1->Fit("pol2", "", "", x1 - sN*sigma1, x1 + sN*sigma1);
+ //	TF1 *fTW1 = pTW1->GetFunction("pol2");
+ //	pTW2->Fit("pol2", "", "", x2 - sN*sigma2, x2 + sN*sigma2);
+ //	TF1 *fTW2 = pTW2->GetFunction("pol2");
+//	
+        for(Int_t i = stepBegin; i < stepEnd; i++) {
+            lmData->GetEntry(i);
+	    if((CA != -1 && crystal1 != CA) || (CB != -1 && crystal2 != CB)) continue;
+     
+            if((tot1 < (x1 - sN*sigma1)) || (tot1 > (x1 + sN*sigma1))) 
+                continue;
+        
+            if((tot2 < (x2 - sN*sigma2)) || (tot2 > (x2 + sN*sigma2))) 
+                continue;
+	    
+/*	    if(fmod(fTime1, 1024*12.5E3) < 1000E3) continue;
+	    if(fmod(fTime2, 1024*12.5E3) < 1000E3) continue;*/
+	    
+	    
+/*   	    if(fmod(fTime1, 6250) < 2*1250 || fmod(fTime1, 6250) > 2.5*1250) continue;
+   	    if(fmod(fTime2, 6250) < 2*1250 || fmod(fTime2, 6250) > 2.5*1250) continue;*/
+/*    	    if(fmod(fTime1, 6250) < 0.1*6250 || fmod(fTime1, 6250) > 0.2*6250) continue;
+    	    if(fmod(fTime2, 6250) < 0.1*6250 || fmod(fTime2, 6250) > 0.2*6250) continue;*/
+// 	    fTimediff = abs(fTime1-fTime2);
+// 	    printf("fTime1: %f\t - fTime2: %f = \t%f\n", fTime1, fTime2, fTimediff);
+
+
+		Float_t correctedDelta = delta*1E-12;
+		
+ 		Float_t tw1 = 0;//+fTW1->Eval(tot1);
+ 		Float_t tw2 = 0;//-fTW2->Eval(tot2);
+ 		correctedDelta -= (tw1 + tw2);
+// 		hDeltaTW1->Fill(tw1);
+// 		hDeltaTW2->Fill(tw2);
+// 		
+//  		correctedDelta -= fSinus1->Eval(fmod(((fTime1+fTime2)/2), 2*T)*1E-12);
+		
+		hDelta->Fill(correctedDelta);
+		hDD->Fill(fmod(((fTime1+fTime2)/2), 2*T)*1E-12, correctedDelta);
+        }
+        
+        pDD = hDD->ProfileX("hDD_pfx_2");
+        
+	char functionName[128];
+	sprintf(functionName, "fCoincidence_%07d_%07d", int(1000*step1), int(1000*step2));	
+	pdf1 = new TF1(functionName, "[0]*exp(-0.5*((x-[1])/[2])**2) + [3]", -wMax, wMax);
+	pdf1->SetNpx(hDelta->GetNbinsX());
+	pdf1->SetParName(0, "Constant");
+	pdf1->SetParName(1, "Mean");
+	pdf1->SetParName(2, "Sigma");
+	pdf1->SetParName(3, "Base");
+	float hdMax = hDelta->GetMaximum();
+	float hdMean = hDelta->GetMean();
+	float hdRMS = hDelta->GetRMS();
+	float hdAvg = hDelta->GetEntries()/hDelta->GetNbinsX();
+	pdf1->SetParameter(0, hdMax);	pdf1->SetParLimits(0, 0.5 * hdMax, 1.5 * hdMax);
+	pdf1->SetParameter(1, hdMean);	pdf1->SetParLimits(1, hdMean - 1.0 * hdRMS, hdMean + 1.0 * hdRMS);
+	pdf1->SetParameter(2, hdRMS);	pdf1->SetParLimits(2, 25E-12,  1.0 * hdRMS);
+	pdf1->SetParameter(3, 0);	pdf1->SetParLimits(3, 0, hdAvg);
+	
+	hDelta->Fit(functionName);
+        hDelta->Draw();
+	
+	char hName[128];
+	sprintf(hName, "hDelta_%07d_%07d", int(1000*step1), int(1000*step2));
+	hDelta->Clone(hName);
+	sprintf(hName, "hToT1_%07d_%07d", int(1000*step1), int(1000*step2));
+	hToT1->Clone(hName);	
+	sprintf(hName, "ToT2_%07d_%07d", int(1000*step1), int(1000*step2));
+	hToT2->Clone(hName);	
+
+        TF1 *ff = hDelta->GetFunction(functionName);
+        if(ff != NULL) {        
+            fprintf(ctrTable, "%f\t%f\t%f\t%f\t%f\t%f\t%e\t%e\t%e\t%e\t\n", 
+                step1, step2, 
+                x1, sigma1, x2, sigma2, 
+                fabs(ff->GetParameter(2)), ff->GetParError(2),
+                ff->GetParameter(1), ff->GetParError(1)
+//                ff->GetNFD() != 0 ? (ff->GetChisquare()/ff->GetNDF()) : INFINITY
+                );
+	    fflush(ctrTable);
+        }          
+        
+        stepBegin = stepEnd;   
+    } while(stepBegin < nEvents); 
+
+    fclose(ctrTable);
+    
+    c->Close();
+    c = new TCanvas();
+    c->Divide(3,1);
+    c->cd(1);
+    hToT1->Draw();
+    c->cd(2);
+    hDelta->Draw();
+    c->cd(3);
+    hToT2->Draw();
+    
+/*    c = new TCanvas();
+    c->Divide(2,1);
+    c->cd(1);
+    pTW1->Draw();
+    c->cd(2);
+    pTW2->Draw();*/
+}
