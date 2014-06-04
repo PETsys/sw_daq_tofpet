@@ -1,6 +1,6 @@
 import re
 import numpy as np
-
+from sys import argv
 def readBaselineProposal(fileName):
     v=[]
     sig=[]
@@ -21,7 +21,8 @@ def readBaselineProposal(fileName):
     data.append(sig)
     return data
 
-
+sipm_dc_0=int(argv[1])
+sipm_dc_1=int(argv[2])
 
 data0=readBaselineProposal("MA.baseline")
 data1=readBaselineProposal("MB.baseline")
@@ -38,38 +39,38 @@ average_th2=np.average(th2)
 average_sig1=np.average(sig1)
 average_sig2=np.average(sig2)
 
+proposal0=0
 proposal1=0
-proposal2=0
 
 if (np.amin(th1)==0 or average_th1<10):
     #print "No counts were found for this postamp value: increasing 5 adc units"
-    proposal1=-5
+    proposal0=-5
 if (average_th1>62):
-    proposal1=-2
+    proposal0=-2
 if (average_th1>56 or np.amax(th1)>60 or np.amax(sig1) > 5):
-    proposal1=-1
+    proposal0=-1
 if (average_th1<49 or np.amin(th1)<46):
-    proposal1=1
+    proposal0=1
 if (average_th1<46):
-    proposal1=2
+    proposal0=2
 if (average_th1<40):
-    proposal1=5
+    proposal0=5
 
 if (np.amin(th2)==0 or average_th2<10):
     #print "No counts were found for this postamp value: increasing 5 adc units"
-    proposal2=-5
+    proposal1=-5
 if (average_th2>62):
-    proposal2=-2
+    proposal1=-2
 if (average_th2>56 or np.amax(th2)>60 or np.amax(sig2) > 5):
-    proposal2=-1
+    proposal1=-1
 if (average_th2<49 or np.amin(th2)<46):
-    proposal2=1
+    proposal1=1
 if (average_th2<46):
-    proposal2=2
+    proposal1=2
 if (average_th2<40):
-    proposal2=5
+    proposal1=5
 
-print proposal1, proposal2
+print sipm_dc_0+proposal0, sipm_dc_1+proposal1
 
 if(proposal1==0 and np.std(th1)>1.5):
     print '\n'
