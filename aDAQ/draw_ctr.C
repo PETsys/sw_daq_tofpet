@@ -7,28 +7,25 @@
 	CB = 10;*/
 	//CA+=64; CB+=64;
 	
-	CA = 113; CB = 1; //A
-	CA = 114; CB = 0; //B
-	//CA = 115; CB = 5; //C
-	//CA = 118; CB = 3; //D
-	//CA = 125; CB = 10; //E
-	CA = 122; CB = 15;
+	//	CA = 113; CB = 1; //A
+//	CA = 114; CB = 0; //B
+// 	CA = 115; CB = 5; //C
+// 	CA = 118; CB = 4; //D
+ 	CA = 118; CB = 10; //E
+//	CA = 122; CB = 15;
 //	CA = 119; CB = 9;
+	CA = 119; CB=4;
 
 	Float_t T = 6250;
 	FILE * ctrTable = fopen("ctr.txt", "w");
 	Float_t step1;      lmData->SetBranchAddress("step1", &step1);   
 	Float_t step2;      lmData->SetBranchAddress("step2", &step2);   
-	Float_t fTime1;		lmData->SetBranchAddress("time1", &fTime1);
-	Float_t crystal1;	lmData->SetBranchAddress("crystal1", &crystal1);
+	Long64_t fTime1;		lmData->SetBranchAddress("time1", &fTime1);
+	UShort_t channel1;	lmData->SetBranchAddress("channel1", &channel1);
 	Float_t tot1;		lmData->SetBranchAddress("tot1", &tot1);
-	Float_t fTime2;		lmData->SetBranchAddress("time2", &fTime2);
-	Float_t crystal2;	lmData->SetBranchAddress("crystal2", &crystal2);
+	Long64_t fTime2;		lmData->SetBranchAddress("time2", &fTime2);
+	UShort_t channel2;	lmData->SetBranchAddress("channel2", &channel2);
 	Float_t tot2;		lmData->SetBranchAddress("tot2", &tot2);
-	Float_t delta;		lmData->SetBranchAddress("delta", &delta);
-	Float_t n1;		lmData->SetBranchAddress("n1", &n1);
-	Float_t n2;		lmData->SetBranchAddress("n1", &n2);
-	Float_t fTimediff;
 	
 	gStyle->SetPalette(1);
 	gStyle->SetOptFit(1);
@@ -44,9 +41,9 @@
 		
 	Double_t tBinWidth = 50E-12;
 	Double_t wMax = 10E-9;
-	TH1F *hDelta = new TH1F("delta", "delta", 2*wMax/tBinWidth, -wMax, wMax);	
-	TH1F *hDeltaTW1 = new TH1F("delta_tw1", "delta_tw1", 2*wMax/tBinWidth, -wMax, wMax);
-	TH1F *hDeltaTW2 = new TH1F("delta_tw2", "delta_tw2", 2*wMax/tBinWidth, -wMax, wMax);	
+	TH1F *hDelta = new TH1F("hDelta", "Delta", 2*wMax/tBinWidth, -wMax, wMax);	
+	TH1F *hDeltaTW1 = new TH1F("hDelta_tw1", "delta_tw1", 2*wMax/tBinWidth, -wMax, wMax);
+	TH1F *hDeltaTW2 = new TH1F("hDlta_tw2", "delta_tw2", 2*wMax/tBinWidth, -wMax, wMax);	
 	
 	TH2F *hDD = new TH2F("hDD", "hDD", 500, 0, 2*T*1E-12, 160, -2E-9, 2E-9);
 	hDD->GetXaxis()->SetTitle("#frac{t1+t2}{2} (s)");
@@ -82,7 +79,7 @@
 		if(step1 != currentStep1 || step2 != currentStep2) 
 			break;
 		
-		if((CA == -1 || crystal1 == CA) && (CB == -1 || crystal2 == CB)) {
+		if((CA == -1 || channel1 == CA) && (CB == -1 || channel2 == CB)) {
 			hToTx->Fill(tot1, tot2);
 		}
             
@@ -155,7 +152,7 @@
 	
 // 	for(Int_t i = stepBegin; i < stepEnd; i++) {
 // 		lmData->GetEntry(i);
-// 		if((CA != -1 && crystal1 != CA) || (CB != -1 && crystal2 != CB)) continue;
+// 		if((CA != -1 && channel1 != CA) || (CB != -1 && channel2 != CB)) continue;
 // 		
 // 		if((tot1 < (x1 - sN*sigma1)) || (tot1 > (x1 + sN*sigma1))) 
 // 		continue;
@@ -177,7 +174,7 @@
 
 //	for(Int_t i = stepBegin; i < stepEnd; i++) {
 //		lmData->GetEntry(i);
-//		if((CA != -1 && crystal1 != CA) || (CB != -1 && crystal2 != CB)) continue;
+//		if((CA != -1 && channel1 != CA) || (CB != -1 && channel2 != CB)) continue;
 //
 //		if((tot1 < (x1 - sN*sigma1)) || (tot1 > (x1 + sN*sigma1))) continue;
 //
@@ -198,7 +195,7 @@
 //	
         for(Int_t i = stepBegin; i < stepEnd; i++) {
             lmData->GetEntry(i);
-	    if((CA != -1 && crystal1 != CA) || (CB != -1 && crystal2 != CB)) continue;
+	    if((CA != -1 && channel1 != CA) || (CB != -1 && channel2 != CB)) continue;
      
             if((tot1 < (x1 - sN*sigma1)) || (tot1 > (x1 + sN*sigma1))) 
                 continue;
@@ -217,7 +214,7 @@
 // 	    fTimediff = abs(fTime1-fTime2);
 // 	    printf("fTime1: %f\t - fTime2: %f = \t%f\n", fTime1, fTime2, fTimediff);
 
-
+		Float_t delta = fTime1 - fTime2;
 		Float_t correctedDelta = delta*1E-12;
 		
  		Float_t tw1 = 0;//+fTW1->Eval(tot1);

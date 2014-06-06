@@ -7,8 +7,8 @@ using namespace DAQ::Common;
 using namespace DAQ::Core;
 using namespace DAQ::TOFPET;
 
-P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, EventSink<Pulse> *sink) : 
-	lut(lut), killZeroToT(killZeroToT),
+P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, bool killTDenormals, bool killEDenormals, EventSink<Pulse> *sink) : 
+	lut(lut), killZeroToT(killZeroToT), killTDenormals(killTDenormals), killEDenormals(killEDenormals),
 	OverlappedEventHandler<RawPulse, Pulse>(sink)
 {
 	nEvent = 0;
@@ -60,9 +60,10 @@ EventBuffer<Pulse> * P2Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 		
 		long long tacIdleTime = raw.d.tofpet.tacIdleTime;
 		
-		if(!lut->isNormal(raw.channelID, raw.d.tofpet.tac, true, tfine,tCoarse, tacIdleTime)) {
+		if((killTDenormals && !lut->isNormal(raw.channelID, raw.d.tofpet.tac, true, tfine,tCoarse, tacIdleTime)) ||
+		   (killEDenormals && !lut->isNormal(raw.channelID, raw.d.tofpet.tac, false, efine, eCoarse, tacIdleTime))) {
 			lNotNormal += 1;
-			//continue;
+			continue;
 		}
 		
 		// WARNING: P2::geT() returns time with coarse value already added!
@@ -74,11 +75,13 @@ EventBuffer<Pulse> * P2Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 		p.raw = raw;		
 		// WARNING: rounding sensitive!
 		p.time = raw.time + (long long)((f_T * raw.d.tofpet.T));
+		p.timeEnd = raw.timeEnd + (long long)((f_E * raw.d.tofpet.T));
 		p.region = raw.region;
 		p.channelID = raw.channelID;
 		
+		//printf("%lld %lld %lld\n", p.time, p.timeEnd, (p.timeEnd - p.time)/1000);
 		
-		p.energy = (coarseToT + f_E - f_T) * (raw.d.tofpet.T * 1E-3); // In ns
+		p.energy = 1E-3*(p.timeEnd - p.time);
 		p.tofpet_TQT = lut->getQ(raw.channelID, raw.d.tofpet.tac, true, tfine, tacIdleTime);
 		p.tofpet_TQE = lut->getQ(raw.channelID, raw.d.tofpet.tac, false, efine, tacIdleTime);
 

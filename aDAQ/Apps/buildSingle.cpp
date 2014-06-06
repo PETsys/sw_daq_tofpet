@@ -1,6 +1,7 @@
 #include <TFile.h>
 #include <TNtuple.h>
 #include <TOFPET/RawV2.hpp>
+#include <TOFPET/Sanity.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <TOFPET/P2.hpp>
 #include <Core/SingleReadoutGrouper.hpp>
@@ -56,8 +57,7 @@ public:
 			eventStep2 = step2;
 			eventTime = raw.time;
 			eventChannel = raw.top.channelID;
-			eventToT = raw.energy;
-			eventChannelIdleTime = 0;
+			eventToT = 1E-3*(raw.top.timeEnd - raw.top.time);
 			eventTac = raw.top.raw.d.tofpet.tac;
 			eventChannelIdleTime = raw.top.raw.d.tofpet.channelIdleTime * T * 1E-12;
 			eventTacIdleTime = raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
@@ -125,18 +125,22 @@ int main(int argc, char *argv[])
 		unsigned long long eventsBegin;
 		unsigned long long eventsEnd;
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
+		
+		//if(eventsEnd > eventsBegin + 1000000)
+	//		eventsEnd = eventsBegin + 1000000;
+		
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
 
 		const unsigned nChannels = 2*128; 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
 
-								      
-				new P2Extract(lut, false,
+				new Sanity(100E-9, 		      
+				new P2Extract(lut, false, false, false,
 				new SingleReadoutGrouper(
 				new FakeCrystalPositions(
 				new EventWriter(lmData, step1, step2
 
-		)))));
+		))))));
 		
 		reader->wait();
 		delete reader;

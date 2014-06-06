@@ -37,7 +37,11 @@ EventBuffer<Hit> * FakeCrystalPositions::handleEvents (EventBuffer<RawHit> *inBu
 		hit.x = 3.6 * (id / 4);
 		hit.y = 3.6 * (id % 4);
 		hit.z = 0;
-		
+
+/*		printf("X1 %20lld %20lld => %8lld\n", 
+		       hit.raw.top.time, 
+		       hit.raw.top.timeEnd,
+		       (hit.raw.top.timeEnd - hit.raw.top.time) / 1000);*/
 		outBuffer->pushWriteSlot();
 	}
 	

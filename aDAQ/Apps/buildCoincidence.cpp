@@ -69,11 +69,28 @@ public:
 						&c.photons[1].hits[j2].raw 
 					};
 					
-/*					if(crystals[0]->crystalID != 56) continue;
-					if(crystals[1]->crystalID != 9) continue;*/
-						
 					long long T = crystals[0]->top.raw.d.tofpet.T;
-					long long delta = crystals[0]->time - crystals[1]->time;
+					
+					eventStep1 = step1;
+					eventStep2 = step2;
+	       
+					event1Time = crystals[0]->time;
+					event1Channel = crystals[0]->top.channelID;
+					event1ToT = 1E-3*(crystals[0]->top.timeEnd - crystals[0]->top.time),
+					event1Tac = crystals[0]->top.raw.d.tofpet.tac;
+					event1ChannelIdleTime = crystals[0]->top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+					event1TacIdleTime = crystals[0]->top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = crystals[0]->top.tofpet_TQT;
+					event1TQE = crystals[0]->top.tofpet_TQE;
+					
+					event2Time = crystals[1]->time;
+					event2Channel = crystals[1]->top.channelID;
+					event2ToT = 1E-3*(crystals[1]->top.timeEnd - crystals[1]->top.time),
+					event2Tac = crystals[1]->top.raw.d.tofpet.tac;
+					event2ChannelIdleTime = crystals[1]->top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+					event2TacIdleTime = crystals[1]->top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = crystals[1]->top.tofpet_TQT;
+					event2TQE = crystals[1]->top.tofpet_TQE;				
 
 					lmTuple->Fill();
 				}
@@ -118,7 +135,26 @@ int main(int argc, char *argv[])
 	}
 	
 	TFile *lmFile = new TFile(argv[3], "RECREATE");
-	TNtuple *lmData = new TNtuple("lmData", "Event List", "step1:step2:frameid:time1:crystal1:tac1:tot1:n1:time2:crystal2:tac2:tot2:n2:delta");
+	TTree *lmData = new TTree("lmData", "Event List", 2);
+	int bs = 512*1024;
+	lmData->Branch("step1", &eventStep1, bs);
+	lmData->Branch("step2", &eventStep2, bs);
+	lmData->Branch("time1", &event1Time, bs);
+	lmData->Branch("channel1", &event1Channel, bs);
+	lmData->Branch("tot1", &event1ToT, bs);
+	lmData->Branch("tac1", &event1Tac, bs);
+	lmData->Branch("channelIdleTime1", &event1ChannelIdleTime, bs);
+	lmData->Branch("tacIdleTime1", &event1TacIdleTime, bs);
+	lmData->Branch("tqT1", &event1TQT, bs);
+	lmData->Branch("tqE1", &event1TQE, bs);	
+	lmData->Branch("time2", &event2Time, bs);
+	lmData->Branch("channel2", &event2Channel, bs);
+	lmData->Branch("tot2", &event2ToT, bs);
+	lmData->Branch("tac2", &event2Tac, bs);
+	lmData->Branch("channelIdleTime2", &event2ChannelIdleTime, bs);
+	lmData->Branch("tacIdleTime2", &event2TacIdleTime, bs);
+	lmData->Branch("tqT2", &event2TQT, bs);
+	lmData->Branch("tqE2", &event2TQE, bs);	
 	
 	int N = scanner->getNSteps();
 	for(int step = 0; step < N; step++) {
@@ -128,7 +164,7 @@ int main(int argc, char *argv[])
 		unsigned long long eventsEnd;
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
-
+		//		eventsEnd=1000000000+eventsBegin;
 // 		printf("BIG FAT WARNING: limiting event number\n");
 // 		if(eventsEnd > eventsBegin + 10E6) eventsEnd = eventsBegin + 10E6;
 
@@ -136,11 +172,11 @@ int main(int argc, char *argv[])
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
 
 								      
-				new P2Extract(P2, false,
+				new P2Extract(P2, false, true, true,
 				new PulseFilter(-INFINITY, INFINITY, 	
 				new SingleReadoutGrouper(
 				new FakeCrystalPositions(
-				new ComptonGrouper(20, 20E-9, GammaPhoton::maxHits, 0, INFINITY,
+				new ComptonGrouper(20, 20E-9, GammaPhoton::maxHits, -INFINITY, INFINITY,
 				new CoincidenceGrouper(20E-9,
 				new EventWriter(lmData, step1, step2
 

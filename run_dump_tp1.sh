@@ -1,4 +1,4 @@
-PREFIX=data/2014/05/27/M17M18/R001_fetp_tp1
+PREFIX=data/2014/06/02/M21M22/R001_fetp_tp1
 
 mkdir -p $(dirname $PREFIX)
 for ((CHANNEL=0; $CHANNEL < 64; CHANNEL=$[CHANNEL+6])); do

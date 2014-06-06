@@ -136,6 +136,13 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 
 		if(photon.time < tMin or photon.time >= tMax) continue;
 		if(photon.nHits > maxHits) continue;
+		
+// 		for(int k = 0; k < photon.nHits; k++)
+// 			printf("X2 %20lld %20lld %8lld\n", 
+// 			       photon.hits[k].raw.top.time, 
+// 			       photon.hits[k].raw.top.timeEnd, 
+// 			       (photon.hits[k].raw.top.timeEnd - photon.hits[k].raw.top.time)/1000);
+
 
 		outBuffer->pushWriteSlot();
 		lHits[photon.nHits-1]++;

@@ -150,6 +150,8 @@ void RawReaderV2::run()
 			// Carefull with the float/double/integer conversions here..
 			p.d.tofpet.T = T * 1E12;
 			p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * p.d.tofpet.T;
+			p.timeEnd = (1024LL * rawEvent.frameID + rawEvent.eCoarse) * p.d.tofpet.T;
+			if((p.timeEnd - p.time) < -256*p.d.tofpet.T) p.timeEnd += (1024LL * p.d.tofpet.T);
 			p.channelID = 64 * rawEvent.asicID + rawEvent.channelID;
 			p.region = (64 * rawEvent.asicID + rawEvent.channelID) / 16;
 			p.feType = RawPulse::TOFPET;

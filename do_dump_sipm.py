@@ -20,13 +20,14 @@ uut.openAcquisition(dataFilePrefix, cWindow)
 
 # Set all HV DAC channels 
 for c in range(8):
-	uut.config.hvBias[c] = 67.25
+	uut.config.hvBias[c] = 67.250
 
 for ac in uut.config.asicConfig:
 	for cc in ac.channelConfig:
 		cc.setValue("deadtime", 3);
-		#cc.setValue("sh", 3)
+		#cc.setValue("sh", 0)
 		#cc.setValue("praedictio", 0)
+		#cc.setValue("vbl", 44)
 
 
 for step1 in [0]:

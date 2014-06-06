@@ -38,7 +38,6 @@ EventBuffer<RawHit> * SingleReadoutGrouper::handleEvents (EventBuffer<Pulse> *in
 		hit.missingEnergy = 0;
 		hit.nMissing = 0;
 		hit.asymmetry = 0;		
-		
 		outBuffer->pushWriteSlot();		
 		lSingleRead++;
 

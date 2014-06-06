@@ -1,4 +1,4 @@
-PREFIX=data/2014/05/27/M17M18/R001_fetp_tp1
+PREFIX=data/2014/06/02/M21M22/R001_fetp_tp1
 
 for F in ${PREFIX}*.raw2; do 
 

@@ -11,6 +11,7 @@ namespace DAQ { namespace Core {
 	  
 
 		long long time;
+		long long timeEnd;
 		short region;
 		int channelID;
 		long long channelIdleTime;
@@ -37,6 +38,7 @@ namespace DAQ { namespace Core {
 
 		RawPulse() {
 			time = -1;
+			timeEnd = -1;
 			channelID = -1;
 			region = -1;
 			channelIdleTime = 0;
@@ -46,6 +48,7 @@ namespace DAQ { namespace Core {
 	struct Pulse {
 		RawPulse raw;
 		long long time;
+		long long timeEnd;
 		short region;
 		
 		int channelID;
@@ -56,6 +59,7 @@ namespace DAQ { namespace Core {
 		
 		Pulse() {
 			time = -1;
+			timeEnd = -1;
 			channelID = -1;
 			energy = 0;
 			region = -1;

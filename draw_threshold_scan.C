@@ -34,8 +34,8 @@
 	f->SetParName(1, "x0");
 	f->SetParName(2, "Sigma");
 
-	FILE *thFile1 = fopen("M0.baseline", "w");
-	FILE *thFile2 = fopen("M1.baseline", "w");
+	FILE *thFile1 = fopen("MA.baseline", "w");
+	FILE *thFile2 = fopen("MB.baseline", "w");
 	for(Int_t i = 1; i < hRate->GetNbinsX() + 1; i++) {
 		Int_t C = i-1;
 		char hName[128];
@@ -44,9 +44,10 @@
 		sprintf(hTitle, "Channel %5d", C);
 		TH1 *h = hRate->ProjectionY(hName, i, i);
 		h->SetTitle(hTitle);
-		
+
+		FILE *thFile = C/64 == 0 ? thFile1 : thFile2;
 		if(h->GetEntries() < 1) {
-			fprintf(thFile, "%d\t%d\t%f\t%f\n", C/64, C%64, 0, 100);
+		  fprintf(thFile, "%d\t%d\t%f\t%f\n", C/64, C%64, 0, 100);
 			delete h;
 			continue;
 		}
@@ -80,13 +81,8 @@
 		Float_t x0_e = f->GetParError(1);
 		Float_t sigma = f->GetParameter(2);
 
-		if(i <= 64){
-		  fprintf(thFile1, "%d\t%d\t%f\t%f\n", C/64, C%64, x0, sigma);
-		}
-		else{
-		  fprintf(thFile2, "%d\t%d\t%f\t%f\n", C/64, C%64, x0, sigma);
-		}
-		
+
+		fprintf(thFile, "%d\t%d\t%f\t%f\n", C/64, C%64, x0, sigma);
 		hMax->SetBinContent(i, max);
 		hBaseline->Fill(x0);
 		hSigma->Fill(sigma);
@@ -94,6 +90,7 @@
 		gBaseline->SetPointError(i-1, 0.1, sigma);
 	}
 	fclose(thFile1);
+	fclose(thFile2);
 	
 	
 	delete c1;
@@ -131,4 +128,5 @@
 	hSigma->GetXaxis()->SetTitle("vth_T (ADC)");
 	hSigma->GetYaxis()->SetTitle("Number of channels");
 	hSigma->Draw();
+	exit(); // I added this to run the automatization script (Luis)
 }

@@ -38,7 +38,7 @@ def loadBaseline(boardConfig, asic, fileName):
 		l = f.readline()
 		s =  r.split(l)
 		s = s[0:4]
-		print s
+		#print s
 		a, c, baseline, noise = s
 		v = float(baseline)
 		boardConfig.asicConfig[asic].channelConfig[i].setBaseline(v)
@@ -46,3 +46,4 @@ def loadBaseline(boardConfig, asic, fileName):
 
 		
 	f.close()
+
