@@ -125,7 +125,7 @@ void RawReaderV2::run()
 	long long minFrameID = LLONG_MAX;
 	long long maxFrameID = LLONG_MIN;
 	
-	printf("Reading %llu to %llu\n", eventsBegin, eventsEnd);
+	fprintf(stderr, "Reading %llu to %llu\n", eventsBegin, eventsEnd);
 	fseek(dataFile, eventsBegin * sizeof(RawEventV2), SEEK_SET);
 
 	unsigned long long readPointer = eventsBegin;

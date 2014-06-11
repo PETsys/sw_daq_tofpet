@@ -44,7 +44,7 @@ namespace DAQ { namespace Core {
 		};
 		
 		virtual void report() {
-			printf(">> NullSink report:\n total events received: %ld\n", count);
+			fprintf(stderr, ">> NullSink report:\n total events received: %ld\n", count);
 		};
 		~NullSink() {};
 	private:

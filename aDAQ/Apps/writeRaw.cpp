@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 	long nWraps = 0;
 	
 	while(fread(&blockHeader, sizeof(blockHeader), 1, stdin) == 1) {
-// 		fprintf(stderr, "Got %f %f %d %u\n", blockHeader.step1, blockHeader.step2, blockHeader.nFrames, unsigned(blockHeader.endOfStep));
+ 		//fprintf(stderr, "writeRaw:: Got %f %f %d %u\n", blockHeader.step1, blockHeader.step2, blockHeader.nFrames, unsigned(blockHeader.endOfStep));
 		
 		if(blockHeader.endOfStep != 0) {
 			if(outBuffer != NULL) {
@@ -228,50 +228,61 @@ int main(int argc, char *argv[])
 				sink = NULL;
 			}
 
-			fprintf(stderr, "Step had %d frames with %d events; %f events/frame avg, %d event/frame max\n", 
+			fprintf(stderr, "writeRaw:: Step had %d frames with %d events; %f events/frame avg, %d event/frame max\n", 
 					stepGoodFrames, stepEvents, 
 					float(stepEvents)/stepGoodFrames,
-					stepMaxFrame);
-			fprintf(stderr, "%d frames received were lost frames\n", stepLostFrames);
+					stepMaxFrame); fflush(stderr);
+			fprintf(stderr, "writeRaw:: %d frames received were lost frames\n", stepLostFrames); fflush(stderr);
 			stepGoodFrames = 0;
 			stepEvents = 0;
 			stepMaxFrame = 0;
 			stepLostFrames = 0;
 
-			
-
-
+			//fprintf(stderr, "writeRaw:: EoS found with %d frames. Returning ", blockHeader.nFrames);
+			for(int n = 0; n < blockHeader.nFrames; n++) {
+	                        int32_t shmIndex = -1;
+        	                fread(&shmIndex, sizeof(int32_t), 1, stdin);
+				fwrite(&shmIndex, sizeof(int32_t), 1, stdout);
+				//fprintf(stderr, "%d ", shmIndex); 
+			}
+			//fprintf(stderr, "\n"); fflush(stderr);
+			fflush(stdout);
+			continue;
 		}				
 
 
+		if(blockHeader.nFrames <= 0)
+			continue;
 
 		shmIndexList.clear();
 		shmIndexList.reserve(1024);	
 		
+		bool hasInvalid = false;
 		for(int n = 0; n < blockHeader.nFrames; n++) {
 			int32_t shmIndex = -1;			
 			fread(&shmIndex, sizeof(int32_t), 1, stdin);
-//			fprintf(stderr, "Got index %d\n", shmIndex);
-			
-			if(shmIndex < 0) {
-				fwrite(&shmIndex, sizeof(int32_t), 1, stdout);
-				fflush(stdout);
-			}
-			else {			
-				shmIndexList.push_back(shmIndex);
-			}
+			if(shmIndex < 0) hasInvalid = true;
+			shmIndexList.push_back(shmIndex);
 		}
-		
-//		fprintf(stderr, "Got %u valid indexes\n", shmIndexList.size());
-		if(shmIndexList.empty()) 
+		assert(blockHeader.nFrames == shmIndexList.size());
+
+		if(hasInvalid) {
+			fprintf(stderr, "writeRaw:: invalid frame index found in %d frames. Returning ", blockHeader.nFrames);
+			for(int n = 0; n < blockHeader.nFrames; n++) {
+				int32_t shmIndex = shmIndexList[n];
+				fwrite(&shmIndex, sizeof(int32_t), 1, stdout);
+				//fprintf(stderr, "%d ", shmIndex);   
+			}
+			fprintf(stderr, "\n"); fflush(stderr);
+			fflush(stdout);
 			continue;
-		
-		
+		}
+
+		// FrameID order check
 		int32_t shmIndex = shmIndexList[0];
 		DataFrame &dataFrame = dataFrameSharedMemory[shmIndex];	
-		
 		bool blockOK = isBefore(lastFrameID, dataFrame.frameID);		
-		for(unsigned n = 1; n < shmIndexList.size(); n++)
+		for(int n = 1; n < blockHeader.nFrames; n++)
 		{
 			int32_t shmIndex1 = shmIndexList[n-1];
 			int32_t shmIndex2 = shmIndexList[n];
@@ -281,21 +292,17 @@ int main(int argc, char *argv[])
 		}
 		
 		if(!blockOK) {
-			fprintf(stderr, "Discarding block with %u frames\n", shmIndexList.size());			
-			for(unsigned n = 0; n < shmIndexList.size(); n++) {
+			fprintf(stderr, "writeRaw:: Discarding block with %d frames. Returning ", blockHeader.nFrames);			
+			for(int n = 0; n < blockHeader.nFrames; n++) {
 				int32_t shmIndex = shmIndexList[n];
-				DataFrame &dataFrame = dataFrameSharedMemory[shmIndex];	
-// 				fprintf(stderr, "%llu ", dataFrame.frameID);
 				fwrite(&shmIndex, sizeof(int32_t), 1, stdout);
-				fflush(stdout);			
+				//fprintf(stderr, "%d ", shmIndex);   
 			}	
-			fprintf(stderr, "\n");
+			fprintf(stderr, "\n"); fflush(stderr);
+			fflush(stdout);
 			continue;
 		}
 		
-// 		fprintf(stderr, "last frame was %llu\n", lastFrameID);
-// 		fprintf(stderr, "Block is OK, %u frames\n", shmIndexList.size());
-			
 		
 
 		step1 = blockHeader.step1;
@@ -315,7 +322,7 @@ int main(int argc, char *argv[])
 		}
 		
 		
-		for(unsigned n = 0; n < shmIndexList.size(); n++) {
+		for(int n = 0; n < blockHeader.nFrames; n++) {
 			int32_t shmIndex = shmIndexList[n];	
 			DataFrame &dataFrame = dataFrameSharedMemory[shmIndex];	
 			
@@ -387,18 +394,26 @@ int main(int argc, char *argv[])
 			else
 				stepGoodFrames += 1;
 			
-			fwrite(&shmIndex, sizeof(int32_t), 1, stdout);
-			fflush(stdout);
 		}
-		
+
+			
+		//fprintf(stderr, "writeRaw:: Finished processing %d frames. Returning ", blockHeader.nFrames);
+               	for(int n = 0; n < blockHeader.nFrames; n++) {
+			int32_t shmIndex = shmIndexList[n];
+                        DataFrame &dataFrame = dataFrameSharedMemory[shmIndex];
+                        //fprintf(stderr, "%d ", shmIndex);
+                        fwrite(&shmIndex, sizeof(int32_t), 1, stdout);
+		}
+                fprintf(stderr, "\n"); fflush(stderr);
+                fflush(stdout);
 	}
 	
 	if(stepEvents > 0) {
-		fprintf(stderr, "Step had %d frames received with %d events; %f events/frame avg, %d event/frame max\n", 
+		fprintf(stderr, "writeRaw:: Step had %d frames received with %d events; %f events/frame avg, %d event/frame max\n", 
 				stepGoodFrames, stepEvents, 
 				float(stepEvents)/stepGoodFrames,
-				stepMaxFrame);
-		fprintf(stderr, "%d frames received were lost frames\n", stepLostFrames);
+				stepMaxFrame); fflush(stderr);
+		fprintf(stderr, "writeRaw:: %d frames received were lost frames\n", stepLostFrames); fflush(stderr);
 	}
 
 	

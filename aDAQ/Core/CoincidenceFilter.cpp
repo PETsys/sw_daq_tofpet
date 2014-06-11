@@ -19,7 +19,7 @@ CoincidenceFilter::~CoincidenceFilter()
 void CoincidenceFilter::report()
 {
 	fprintf(stderr, ">> CoincidenceFilter report\n");
-	printf("cWindow = %lld\n", cWindow);
+	fprintf(stderr, "cWindow = %lld\n", cWindow);
 	fprintf(stderr, " events passed\n");
 	fprintf(stderr, "  %10u \n", nEventsOut);
 	OverlappedEventHandler<GammaPhoton, GammaPhoton>::report();

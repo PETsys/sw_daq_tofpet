@@ -688,9 +688,10 @@ class ATB:
 		cmd = [ "aDAQ/writeRaw", self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
 				"%e" % cWindow, \
 				fileName ]
-		self.__acquisitionPipe = Popen(cmd, bufsize=0, stdin=PIPE, stdout=PIPE, close_fds=True)
+		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
 
 	def acquire(self, step1, step2, acquisitionTime):
+		#print "Python:: acquiring %f %f"  % (step1, step2)
 		(pin, pout) = (self.__acquisitionPipe.stdin, self.__acquisitionPipe.stdout)
 		nFrames = 0
 
@@ -699,9 +700,16 @@ class ATB:
 		n1 = struct.calcsize(template1)
 		n2 = struct.calcsize(template2)
 		rawIndexes = self.getDataFramesByRawIndex(1024)
+
+                nRequiredFrames = acquisitionTime / self.__frameLength
 		t0 = time()
-		while time() - t0 < acquisitionTime:		
+		while nFrames < nRequiredFrames:
 			nFramesInBlock = len(rawIndexes)/n2
+			if nFramesInBlock <= 0:
+				print "Python:: Could not read any data frame indexes"
+				break
+			#print "Python:: About to push %d frames" % nFramesInBlock
+			
 			header = struct.pack(template1, step1, step2, nFramesInBlock, 0)
 			pin.write(header)
 			pin.write(rawIndexes[0:n2*nFramesInBlock])
@@ -710,12 +718,14 @@ class ATB:
 			nFrames += nFramesInBlock
 			newRawIndexes = self.getDataFramesByRawIndex(1024)
 
-			pout.read(n2*nFramesInBlock)
+			tmp = pout.read(n2*nFramesInBlock)
+			#print "Python:: got back %d frames" % (len(tmp)/n2)
+			
 			self.returnDataFramesByRawIndex(rawIndexes)
 			rawIndexes = newRawIndexes
-			continue
 
-		self.returnDataFramesByRawIndex(newRawIndexes)
+		#print "Python:: Returning last frames"
+		self.returnDataFramesByRawIndex(rawIndexes)
 
 
 		#t0 = time()
@@ -728,14 +738,18 @@ class ATB:
 		# Close the deal by sending a block with a -1 index and endOfStep set to 1
 		header = struct.pack(template1, step1, step2, 1, 1)
 		rawIndexes = struct.pack(template2, -1)		
+		#print "Python:: closing step with ",[hex(ord(c)) for c in rawIndexes ]
 		pin.write(header)
 		pin.write(rawIndexes)
 		pin.flush()
 		rawIndexes = pout.read(n2)
-		self.returnDataFramesByRawIndex(rawIndexes)
+		index, = struct.unpack(template2, rawIndexes)
+		assert index == -1
+		#print "Python:: got back %ld\n" % (long(index)), [hex(ord(c)) for c in rawIndexes ]
+		#self.returnDataFramesByRawIndex(rawIndexes)
 	
 
-		print "Acquired %d frames in %f seconds, corresponding to %f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
+		#print "Python:: Acquired %d frames in %f seconds, corresponding to %f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
 		return None
 
 	def uploadConfig(self):
