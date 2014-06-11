@@ -404,7 +404,7 @@ int main(int argc, char *argv[])
                         //fprintf(stderr, "%d ", shmIndex);
                         fwrite(&shmIndex, sizeof(int32_t), 1, stdout);
 		}
-                fprintf(stderr, "\n"); fflush(stderr);
+                //fprintf(stderr, "\n"); fflush(stderr);
                 fflush(stdout);
 	}
 	
