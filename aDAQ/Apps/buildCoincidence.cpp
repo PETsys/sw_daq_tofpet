@@ -6,6 +6,7 @@
 #include <Core/SingleReadoutGrouper.hpp>
 #include <Core/FakeCrystalPositions.hpp>
 #include <Core/ComptonGrouper.hpp>
+#include <Core/NaiveGrouper.hpp>
 #include <Core/CoincidenceFilter.hpp>
 #include <Core/CoincidenceGrouper.hpp>
 #include <assert.h>
@@ -15,7 +16,10 @@
 
 static float		eventStep1;
 static float		eventStep2;
+static long long 	stepBegin;
+static long long 	stepEnd;
 
+static unsigned short	event1J;
 static long long	event1Time;
 static unsigned short	event1Channel;
 static float		event1ToT;
@@ -25,6 +29,8 @@ static double		event1TacIdleTime;
 static unsigned short	event1TFine;
 static float		event1TQT;
 static float		event1TQE;
+
+static unsigned short	event2J;
 static long long	event2Time;
 static unsigned short	event2Channel;
 static float		event2ToT;
@@ -46,8 +52,8 @@ using namespace std;
 
 class EventWriter : public EventSink<Coincidence> {
 public:
-	EventWriter(TTree *lmDataTuple, float step1, float step2) 
-	: lmTuple(lmDataTuple), step1(step1), step2(step2) {
+	EventWriter(TTree *lmDataTuple) 
+	: lmTuple(lmDataTuple) {
 		
 	};
 	
@@ -62,8 +68,8 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Coincidence &c = buffer->get(i);
 
-			for(int j1 = 0; j1 < c.photons[0].nHits; j1 ++) {
-				for(int j2 = 0; j2 < c.photons[1].nHits; j2++) {
+			for(int j1 = 0; j1 < 1; j1 ++) {
+				for(int j2 = 0; j2 < 1; j2++) {
 					RawHit *crystals[2] = { 
 						&c.photons[0].hits[j1].raw, 
 						&c.photons[1].hits[j2].raw 
@@ -71,9 +77,7 @@ public:
 					
 					long long T = crystals[0]->top.raw.d.tofpet.T;
 					
-					eventStep1 = step1;
-					eventStep2 = step2;
-	       
+					event1J	= j1;
 					event1Time = crystals[0]->time;
 					event1Channel = crystals[0]->top.channelID;
 					event1ToT = 1E-3*(crystals[0]->top.timeEnd - crystals[0]->top.time),
@@ -83,6 +87,7 @@ public:
 					event1TQT = crystals[0]->top.tofpet_TQT;
 					event1TQE = crystals[0]->top.tofpet_TQE;
 					
+					event2J = j2;
 					event2Time = crystals[1]->time;
 					event2Channel = crystals[1]->top.channelID;
 					event2ToT = 1E-3*(crystals[1]->top.timeEnd - crystals[1]->top.time),
@@ -107,8 +112,6 @@ public:
 	void report() { };
 private: 
 	TTree *lmTuple;
-	float step1;
-	float step2;
 };
 
 int main(int argc, char *argv[])
@@ -139,6 +142,7 @@ int main(int argc, char *argv[])
 	int bs = 512*1024;
 	lmData->Branch("step1", &eventStep1, bs);
 	lmData->Branch("step2", &eventStep2, bs);
+	lmData->Branch("j1", &event1J, bs);
 	lmData->Branch("time1", &event1Time, bs);
 	lmData->Branch("channel1", &event1Channel, bs);
 	lmData->Branch("tot1", &event1ToT, bs);
@@ -147,6 +151,7 @@ int main(int argc, char *argv[])
 	lmData->Branch("tacIdleTime1", &event1TacIdleTime, bs);
 	lmData->Branch("tqT1", &event1TQT, bs);
 	lmData->Branch("tqE1", &event1TQE, bs);	
+	lmData->Branch("j2", &event2J, bs);
 	lmData->Branch("time2", &event2Time, bs);
 	lmData->Branch("channel2", &event2Channel, bs);
 	lmData->Branch("tot2", &event2ToT, bs);
@@ -156,35 +161,46 @@ int main(int argc, char *argv[])
 	lmData->Branch("tqT2", &event2TQT, bs);
 	lmData->Branch("tqE2", &event2TQE, bs);	
 	
+	TTree *lmIndex = new TTree("lmIndex", "Step Index", 2);
+	lmIndex->Branch("step1", &eventStep1, bs);
+	lmIndex->Branch("step2", &eventStep2, bs);
+	lmIndex->Branch("stepBegin", &stepBegin, bs);
+	lmIndex->Branch("stepEnd", &stepEnd, bs);
+
+	
+	stepBegin = 0;
+	stepEnd = 0;
 	int N = scanner->getNSteps();
 	for(int step = 0; step < N; step++) {
-		Float_t step1;
-		Float_t step2;
 		unsigned long long eventsBegin;
 		unsigned long long eventsEnd;
-		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
-		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
+		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
+		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 		//		eventsEnd=1000000000+eventsBegin;
 // 		printf("BIG FAT WARNING: limiting event number\n");
 // 		if(eventsEnd > eventsBegin + 10E6) eventsEnd = eventsBegin + 10E6;
 
 		const unsigned nChannels = 2*128; 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
-
 								      
 				new P2Extract(P2, false, true, true,
 				new PulseFilter(-INFINITY, INFINITY, 	
 				new SingleReadoutGrouper(
 				new FakeCrystalPositions(
-				new ComptonGrouper(20, 20E-9, GammaPhoton::maxHits, -INFINITY, INFINITY,
+				new NaiveGrouper(20, 100E-9,
 				new CoincidenceGrouper(20E-9,
-				new EventWriter(lmData, step1, step2
+				new EventWriter(lmData
 
 		))))))));
 		
 		reader->wait();
 		delete reader;
+		stepEnd = lmData->GetEntries();
+		lmIndex->Fill();
+		stepBegin = stepEnd;
+
 		lmFile->Write();
+		
 	}
 	
 	lmFile->Close();
