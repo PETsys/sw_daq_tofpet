@@ -749,7 +749,7 @@ class ATB:
 		#self.returnDataFramesByRawIndex(rawIndexes)
 	
 
-		#print "Python:: Acquired %d frames in %f seconds, corresponding to %f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
+		print "Python:: Acquired %d frames in %f seconds, corresponding to %f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
 		return None
 
 	def uploadConfig(self):
