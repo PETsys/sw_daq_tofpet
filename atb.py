@@ -753,6 +753,11 @@ class ATB:
 		return None
 
 	def uploadConfig(self):
+		# Force parameters!
+		for ac in self.config.asicConfig:
+			for cc in ac.channelConfig:
+				cc.setValue("deadtime", 3);
+
 		#for dacChannel, hvValue in enumerate(self.config.hvBias):
 			#self.setHVDAC(dacChannel, 0)
 		#self.stop()
