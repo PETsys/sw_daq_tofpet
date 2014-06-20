@@ -6,16 +6,18 @@ from sys import argv, stdout, stdin
 from time import time, sleep
 import ROOT
 
-targetAsics = [ x for x in range(2) ]
+targetAsics = [ x for x in range(1) ]
 
 # All channels
 targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
 # Only some channels
-#targetChannels = [ (x, y) for x in targetAsics for y in [0, 2, 4, 6, 7, 9, 17, 23, 38, 49, 54, 63] ]
+targetChannels = [ (x, y) for x in targetAsics for y in [8, 12, 20] ]
+
 
 # SiPM Vbias
 targetHVBias = [ 50 ]
-#targetHVBias = [ 50, 66.5, 67, 67.5, 68, 68.5 ]
+targetHVBias = [ 50, 65, 65.5, 66, 66.5 ]
+
 
 
 # Operating clock period
@@ -28,8 +30,6 @@ for tAsic, tChannel in targetChannels:
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.initialize()
 uut.config = atbConfig
-uut.uploadConfig()
-uut.doSync(False)
 
 rootFile = ROOT.TFile(argv[1], "RECREATE")
 ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")
@@ -38,8 +38,11 @@ N = 30
 for step1 in targetHVBias:
 	print "SiPM Vbias = ", step1
 
-	for dacChannel in range(8):
-		uut.setHVDAC(dacChannel, step1)
+	for c in range(8):
+		atbConfig.hvBias[c] = step1
+
+	uut.uploadConfig()
+	uut.doSync(False)
 
 	for step2 in range(32,64):
 		print "Vth_T = ", step2
