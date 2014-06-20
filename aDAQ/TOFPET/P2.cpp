@@ -103,7 +103,7 @@ float P2::getQ(int channel, int tac, bool isT, int adc, long long tacIdleTime)
 	
 /*	printf("%f %f %f %lld => %f => %f (vs %f : %f)\n", te.leakage.tQ, te.leakage.b, te.leakage.m, tacIdleTime, adcEstimate, tB, te.shape.tB, (tB - te.shape.tB));
 	printf("tQ : %f vs %f : %f\n", tQ1, tQ2, tQ1 - tQ2);*/
-	return tQ2;
+	return tQ2 + defaultQ;
 }
 
 void P2::setT0(int channel, int tac, bool isT, float t0)
