@@ -128,5 +128,4 @@
 	hSigma->GetXaxis()->SetTitle("vth_T (ADC)");
 	hSigma->GetYaxis()->SetTitle("Number of channels");
 	hSigma->Draw();
-	exit(); // I added this to run the automatization script (Luis)
 }
