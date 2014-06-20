@@ -33,7 +33,7 @@ class DataFile:
       self.__dataTree.Branch("channelIdleTime", self.__channelIdleTime, "channelIdleTime/L")
 
 
-      self.__indexTree = ROOT.TTree("index3", "Index v3")
+      self.__indexTree = ROOT.TTree("index3" + suffix, "Index v3 " + suffix)
       self.__indexTree.Branch("step1", self.__step1, "step1/F")
       self.__indexTree.Branch("step2", self.__step2, "step2/F")
       self.__stepBegin = array('i', [0])
