@@ -415,9 +415,9 @@ int main(int argc, char *argv[])
 					int index2 = 4 * (64 * asic + channel) + tac;				
 					TacInfo &ti = tacInfo[2*index2 + (isT ? 0 : 1)];				
 					
-					if(ti.pA_Fine == NULL) 
+					if(ti.pA_Fine == NULL) {
 						continue;
-					
+					}
 					// We use the same delay for all (ASIC, TAC, branch) combinations for a given channel
 					float x = hTPoint->GetBinContent(channel + 1);
 					float tQ = 3 - fmod(4.0 + x - ti.shape.tEdge, 2.0);
@@ -425,7 +425,9 @@ int main(int argc, char *argv[])
 					char hName[128];
 					sprintf(hName, isT ? "htFineB_%03d_%02d_%1d" : "heFineB_%03d_%02d_%1d", asic, channel, tac);
 					TH2 * hB_Fine = (TH2 *)dataFile->Get(hName);					
-					if(hB_Fine == NULL) continue;
+					if(hB_Fine == NULL) {
+						continue;
+					}
 					
 					sprintf(hName, isT ? "C%03d_%02d_%d_B_T_pFine_X" : "C%03d_%02d_%d_B_E_pFine_X", asic, channel, tac);
 					TProfile *pB_Fine = hB_Fine->ProfileX(hName, 1, -1, "s");
@@ -694,12 +696,11 @@ int main(int argc, char *argv[])
 	}
 	
 	
-	// Remove the t0 offset that may exist between T and E branches
-	// in case we use a FETP/TDCA calibration
-	float t0_adjust_sum = 0;
-	int t0_adjust_N = 0;
 	for(int asic = 0; asic < nASIC; asic++) {
 		for(int channel = 0; channel < 64; channel++) {			
+		
+			float t0_adjust_sum = 0;
+			int t0_adjust_N = 0;	
 			for(int tac = 0; tac < 4; tac++) {
 				int index2 = 4 * (64 * asic + channel) + tac;				
 				TacInfo &tiT = tacInfo[2*index2 + 0];				
@@ -712,16 +713,10 @@ int main(int argc, char *argv[])
 				float t0_E = myP2.getT0((64 * asic + channel), tac, false);
 		
 				t0_adjust_sum += (t0_T - t0_E);
-				t0_adjust_N += 1;
+				t0_adjust_N += 1;				
 			}
-		}
-	}
-	
-	
-	float t0_adjust = t0_adjust_sum / t0_adjust_N;
-	//printf("%d %f %f\n", t0_adjust_N, t0_adjust_sum, t0_adjust);	
-	for(int asic = 0; asic < nASIC; asic++) {
-		for(int channel = 0; channel < 64; channel++) {			
+			
+			float t0_adjust = t0_adjust_sum / t0_adjust_N;
 			for(int tac = 0; tac < 4; tac++) {
 				int index2 = 4 * (64 * asic + channel) + tac;				
 				TacInfo &tiT = tacInfo[2*index2 + 0];				
@@ -731,13 +726,17 @@ int main(int argc, char *argv[])
 					continue;
 			
 				float t0_T = myP2.getT0((64 * asic + channel), tac, true);
-				float t0_E = myP2.getT0((64 * asic + channel), tac, false);
-		
-				t0_T -= t0_adjust;
-				myP2.setT0((64 * asic + channel), tac, true, t0_T);
+				float t0_T_adjusted = t0_T - t0_adjust;
+				
+				fprintf(stderr, "%d %2d %d adjusting %f to %f\n", asic, channel, tac, t0_T, t0_T_adjusted);
+				
+				myP2.setT0((64 * asic + channel), tac, true, t0_T_adjusted);
 			}
+			
 		}
 	}
+	
+	
 	
 	
 	myP2.storeFile( 0,  64, tableFileName1);
