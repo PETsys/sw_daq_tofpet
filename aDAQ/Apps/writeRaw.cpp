@@ -22,7 +22,7 @@
 #include <Core/PulseFilter.hpp>
 #include <Core/SingleReadoutGrouper.hpp>
 #include <Core/FakeCrystalPositions.hpp>
-#include <Core/ComptonGrouper.hpp>
+#include <Core/NaiveGrouper.hpp>
 #include <Core/CoincidenceFilter.hpp>
 
 
@@ -85,6 +85,9 @@ public:
 	
 		for(unsigned i = 0; i < nEvents; i++) {
 			GammaPhoton &photon = inBuffer->get(i);
+			if(photon.time < tMin || photon.time > tMax)
+				continue;
+			
 			for(int k = 0; k < photon.nHits; k++) {
 				RawHit &rawHit= photon.hits[k].raw;
 				RawPulse &rawPulse = rawHit.top.raw;
@@ -314,7 +317,7 @@ int main(int argc, char *argv[])
 				new PulseFilter(-INFINITY, INFINITY, 
 				new SingleReadoutGrouper(
 				new FakeCrystalPositions(
-				new ComptonGrouper(20, 25E-9, GammaPhoton::maxHits, -INFINITY, INFINITY,
+				new NaiveGrouper(20, 100E-9,
 				new CoincidenceFilter(cWindow, 0,
 				new EventWriter(outputDataFile, outputIndexFile, step1, step2,
 				new NullSink<GammaPhoton>()
