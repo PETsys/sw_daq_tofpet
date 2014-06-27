@@ -50,7 +50,7 @@ uut.uploadConfig()
 uut.doSync()
 uut.openAcquisition(dataFilePrefix, cWindow)
 
-uut.setExternalTestPulse(tpLength, tpFrameInterval, tpCoarsePhase, tpFinePhase, 1)
+uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
 uut.doSync()
 
 for step1 in range(0,64,4): # vib

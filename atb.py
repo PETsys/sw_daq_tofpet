@@ -294,8 +294,8 @@ class AsicConfig:
 class BoardConfig:
 	def __init__(self):
 		self.asicConfig = [ AsicConfig() for x in range(2) ]
-		self.hvBias = [ 0.0 for x in range(8) ]
-		self.hvParam = [ (1.0, 0.0) for x in range(8) ]
+		self.hvBias = [ 0.0 for x in range(32) ]
+		self.hvParam = [ (1.0, 0.0) for x in range(32) ]
 		return None
 
 
@@ -342,6 +342,7 @@ class ATB:
 		self.__socket.connect(self.__socketPath)
 		self.__crcFunc = crcmod.mkCrcFun(0x104C11DB7, rev=False, initCrc=0x0A1CB27F)
 		self.__lastSN = randrange(0, 2**16-1)
+		self.__pendingReplies = 0
 		self.__recvBuffer = bytearray([]);
 		self.__debug = debug
 		self.__dataFramesIndexes = []
@@ -597,7 +598,7 @@ class ATB:
 			self.stop()
 			self.sendCommand(0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
 			sleep(pause)
-			self.setExternalTestPulse(0, 7, 0, 0)
+			self.setTestPulseNone()
 
 			defaultAsicChannelConfig = AsicChannelConfig()
 			defaultAsicGlobalConfig = AsicGlobalConfig()
@@ -658,30 +659,62 @@ class ATB:
 
 
 		whichDAC = 1
-		channelMap = [	30, 18, 24, 28, \
-				3, 7, 1, 5 ]
+		channelMap = [	30, 18, 24, 28,  3,  7,  1,  5, \
+				0,   0,  0,  0,  0,  0,  0,  0, \
+				15, 10, 20, 21, 13, 11, 14, 26, \
+				16,  9, 17, 19, 12,  8, 25, 29  \
+				]
 		channel = channelMap [channel]
 
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
 		dacBytes = bytearray(dacBits.tobytes())
 		return self.sendCommand(0x01, dacBytes)
-	  
-	def setExternalTestPulse(self, length, interval, framePhase, finePhase, generator=1):
-	  finePhase0 = finePhase & 255
-	  finePhase1 = (finePhase >> 8) & 255
-	  finePhase2 = (finePhase >> 16) & 255
-	  framePhase0 = framePhase & 255
-	  framePhase1 = (framePhase >> 8) & 255
-	  interval0 = interval & 255
-	  interval1 = (interval >> 8) & 255
-	  length0 = length & 255
-	  length1 = (length >> 8) & 255
-	  length1 = (length1 + (generator<<2)) & 255
-	  
-	  cmd =  bytearray([0x01, finePhase2, finePhase1, finePhase0, 0x00, interval1, interval0, length1, length0])
-#	  cmd = bytearray([0x01, 0x00, finePhase0, framePhase1, framePhase0, interval, length1, length0 ])
-#	  print ["%02X" % x for x in cmd ]
-	  return self.sendCommand(0x03,cmd)
+	
+	def setTestPulseNone(self):
+		cmd =  bytearray([0x01] + [0x00 for x in range(8)])
+		return self.sendCommand(0x03,cmd)
+
+	def setTestPulseArb(self, invert):
+		if not invert:
+			tpMode = 0b11000000
+		else:
+			tpMode = 0b11100000
+
+		cmd =  bytearray([0x01] + [tpMode] + [0x00 for x in range(7)])
+		return self.sendCommand(0x03,cmd)
+		
+	def setTestPulsePLL(self, length, interval, finePhase, invert):
+		if not invert:
+			tpMode = 0b10000000
+		else:
+			tpMode = 0b10100000
+
+		finePhase0 = finePhase & 255
+		finePhase1 = (finePhase >> 8) & 255
+		finePhase2 = (finePhase >> 16) & 255
+		interval0 = interval & 255
+		interval1 = (interval >> 8) & 255
+		length0 = length & 255
+		length1 = (length >> 8) & 255
+		
+		cmd =  bytearray([0x01, tpMode, finePhase2, finePhase1, finePhase0, interval1, interval0, length1, length0])
+		return self.sendCommand(0x03,cmd)
+
+	def loadArbTestPulse(self, address, isPulse, delay, length):
+		if isPulse:
+			isPulseBit = bitarray('1')
+		else:
+			isPulseBit = bitarray('0')
+
+		delayBits = intToBin(delay, 21)
+		lengthBits = intToBin(length, 10)
+
+		addressBits = intToBin(address,32)
+		
+		bits =  isPulseBit + delayBits + lengthBits + addressBits
+		cmd = bytearray([0x03]) + bytearray(bits.tobytes())
+		#print [ hex(x) for x in cmd ]
+		return self.sendCommand(0x03,cmd)
 
 	  
 	def openAcquisition(self, fileName, cWindow):

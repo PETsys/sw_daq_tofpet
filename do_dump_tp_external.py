@@ -41,12 +41,8 @@ for tAsic in range(2):
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.initialize()
 uut.config = atbConfig
-uut.uploadConfig()
-uut.doSync()
 uut.openAcquisition(dataFilePrefix, cWindow)
 
-#uut.setExternalTestPulse(tpLength, tpFrameInterval, tpCoarsePhase, tpFinePhase, 1)
-uut.doSync()
 
 for step1 in range(1):
   for step2 in range(1):
