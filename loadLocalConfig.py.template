@@ -13,8 +13,8 @@ def loadLocalConfig():
 	loadBaseline(atbConfig, 0, "config/M001/asic.baseline");
 
 	### Mezzanine B (J16) configuration
-	loadAsicConfig(atbConfig, 1, "config/M005/asic.config")
-	loadBaseline(atbConfig, 1, "config/M005/asic.baseline");
+	loadAsicConfig(atbConfig, 1, "config/M002/asic.config")
+	loadBaseline(atbConfig, 1, "config/M002/asic.baseline");
 
 
 	return atbConfig

@@ -6,16 +6,9 @@ from sys import argv, stdout, stdin
 from time import time, sleep
 import ROOT
 
-targetAsics = [ x for x in range(1) ]
-
-# All channels
-targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
-# Only some channels
-targetChannels = [ (x, y) for x in targetAsics for y in [8, 12, 20] ]
-
-
-# SiPM Vbias
-targetHVBias = [ 50 ]
+# Select which ASICs, channels and bias voltages
+targetAsics = [ x for x in range(2) ]
+targetChannels = [ (x, y) for x in targetAsics for y in [0, 1, 2, 3, 61, 62, 63] ]
 targetHVBias = [ 50, 65, 65.5, 66, 66.5 ]
 
 
@@ -38,7 +31,7 @@ N = 30
 for step1 in targetHVBias:
 	print "SiPM Vbias = ", step1
 
-	for c in range(8):
+	for c in len(atbConfig.hvBias):
 		atbConfig.hvBias[c] = step1
 
 	uut.uploadConfig()
