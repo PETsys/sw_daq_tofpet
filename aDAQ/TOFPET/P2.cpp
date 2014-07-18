@@ -189,7 +189,7 @@ void P2::loadFiles(const char *mapFileName)
 	printf("P2:: loading TDC calibrations...\n");
 	FILE * mapFile = fopen(mapFileName, "r");
 	char baseName[1024];
-	strncat(baseName, dirname((char *)mapFileName), 1024);
+	strncpy(baseName, dirname((char *)mapFileName), 1024);
 	char lutFileName[1024];
 	char lutFilePath[1024];
 	int start, end;
