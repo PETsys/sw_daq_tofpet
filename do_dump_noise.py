@@ -5,6 +5,15 @@ from bitarray import bitarray
 from sys import argv, stdout, stdin
 from time import time, sleep
 import ROOT
+from os.path import join, dirname, basename, splitext
+
+if (len(argv) != 2):
+	print "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+	print "USAGE: python %s.py outputfile.root \n" % argv[0]
+	print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+	exit(1)
+
+prefix, ext = splitext(argv[1])
 
 targetAsics = [ x for x in range(2) ]
 
@@ -20,7 +29,7 @@ targetHVBias = [ 50 ]
 # Operating clock period
 T = 6.25E-9
 
-atbConfig = loadLocalConfig()
+atbConfig = loadLocalConfig(loadBaseline=False)
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 
@@ -30,8 +39,10 @@ uut.config = atbConfig
 uut.uploadConfig()
 uut.doSync(False)
 
-rootFile = ROOT.TFile(argv[1], "RECREATE")
+rootFile = ROOT.TFile(prefix + ext, "RECREATE")
 ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")
+
+uut.config.writeParams(prefix)
 
 N = 30
 for step1 in targetHVBias:

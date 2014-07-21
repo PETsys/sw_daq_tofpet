@@ -5,18 +5,24 @@ from bitarray import bitarray
 from sys import argv, stdout, stdin
 from time import time, sleep
 import ROOT
+from os.path import join, dirname, basename, splitext
 
 # Select which ASICs, channels and bias voltages
 targetAsics = [ x for x in range(2) ]
 targetChannels = [ (x, y) for x in targetAsics for y in [0, 1, 2, 3, 61, 62, 63] ]
 targetHVBias = [ 50, 65, 65.5, 66, 66.5 ]
-
-
-
 # Operating clock period
 T = 6.25E-9
 
-atbConfig = loadLocalConfig()
+if (len(argv) != 2):
+	print "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+	print "USAGE: python %s.py outputfile.root \n" % argv[0]
+	print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+	exit(1)
+
+prefix, ext = splitext(argv[1])
+
+atbConfig = loadLocalConfig(loadBaseline=False)
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 
@@ -26,6 +32,9 @@ uut.config = atbConfig
 
 rootFile = ROOT.TFile(argv[1], "RECREATE")
 ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")
+
+uut.config.writeParams(prefix)
+
 
 N = 30
 for step1 in targetHVBias:

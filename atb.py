@@ -166,6 +166,9 @@ class AsicGlobalConfig(bitarray):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getValue(key)
 
+  def getKeys(self):
+	return self.__fields.keys()
+
 
 class AsicChannelConfig(bitarray):
   def __init__(self, initial=None, endian="big"):
@@ -281,6 +284,8 @@ class AsicChannelConfig(bitarray):
   def getBaseline(self):
 	return self.__baseline
 
+  def getKeys(self):
+	return self.__fields.keys()
 
 class AsicConfig:
 	def __init__(self):
@@ -293,10 +298,140 @@ class AsicConfig:
 
 class BoardConfig:
 	def __init__(self):
-		self.asicConfig = [ AsicConfig() for x in range(2) ]
+		
+                self.asicConfigFile = [ "Default Configuration" for x in range(2) ]
+                self.asicBaselineFile = [ "None" for x in range(2) ]
+                self.HVDACParamsFile = "None"
+                self.asicConfig = [ AsicConfig() for x in range(2) ]
 		self.hvBias = [ 0.0 for x in range(32) ]
 		self.hvParam = [ (1.0, 0.0) for x in range(32) ]
 		return None
+
+        def writeParams(self, prefix):
+    
+          defaultAsicConfig = AsicConfig()
+          
+          global_params= self.asicConfig[0].globalConfig.getKeys()
+          channel_params= self.asicConfig[0].channelConfig[0].getKeys()
+          
+
+          f = open(prefix+'.params', 'w')
+          f.write("--------------------\n")
+          f.write("-- DEFAULT PARAMS --\n")
+          f.write("--------------------\n\n")
+          f.write("Global{\n")    
+ 
+        
+          for i,key in enumerate(global_params):
+            for ac in self.asicConfig:
+              value= ac.globalConfig.getValue( key)
+              value_d= defaultAsicConfig.globalConfig.getValue(key)
+              if(value_d==value):
+                check=True
+              else:
+                check=False
+                break    
+            if check:
+               f.write('\t"%s" : %d\n' % (key, value))         
+   
+          f.write("\t}\n")    
+          f.write("\n") 
+          f.write("Channel{\n")    
+    
+          check=True
+          for i,key in enumerate(channel_params):
+            for ac in self.asicConfig:
+              if not check:
+                break 
+              for ch in range(64):
+                value= ac.channelConfig[ch].getValue(key)
+                value_d= defaultAsicConfig.channelConfig[ch].getValue(key)
+                if(value_d==value):
+                  check=True 
+                else:
+                  check=False
+                  break    
+            if check:
+              f.write('\t"%s" : %d\n' % (key, value))
+            
+          f.write("\t}\n\n")  
+          f.write("------------------------\n")
+          f.write("-- NON-DEFAULT PARAMS --\n")    
+          f.write("------------------------\n")
+          ac_ind=0
+          for ac in self.asicConfig:
+        
+            f.write("\nASIC%d.Global{\n"%ac_ind)  
+            for i,key in enumerate(global_params):
+              value= ac.globalConfig.getValue(key)
+              value_d= defaultAsicConfig.globalConfig.getValue(key)
+              if(value_d!=value):
+                f.write('\t"%s" : %d\n' % (key, value)) 
+            f.write("\t}\n\n")
+        
+            f.write("ASIC%d.ChAll{\n"%ac_ind)  
+            key_list = []
+            for i,key in enumerate(channel_params):
+              prev_value=ac.channelConfig[0].getValue(key)
+              for ch in range(64):
+                value= ac.channelConfig[ch].getValue(key)   
+                value_d= defaultAsicConfig.channelConfig[ch].getValue(key)
+                if((value_d!=value) and (value==prev_value)):
+                  check=True 
+                  prev_value=value
+                else:
+                  check=False
+                  if(value_d!=value):
+                    key_list.append(key)
+                  break    
+              if check:
+		f.write('\t"%s" : %d\n' % (key, value))
+                
+            prev_baseline=ac.channelConfig[0].getBaseline()
+            for ch in range(64):
+              baseline= ac.channelConfig[ch].getBaseline()  
+              if(baseline==prev_baseline):
+                check=True 
+              else:
+                check=False
+            if check:
+              f.write("\tBASELINE : %d\n" %  baseline)
+
+            f.write("\t}\n\n")
+            
+            if not check:
+              for ch in range(64):
+                f.write("ASIC%d.Ch%d{\n"%(ac_ind,ch))
+                for key in key_list:
+                  value= ac.channelConfig[ch].getValue(key)
+                  f.write('\t"%s" : %d\n' % (key, value))
+                baseline= ac.channelConfig[ch].getBaseline(key)
+                f.write("\tBASELINE : %d\n"%baseline)
+                f.write("\t}\n")
+            ac_ind+=1
+
+
+          f.write("\n") 
+          f.write("--------------------------------------\n")
+          f.write("-- CONFIGURATION and BASELINE FILES --\n")
+          f.write("--------------------------------------\n\n")
+          f.write("HVDAC File: %s\n"%self.HVDACParamsFile)
+          asic_id=0
+          for filename in self.asicConfigFile:
+            f.write("ASIC%d Configuration File: %s\n"%(asic_id,filename)) 
+            asic_id+=1
+          asic_id=0
+          for filename in self.asicBaselineFile:
+            f.write("ASIC%d Baseline File: %s\n"%(asic_id,filename))
+            asic_id+=1
+          f.write("\n")
+          f.write("-------------\n")
+          f.write("-- HV BIAS --\n")
+          f.write("-------------\n\n")
+          for entry in self.hvBias:
+            f.write("%f"%entry)
+            f.write("\n")
+          f.close()
 
 
 

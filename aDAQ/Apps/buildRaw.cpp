@@ -68,6 +68,13 @@ private:
 
 int main(int argc, char *argv[])
 {
+	if (argc != 3) {
+		fprintf(stderr, "USAGE: %s <rawfiles_prefix> <output_file.root>\n", argv[0]);
+		fprintf(stderr, "rawfiles_prefix - Path to raw data files prefix\n");
+		fprintf(stderr, "output_file.root - ROOT output file containing coincidence events TTree\n");
+		return 1;
+	}
+
 	assert(argc == 3);
 	char *inputFilePrefix = argv[1];
 

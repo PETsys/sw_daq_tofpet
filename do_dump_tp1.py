@@ -31,8 +31,8 @@ tpLength = 512
 
 
 
-atbConfig = loadLocalConfig()
-for c in range(8):
+atbConfig = loadLocalConfig(loadBaseline=False)
+for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = 50.0
 
 for tAsic in range(2):
@@ -49,10 +49,11 @@ uut.config = atbConfig
 uut.uploadConfig()
 uut.doSync()
 uut.openAcquisition(dataFilePrefix, cWindow)
-
 uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
-uut.doSync()
 
+uut.config.writeParams(dataFilePrefix)
+
+uut.doSync()
 for step1 in range(0,64,4): # vib
   for step2 in range(0,64,4): #vbl
 	t0 = time()

@@ -160,6 +160,18 @@ bool isCanonical(int coarse, float q)
 
 int main(int argc, char *argv[])
 {
+	if (argc != 6) {
+		fprintf(stderr, "USAGE: %s t_branch_data.root e_branch_data.root"
+				" 128"
+				" mezzanine1.tdc.cal mezzanine2.tdc.cal"
+				"\n",  argv[0]);
+		fprintf(stderr, "t_branch_data.root -- Data to be used for T branch calibration");
+		fprintf(stderr, "E_branch_data.root -- Data to be used for E branch calibration");
+		fprintf(stderr, "128 -- Nominal TDC interpolation factor");
+		fprintf(stderr, "board1.tdc.cal -- Output calibration constants for board 1");
+		fprintf(stderr, "board2.tdc.cal -- Output calibration constants for board 2");
+		return 1;
+	}	
 	assert(argc == 6);
 //	TVirtualFitter::SetDefaultFitter("Minuit2");
 	

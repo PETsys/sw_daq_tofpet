@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 import cPickle as pickle
 import re
+import json
 
 def dumpAsicConfig(boardConfig, asic, fileName):
 	f = open(fileName, "w")
 	pickler = pickle.Pickler(f, pickle.HIGHEST_PROTOCOL)
 	pickler.dump(boardConfig.asicConfig[asic])
-	f.close()
+	f.close() 
 	
 
 def loadAsicConfig(boardConfig, asic, fileName):
@@ -14,11 +15,13 @@ def loadAsicConfig(boardConfig, asic, fileName):
 	f = open(fileName, "r")
 	unpickler = pickle.Unpickler(f)
 	boardConfig.asicConfig[asic] = unpickler.load()
+	boardConfig.asicConfigFile[asic]=fileName
 	f.close()
 
 
 def loadHVDACParams(boardConfig, fileName):
 	print "Loading %s for DAC" % fileName
+	boardConfig.HVDACParamsFile=fileName
 	f = open(fileName, "r")
 	r = re.compile('[ \t\n\r:]+')
 	for i,v in enumerate(boardConfig.hvParam):
@@ -32,6 +35,7 @@ def loadHVDACParams(boardConfig, fileName):
 
 def loadBaseline(boardConfig, asic, fileName):
 	print "Loading %s for ASIC %d" % (fileName, asic)
+	boardConfig.asicBaselineFile[asic]=fileName
 	f = open(fileName, "r")
 	r = re.compile('[ \t\n\r:]*')
 	for i in range(64):
