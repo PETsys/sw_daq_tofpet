@@ -1,4 +1,4 @@
-PREFIX=data/2014/06/02/M21M22/R001_fetp_tp1
+PREFIX=data/2014/07/21/M21M05/R001_fetp_tp1
 
 for F in ${PREFIX}*.raw2; do 
 
@@ -8,7 +8,7 @@ for F in ${PREFIX}*.raw2; do
 	mkdir -p ${D}/pdf
 	mkdir -p ${D}/rpt
 
-	aDAQ/reportTDC ${D}/${P} ${D}/rpt/${P}_rpt.root
+	aDAQ/buildRaw ${D}/${P} ${D}/rpt/${P}_rpt.root
 
 	# Mezzanine on slot 0
 	root -l -q ${D}/rpt/${P}_rpt.root aDAQ/setASIC0.C aDAQ/draw_dump_tp1.C
