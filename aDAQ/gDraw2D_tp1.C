@@ -30,7 +30,7 @@
         g1->SetTitle("T resolution (LSB #sigma)");
         g1->GetXaxis()->SetTitle("ib1 (ADC)");
         g1->GetYaxis()->SetTitle("vbl (ADC)");
-        g1->GetZaxis()->SetRangeUser(0, 4);
+        g1->GetZaxis()->SetRangeUser(0, 2);
         g1->Draw("COLZ");
         
 //        c->cd(2);
@@ -51,7 +51,7 @@
         g4->SetTitle("ToT average (ns) ");
         g4->GetXaxis()->SetTitle("ib1 (ADC)");
         g4->GetYaxis()->SetTitle("vbl (ADC)");
-        g4->GetZaxis()->SetRangeUser(0, 300);
+        g4->GetZaxis()->SetRangeUser(75, 250);
         g4->Draw("COLZ");
 	
 	

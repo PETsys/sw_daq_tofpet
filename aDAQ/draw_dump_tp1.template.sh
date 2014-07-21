@@ -8,7 +8,7 @@ for F in ${PREFIX}*.raw2; do
 	mkdir -p ${D}/pdf
 	mkdir -p ${D}/rpt
 
-	aDAQ/reportTDC ${D}/${P} ${D}/rpt/${P}_rpt.root
+	aDAQ/buildRaw ${D}/${P} ${D}/rpt/${P}_rpt.root
 
 	# Mezzanine on slot 0
 	root -l -q ${D}/rpt/${P}_rpt.root aDAQ/setASIC0.C aDAQ/draw_dump_tp1.C
