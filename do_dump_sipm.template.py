@@ -19,7 +19,7 @@ uut.config = loadLocalConfig()
 uut.openAcquisition(dataFilePrefix, cWindow)
 
 # Set all HV DAC channels 
-for c in range(8):
+for c in range(len(uut.config.hvBias)):
 	uut.config.hvBias[c] = 67.250
 
 for step1 in [0]:
@@ -32,6 +32,6 @@ for step1 in [0]:
   
 
 # Set SiPM bias to zero when finished!
-for c in range(8):
+for c in range(len(uut.config.hvBias)):
 	uut.config.hvBias[c] = 0
 uut.uploadConfig()
