@@ -22,7 +22,7 @@ if (len(argv) != 2):
 
 prefix, ext = splitext(argv[1])
 
-atbConfig = loadLocalConfig(loadBaseline=False)
+atbConfig = loadLocalConfig(useBaseline=False)
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 

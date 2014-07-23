@@ -29,7 +29,7 @@ targetHVBias = [ 50 ]
 # Operating clock period
 T = 6.25E-9
 
-atbConfig = loadLocalConfig(loadBaseline=False)
+atbConfig = loadLocalConfig(useBaseline=False)
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 

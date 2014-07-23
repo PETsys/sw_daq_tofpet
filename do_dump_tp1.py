@@ -31,7 +31,7 @@ tpLength = 512
 
 
 
-atbConfig = loadLocalConfig(loadBaseline=False)
+atbConfig = loadLocalConfig(useBaseline=False)
 for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = 50.0
 
