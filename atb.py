@@ -405,7 +405,7 @@ class BoardConfig:
                 for key in key_list:
                   value= ac.channelConfig[ch].getValue(key)
                   f.write('\t"%s" : %d\n' % (key, value))
-                baseline= ac.channelConfig[ch].getBaseline(key)
+                baseline= ac.channelConfig[ch].getBaseline()
                 f.write("\tBASELINE : %d\n"%baseline)
                 f.write("\t}\n")
             ac_ind+=1
