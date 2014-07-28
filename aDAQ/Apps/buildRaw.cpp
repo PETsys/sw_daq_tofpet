@@ -1,12 +1,7 @@
 #include <TFile.h>
 #include <TNtuple.h>
 #include <TOFPET/RawV2.hpp>
-#include <TOFPET/LUTExtract.hpp>
-#include <TOFPET/LUT.hpp>
-#include <Core/SingleReadoutGrouper.hpp>
-#include <Core/FakeCrystalPositions.hpp>
-#include <Core/ComptonGrouper.hpp>
-#include <Core/CoincidenceGrouper.hpp>
+#include <Core/OverlappedEventHandler.hpp>
 #include <assert.h>
 #include <math.h>
 #include <string.h>

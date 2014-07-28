@@ -853,6 +853,11 @@ class ATB:
 
 	  
 	def openAcquisition(self, fileName, cWindow):
+		from os import environ
+		if not environ.has_key('ADAQ_CRYSTAL_MAP'):
+			print 'Error: ADAQ_CRYSTAL_MAP environment variable is not set'
+			exit(1)
+
 		cmd = [ "aDAQ/writeRaw", self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
 				"%e" % cWindow, \
 				fileName ]

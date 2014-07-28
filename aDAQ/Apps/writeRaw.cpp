@@ -17,11 +17,13 @@
 #include <algorithm>
 #include <functional>
 
+#include <Common/Constants.hpp>
+#include <Common/Utils.hpp>
 #include <Core/Event.hpp>
 #include <Core/CoarseExtract.hpp>
 #include <Core/PulseFilter.hpp>
 #include <Core/SingleReadoutGrouper.hpp>
-#include <Core/FakeCrystalPositions.hpp>
+#include <Core/CrystalPositions.hpp>
 #include <Core/NaiveGrouper.hpp>
 #include <Core/CoincidenceFilter.hpp>
 
@@ -30,7 +32,7 @@ using namespace std;
 using namespace DAQ;
 using namespace DAQ::Core;
 
-const double T = 6.25E-9;
+const double T = SYSTEM_PERIOD;
 static const unsigned outBlockSize = 128*1024;
 
 
@@ -314,14 +316,13 @@ int main(int argc, char *argv[])
 		
 		if(sink == NULL) {			
 			sink = new CoarseExtract(false,
-				new PulseFilter(-INFINITY, INFINITY, 
 				new SingleReadoutGrouper(
-				new FakeCrystalPositions(
+				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(20, 100E-9,
 				new CoincidenceFilter(cWindow, 0,
 				new EventWriter(outputDataFile, outputIndexFile, step1, step2,
 				new NullSink<GammaPhoton>()
-				)))))));		
+				))))));		
 		}
 		
 		

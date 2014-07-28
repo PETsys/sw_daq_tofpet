@@ -98,6 +98,8 @@ namespace DAQ { namespace Core {
 		float x;
 		float y;
 		float z;
+		int xi;
+		int yi;
 		float energy;
 		float missingEnergy;
 		short nMissing;
@@ -108,6 +110,8 @@ namespace DAQ { namespace Core {
 			x = 0;
 			y = 0;
 			z = 0;
+			xi = -1;
+			yi = -1;
 			energy = 0;
 			missingEnergy = 0;
 			nMissing = 0;

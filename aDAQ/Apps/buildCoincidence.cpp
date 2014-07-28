@@ -1,13 +1,13 @@
 #include <TFile.h>
 #include <TNtuple.h>
+#include <Common/Constants.hpp>
+#include <Common/Utils.hpp>
 #include <TOFPET/RawV2.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <Core/PulseFilter.hpp>
 #include <Core/SingleReadoutGrouper.hpp>
-#include <Core/FakeCrystalPositions.hpp>
-#include <Core/ComptonGrouper.hpp>
+#include <Core/CrystalPositions.hpp>
 #include <Core/NaiveGrouper.hpp>
-#include <Core/CoincidenceFilter.hpp>
 #include <Core/CoincidenceGrouper.hpp>
 #include <assert.h>
 #include <math.h>
@@ -19,7 +19,9 @@ static float		eventStep2;
 static long long 	stepBegin;
 static long long 	stepEnd;
 
+static unsigned short	event1N;
 static unsigned short	event1J;
+static unsigned 	event1DeltaT;
 static long long	event1Time;
 static unsigned short	event1Channel;
 static float		event1ToT;
@@ -29,8 +31,15 @@ static double		event1TacIdleTime;
 static unsigned short	event1TFine;
 static float		event1TQT;
 static float		event1TQE;
+static int		event1Xi;
+static int		event1Yi;
+static float		event1X;
+static float 		event1Y;
+static float 		event1Z;
 
+static unsigned short	event2N;
 static unsigned short	event2J;
+static unsigned 	event2DeltaT;
 static long long	event2Time;
 static unsigned short	event2Channel;
 static float		event2ToT;
@@ -40,6 +49,11 @@ static double		event2TacIdleTime;
 static unsigned short	event2TFine;
 static float		event2TQT;
 static float		event2TQE;
+static int		event2Xi;
+static int		event2Yi;
+static float		event2X;
+static float 		event2Y;
+static float 		event2Z;
 
 
 
@@ -52,9 +66,9 @@ using namespace std;
 
 class EventWriter : public EventSink<Coincidence> {
 public:
-	EventWriter(TTree *lmDataTuple) 
-	: lmTuple(lmDataTuple) {
-		
+	EventWriter(TTree *lmTree, float maxDeltaT, int maxN)
+	: lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN)
+	{
 	};
 	
 	~EventWriter() {
@@ -67,37 +81,60 @@ public:
 		unsigned nEvents = buffer->getSize();
 		for(unsigned i = 0; i < nEvents; i++) {
 			Coincidence &c = buffer->get(i);
-
-			for(int j1 = 0; j1 < 1; j1 ++) {
-				for(int j2 = 0; j2 < 1; j2++) {
-					RawHit *crystals[2] = { 
-						&c.photons[0].hits[j1].raw, 
-						&c.photons[1].hits[j2].raw 
-					};
+			
+			for(int j1 = 0; (j1 < c.photons[0].nHits) && (j1 < maxN); j1 ++) {
+				long long t0_1 = c.photons[0].hits[0].time;		
+				
+				for(int j2 = 0; (j2 < c.photons[1].nHits) && (j2 < maxN); j2++) {
+					long long t0_2 = c.photons[1].hits[0].time;
+		
+					Hit &hit1 = c.photons[0].hits[j1];
+					Hit &hit2 = c.photons[1].hits[j2];
 					
-					long long T = crystals[0]->top.raw.d.tofpet.T;
+					long long T = hit1.raw.top.raw.d.tofpet.T;
 					
-					event1J	= j1;
-					event1Time = crystals[0]->time;
-					event1Channel = crystals[0]->top.channelID;
-					event1ToT = 1E-3*(crystals[0]->top.timeEnd - crystals[0]->top.time),
-					event1Tac = crystals[0]->top.raw.d.tofpet.tac;
-					event1ChannelIdleTime = crystals[0]->top.raw.d.tofpet.channelIdleTime * T * 1E-12;
-					event1TacIdleTime = crystals[0]->top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-					event1TQT = crystals[0]->top.tofpet_TQT;
-					event1TQE = crystals[0]->top.tofpet_TQE;
+					float dt1 = hit1.time - t0_1;
+					if(dt1 > maxDeltaT) continue;
 					
+					float dt2 = hit2.time - t0_1;
+					if(dt2 > maxDeltaT) continue;
+					
+					
+					event1J = j1;
+					event1N = c.photons[0].nHits;
+					event1DeltaT = dt1;
+					event1Time = hit1.time;
+					event1Channel = hit1.raw.top.channelID;
+					event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
+					event1Tac = hit1.raw.top.raw.d.tofpet.tac;
+					event1ChannelIdleTime = hit1.raw.top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+					event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = hit1.raw.top.tofpet_TQT;
+					event1TQE = hit1.raw.top.tofpet_TQE;
+					event1X = hit1.x;
+					event1Y = hit1.y;
+					event1Z = hit1.z;
+					event1Xi = hit1.xi;
+					event1Yi = hit1.yi;			
+						
 					event2J = j2;
-					event2Time = crystals[1]->time;
-					event2Channel = crystals[1]->top.channelID;
-					event2ToT = 1E-3*(crystals[1]->top.timeEnd - crystals[1]->top.time),
-					event2Tac = crystals[1]->top.raw.d.tofpet.tac;
-					event2ChannelIdleTime = crystals[1]->top.raw.d.tofpet.channelIdleTime * T * 1E-12;
-					event2TacIdleTime = crystals[1]->top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-					event2TQT = crystals[1]->top.tofpet_TQT;
-					event2TQE = crystals[1]->top.tofpet_TQE;				
+					event2N = c.photons[1].nHits;
+					event2DeltaT = dt2;
+					event2Time = hit2.time;
+					event2Channel = hit2.raw.top.channelID;
+					event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
+					event2Tac = hit2.raw.top.raw.d.tofpet.tac;
+					event2ChannelIdleTime = hit2.raw.top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+					event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = hit2.raw.top.tofpet_TQT;
+					event2TQE = hit2.raw.top.tofpet_TQE;
+					event2X = hit2.x;
+					event2Y = hit2.y;
+					event2Z = hit2.z;
+					event2Xi = hit2.xi;
+					event2Yi = hit2.yi;					
 
-					lmTuple->Fill();
+					lmTree->Fill();
 				}
 					
 			}
@@ -111,7 +148,9 @@ public:
 	void finish() { };
 	void report() { };
 private: 
-	TTree *lmTuple;
+	TTree *lmTree;
+	long long maxDeltaT;
+	int maxN;	
 };
 
 int main(int argc, char *argv[])
@@ -151,7 +190,10 @@ int main(int argc, char *argv[])
 	int bs = 512*1024;
 	lmData->Branch("step1", &eventStep1, bs);
 	lmData->Branch("step2", &eventStep2, bs);
-	lmData->Branch("j1", &event1J, bs);
+	
+	lmData->Branch("mh_n1", &event1N, bs);
+	lmData->Branch("mh_j1", &event1J, bs);
+	lmData->Branch("mt_dt1", &event1DeltaT, bs);
 	lmData->Branch("time1", &event1Time, bs);
 	lmData->Branch("channel1", &event1Channel, bs);
 	lmData->Branch("tot1", &event1ToT, bs);
@@ -159,8 +201,16 @@ int main(int argc, char *argv[])
 	lmData->Branch("channelIdleTime1", &event1ChannelIdleTime, bs);
 	lmData->Branch("tacIdleTime1", &event1TacIdleTime, bs);
 	lmData->Branch("tqT1", &event1TQT, bs);
-	lmData->Branch("tqE1", &event1TQE, bs);	
-	lmData->Branch("j2", &event2J, bs);
+	lmData->Branch("tqE1", &event1TQE, bs);
+	lmData->Branch("xi1", &event1Xi, bs);
+	lmData->Branch("yi1", &event1Yi, bs);
+	lmData->Branch("x1", &event1X, bs);
+	lmData->Branch("y1", &event1Y, bs);
+	lmData->Branch("z1", &event1Z, bs);
+	
+	lmData->Branch("mh_n2", &event2N, bs);
+	lmData->Branch("mh_j2", &event2J, bs);
+	lmData->Branch("mt_dt2", &event2DeltaT, bs);
 	lmData->Branch("time2", &event2Time, bs);
 	lmData->Branch("channel2", &event2Channel, bs);
 	lmData->Branch("tot2", &event2ToT, bs);
@@ -168,7 +218,12 @@ int main(int argc, char *argv[])
 	lmData->Branch("channelIdleTime2", &event2ChannelIdleTime, bs);
 	lmData->Branch("tacIdleTime2", &event2TacIdleTime, bs);
 	lmData->Branch("tqT2", &event2TQT, bs);
-	lmData->Branch("tqE2", &event2TQE, bs);	
+	lmData->Branch("tqE2", &event2TQE, bs);
+	lmData->Branch("xi2", &event2Xi, bs);
+	lmData->Branch("yi2", &event2Yi, bs);
+	lmData->Branch("x2", &event2X, bs);
+	lmData->Branch("y2", &event2Y, bs);
+	lmData->Branch("z2", &event2Z, bs);	
 	
 	TTree *lmIndex = new TTree("lmIndex", "Step Index", 2);
 	lmIndex->Branch("step1", &eventStep1, bs);
@@ -190,17 +245,15 @@ int main(int argc, char *argv[])
 // 		if(eventsEnd > eventsBegin + 10E6) eventsEnd = eventsBegin + 10E6;
 
 		const unsigned nChannels = 2*128; 
-		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
-								      
+		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 				new P2Extract(P2, false, true, true,
-				new PulseFilter(-INFINITY, INFINITY, 	
 				new SingleReadoutGrouper(
-				new FakeCrystalPositions(
+				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(20, 100E-9,
 				new CoincidenceGrouper(20E-9,
-				new EventWriter(lmData
+				new EventWriter(lmData, 100E-9, 1
 
-		))))))));
+		)))))));
 		
 		reader->wait();
 		delete reader;

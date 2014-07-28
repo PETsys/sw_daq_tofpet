@@ -44,8 +44,10 @@ EventBuffer<Coincidence> * CoincidenceGrouper::handleEvents(EventBuffer<GammaPho
 			if(tAbs(photon1.time - photon2.time) <= cWindow) {
 				Coincidence &c = outBuffer->getWriteSlot();
 				c.nPhotons = 2;
-				c.photons[0] = (photon1.region > photon2.region) ? photon1 : photon2;
-				c.photons[1] = (photon1.region > photon2.region) ? photon2 : photon1;
+				
+				bool first1 = photon1.region > photon2.region;
+				c.photons[0] = first1 ? photon1 : photon2;
+				c.photons[1] = first1 ? photon2 : photon1;
 				if(c.photons[0].time < tMin || c.photons[0].time >= tMax) continue;		
 				outBuffer->pushWriteSlot();
 				lPrompts++;
