@@ -127,12 +127,14 @@ void RawReaderV2::run()
 	
 	fprintf(stderr, "Reading %llu to %llu\n", eventsBegin, eventsEnd);
 	fseek(dataFile, eventsBegin * sizeof(RawEventV2), SEEK_SET);
+	
+	int maxReadBlock = 1024*1024;
+	RawEventV2 *rawEvents = new RawEventV2[maxReadBlock];
 
 	unsigned long long readPointer = eventsBegin;
 	while (readPointer < eventsEnd) {
 		unsigned long long count = eventsEnd - readPointer;
-		if(count > 128) count = 128;
-		RawEventV2 rawEvents[128];
+		if(count > maxReadBlock) count = maxReadBlock;
 		int r = fread(rawEvents, sizeof(RawEventV2), count, dataFile);
 		if(r <= 0) break;
 		readPointer += r;
@@ -184,6 +186,8 @@ void RawReaderV2::run()
 			}
 		}
 	}
+	
+	delete [] rawEvents;
 
 	
 	if(outBuffer != NULL) {
