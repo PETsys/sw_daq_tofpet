@@ -27,10 +27,17 @@ namespace DAQ { namespace Core {
 			  short efine;
 			  short tac;
 			  long long T;
-			  long long channelIdleTime;
 			  long long tacIdleTime;
 		  } tofpet;
 		  struct {
+			  long long frameID;
+			  short tcoarse;
+			  short ecoarse;
+			  short tfine;
+			  short efine;
+			  bool tBadHit;
+			  bool eBadHit;
+			  // Write here any other STIC auxiliary fields that may be relevant for data analysis;
 		  } stic;
 		  struct {
 		  } dsipm;

@@ -79,7 +79,7 @@ public:
 				eventChannel = hit.raw.top.channelID;
 				eventToT = 1E-3*(hit.raw.top.timeEnd - hit.raw.top.time);
 				eventTac = hit.raw.top.raw.d.tofpet.tac;
-				eventChannelIdleTime = hit.raw.top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+				eventChannelIdleTime = hit.raw.top.raw.channelIdleTime * T * 1E-12;
 				eventTacIdleTime = hit.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
 				eventTQT = hit.raw.top.tofpet_TQT;
 				eventTQE = hit.raw.top.tofpet_TQE;

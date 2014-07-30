@@ -43,7 +43,7 @@ public:
 				raw.channelID, raw.d.tofpet.tac,
 				raw.d.tofpet.tcoarse, raw.d.tofpet.tfine, 
 				raw.d.tofpet.ecoarse, raw.d.tofpet.efine, 
-				float(raw.d.tofpet.channelIdleTime), 
+				float(raw.channelIdleTime), 
 				float(raw.d.tofpet.tacIdleTime));
 			
 			

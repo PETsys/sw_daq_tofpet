@@ -119,7 +119,7 @@ public:
 					rawPulse.d.tofpet.ecoarse,
 					rawPulse.d.tofpet.tfine,
 					rawPulse.d.tofpet.efine,
-					rawPulse.d.tofpet.channelIdleTime,
+					rawPulse.channelIdleTime,
 					rawPulse.d.tofpet.tacIdleTime
 				};
 				
@@ -368,7 +368,7 @@ int main(int argc, char *argv[])
 				p.d.tofpet.ecoarse = eventIn.eCoarse;
 				p.d.tofpet.tfine =  eventIn.tFine;
 				p.d.tofpet.efine = eventIn.eFine;
-				p.d.tofpet.channelIdleTime = eventIn.channelIdleTime;				
+				p.channelIdleTime = eventIn.channelIdleTime;				
 				p.d.tofpet.tacIdleTime = eventIn.tacIdleTime;				
 									
 				if(p.time > tMax) {

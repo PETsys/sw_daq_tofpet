@@ -65,7 +65,7 @@ public:
 			eventChannel = raw.top.channelID;
 			eventToT = 1E-3*(raw.top.timeEnd - raw.top.time);
 			eventTac = raw.top.raw.d.tofpet.tac;
-			eventChannelIdleTime = raw.top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+			eventChannelIdleTime = raw.top.raw.channelIdleTime * T * 1E-12;
 			eventTacIdleTime = raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
 			eventTQT = raw.top.tofpet_TQT;
 			eventTQE = raw.top.tofpet_TQE;

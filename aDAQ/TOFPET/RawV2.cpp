@@ -155,6 +155,7 @@ void RawReaderV2::run()
 			p.timeEnd = (1024LL * rawEvent.frameID + rawEvent.eCoarse) * p.d.tofpet.T;
 			if((p.timeEnd - p.time) < -256*p.d.tofpet.T) p.timeEnd += (1024LL * p.d.tofpet.T);
 			p.channelID = 64 * rawEvent.asicID + rawEvent.channelID;
+			p.channelIdleTime = rawEvent.channelIdleTime;
 			p.region = (64 * rawEvent.asicID + rawEvent.channelID) / 16;
 			p.feType = RawPulse::TOFPET;
 			p.d.tofpet.frameID = rawEvent.frameID;
@@ -163,7 +164,7 @@ void RawReaderV2::run()
 			p.d.tofpet.ecoarse = rawEvent.eCoarse;
 			p.d.tofpet.tfine =  rawEvent.tFine;
 			p.d.tofpet.efine = rawEvent.eFine;
-			p.d.tofpet.channelIdleTime = rawEvent.channelIdleTime;
+			p.channelIdleTime = rawEvent.channelIdleTime;
 			p.d.tofpet.tacIdleTime = rawEvent.tacIdleTime;
 			
 		

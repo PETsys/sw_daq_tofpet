@@ -107,7 +107,7 @@ public:
 					event1Channel = hit1.raw.top.channelID;
 					event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
 					event1Tac = hit1.raw.top.raw.d.tofpet.tac;
-					event1ChannelIdleTime = hit1.raw.top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+					event1ChannelIdleTime = hit1.raw.top.raw.channelIdleTime * T * 1E-12;
 					event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
 					event1TQT = hit1.raw.top.tofpet_TQT;
 					event1TQE = hit1.raw.top.tofpet_TQE;
@@ -124,7 +124,7 @@ public:
 					event2Channel = hit2.raw.top.channelID;
 					event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
 					event2Tac = hit2.raw.top.raw.d.tofpet.tac;
-					event2ChannelIdleTime = hit2.raw.top.raw.d.tofpet.channelIdleTime * T * 1E-12;
+					event2ChannelIdleTime = hit2.raw.top.raw.channelIdleTime * T * 1E-12;
 					event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
 					event2TQT = hit2.raw.top.tofpet_TQT;
 					event2TQE = hit2.raw.top.tofpet_TQE;

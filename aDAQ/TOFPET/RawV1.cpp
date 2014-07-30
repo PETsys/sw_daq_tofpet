@@ -153,7 +153,7 @@ void RawReaderV1::run()
 		p.d.tofpet.tfine = rawEvent.tEoC - rawEvent.xSoC;
 		p.d.tofpet.tfine = rawEvent.eEoC - rawEvent.xSoC;
 		p.d.tofpet.tacIdleTime = 0;
-		p.d.tofpet.channelIdleTime = 0;
+		p.channelIdleTime = 0;
 
 		if(p.channelID >= 128)
 			continue;
