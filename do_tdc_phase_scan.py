@@ -44,6 +44,7 @@ if argv[2] == "tdca":
   tdcaMode = True
   vbias = 5
   frameInterval = 0
+  invertTP = False
 	
 
 elif argv[2] == "fetp":
@@ -51,6 +52,7 @@ elif argv[2] == "fetp":
   tpDAC = int(argv[3])
   vbias = float(argv[4])
   frameInterval = 16
+  invertTP = True
 
 else:
   print "Unkown mode!"
@@ -137,7 +139,7 @@ for tChannel in activeChannels:
 			tpCoarsePhase = phaseStep/M
 			tpFinePhase = phaseStep % M
 
-		uut.setExternalTestPulse(tpLength, frameInterval, tpCoarsePhase, tpFinePhase, Generator)
+		uut.setTestPulsePLL(tpLength, frameInterval, tpFinePhase, invertTP)
 		uut.doSync()
 		t0 = time()
 		
@@ -239,7 +241,7 @@ for tChannel in activeChannels:
 				tpCoarsePhase = phaseStep/M
 				tpFinePhase = phaseStep % M
 
-			uut.setExternalTestPulse(tpLength, interval, tpCoarsePhase, tpFinePhase, Generator)
+			uut.setTestPulsePLL(tpLength, interval, tpFinePhase, invertTP)
 			uut.doSync()
 			t0 = time()
 			
