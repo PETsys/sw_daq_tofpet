@@ -22,8 +22,7 @@ CrystalPositions::CrystalPositions(int nCrystals, const char *mapFileName, Event
 	FILE *mapFile = fopen(mapFileName, "r");
 	assert(mapFile != NULL);
 	
-	int asic;
-	int channel;
+	int crystal;
 	int region;
 	int xi;
 	int yi;
@@ -33,8 +32,7 @@ CrystalPositions::CrystalPositions(int nCrystals, const char *mapFileName, Event
 	int hv;
 	
 	int nLoaded = 0;
-	while(fscanf(mapFile, "%d\t%d\t%d\t%d\t%d\t%f\t%f\t%f\t%d\n", &asic, &channel, &region, &xi, &yi, &x, &y, &z, &hv) == 9) {
-		int crystal = 64 * asic + channel;
+	while(fscanf(mapFile, "%d\t%d\t%d\t%d\t%f\t%f\t%f\t%d\n", &crystal, &region, &xi, &yi, &x, &y, &z, &hv) == 8) {
 		
 		assert(crystal < nCrystals);
 		
@@ -76,12 +74,12 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 		Hit &hit = outBuffer->getWriteSlot();
 		hit.raw = raw;
 		hit.time = raw.time;
-		hit.region = map[id].region;
 		hit.energy = raw.energy;
 		hit.missingEnergy = raw.missingEnergy;
 		hit.nMissing = raw.nMissing;
 
-		
+		if(map[id].region == -1) continue;
+		hit.region = map[id].region;		
 		hit.x = map[id].x;
 		hit.y = map[id].y;
 		hit.z = map[id].z;
