@@ -528,11 +528,14 @@ class ATB:
 		name = self.__socket.recv(length - n);
 		return (name, s0, p1, s1)
 
-	def getDataFrame(self):
+	def getDataFrame(self, waitForDataFrame = True):
 		
 		index = None
-		while index is None:
+		while index is None and waitForDataFrame:
 			index = self.getDataFrameByIndex()
+
+		if index is None:
+			return None
 
 		s0, p1, s1 = self.__shmParams
 
@@ -617,6 +620,8 @@ class ATB:
 			self.__lastSN = (sn + 1) & 0xFFFF
 			rawFrame = bytearray([(sn >> 8) & 0xFF, (sn >> 0) & 0xFF, commandType]) + payload
 			rawFrame = str(rawFrame)
+
+			#print [ hex(ord(x)) for x in rawFrame ]
 
 			template1 = "@HH"
 			n = struct.calcsize(template1) + len(rawFrame)
@@ -729,11 +734,21 @@ class ATB:
 			print "Reseting and configuring board (attempt %d)" % attempt
 			attempt += 1
 
-			# Reset ASIC
-			self.stop()
+			# Reset ASIC & ASIC readout
+			self.stop()	
 			self.sendCommand(0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
 			sleep(pause)
 			self.setTestPulseNone()
+
+			# TX calibration
+			#txCalibrateAsicGlobalConfig = AsicGlobalConfig()
+			#txCalibrateAsicGlobalConfig.setValue("tx_mode", 3)
+                        #for asic in range(2):
+			#	 status, _ = self.doAsicCommand(asic, "wrGlobalCfg", value=txCalibrateAsicGlobalConfig);
+
+			#self.sendCommand(0x03, bytearray([0x04, 0xFF, 0x0]))
+			#sleep(1.0)
+			#self.sendCommand(0x03, bytearray([0x04, 0x00, 0x00, 0x00, 0x00]))
 
 			defaultAsicChannelConfig = AsicChannelConfig()
 			defaultAsicGlobalConfig = AsicGlobalConfig()
@@ -745,7 +760,8 @@ class ATB:
 				status, _ = self.doAsicCommand(asic, "wrGlobalCfg", value=defaultAsicGlobalConfig);
 				status, _ = self.doAsicCommand(asic, "wrGlobalTCfg", value=bitarray("1111110"))
 			
-			# Get the frame ID *before* this sync/rst and ensure we discard all frames up to this point
+			# Set normal RX mode and sync to start
+			self.sendCommand(0x03, bytearray([0x04] + [0x00 for x in range(7)] + [0x0F]))
 			self.sendCommand(0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 			sleep(pause)
 			self.start()			
