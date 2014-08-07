@@ -105,11 +105,6 @@ public:
 				
 					lmTuple->Fill();
 					events_passed++;
-					if( events_passed%100000 == 0){
-						fprintf(stderr, "events=%ld\n",events_passed );
-						fprintf(stderr, "event2Channel=%ld\n", event2Channel);
-						fprintf(stderr, "event2Channel=%lld\n", event2Time);
-					}
 				}
 					
 			}
