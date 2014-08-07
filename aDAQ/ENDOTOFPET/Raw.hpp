@@ -1,5 +1,5 @@
-#ifndef __ENDOTOFPET__RAW_HPP__DEFINED__
-#define __ENDOTOFPET__RAW_HPP__DEFINED__
+#ifndef __DAQ__ENDOTOFPET__RAW_HPP__DEFINED__
+#define __DAQ__ENDOTOFPET__RAW_HPP__DEFINED__
 #include <Common/Task.hpp>
 #include <Core/EventSourceSink.hpp>
 #include <Core/Event.hpp>

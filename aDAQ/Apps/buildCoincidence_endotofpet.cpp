@@ -1,6 +1,7 @@
 #include <TFile.h>
 #include <TNtuple.h>
 #include <ENDOTOFPET/Raw.hpp>
+#include <ENDOTOFPET/Extract.hpp>
 #include <Common/Constants.hpp>
 #include <Common/Utils.hpp>
 #include <TOFPET/RawV2.hpp>
@@ -104,7 +105,11 @@ public:
 				
 					lmTuple->Fill();
 					events_passed++;
-					//	fprintf(stderr, "events=%ld\n",events_passed );
+					if( events_passed%100000 == 0){
+						fprintf(stderr, "events=%ld\n",events_passed );
+						fprintf(stderr, "event2Channel=%ld\n", event2Channel);
+						fprintf(stderr, "event2Channel=%lld\n", event2Time);
+					}
 				}
 					
 			}
@@ -128,7 +133,7 @@ int main(int argc, char *argv[])
 	if (argc != 4) {
 		fprintf(stderr, "USAGE: %s <setup_file> <rawfiles> <output_file.root>\n", argv[0]);
 		fprintf(stderr, "setup_file - File containing setup layout and path to tdc calibration files (mezzanines.cal or similar)\n");
-		fprintf(stderr, "rawfiles_prefix - Path to raw data files prefix\n");
+		fprintf(stderr, "rawfiles - Path to raw data files\n");
 		fprintf(stderr, "output_file.root - ROOT output file containing coincidence events TTree\n");
 		return 1;
 	}	
@@ -183,15 +188,16 @@ int main(int argc, char *argv[])
 // 		if(eventsEnd > eventsBegin + 10E6) eventsEnd = eventsBegin + 10E6;
 	
 	const unsigned nChannels = 2*128; 
-	DAQ::ENDOTOFPET::RawReader *reader = new DAQ::ENDOTOFPET::RawReader(inputDataFile, SYSTEM_PERIOD,   
-				new P2Extract(P2, false, true, true,
-				new PulseFilter(-INFINITY, INFINITY, 	
+	DAQ::ENDOTOFPET::RawReader *reader = new DAQ::ENDOTOFPET::RawReader(inputDataFile, SYSTEM_PERIOD, new Extract(
+																												  new P2Extract(P2, false, true, true, NULL),
+							NULL,
+							NULL,	
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(20, 100E-9,
 				new CoincidenceGrouper(20E-9,
 				new EventWriter(lmData
-			))))))));
+								)))))));
 		
 	reader->wait();
 	delete reader;

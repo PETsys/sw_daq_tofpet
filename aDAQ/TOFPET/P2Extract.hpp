@@ -1,5 +1,5 @@
-#ifndef __DAQ_CORE__P2EXTRACT_HPP__DEFINED__
-#define __DAQ_CORE__P2EXTRACT_HPP__DEFINED__
+#ifndef __DAQ_TOFPET__P2EXTRACT_HPP__DEFINED__
+#define __DAQ_TOFPET__P2EXTRACT_HPP__DEFINED__
 
 #include <vector>
 #include <Core/Event.hpp>
@@ -16,21 +16,28 @@ namespace DAQ { namespace TOFPET {
 	public:
 		P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, bool killTDenormals, bool killEDenormals, EventSink<Pulse> *sink);
 		
+		bool handleEvent(RawPulse &raw, Pulse &Pulse);
+
 		virtual void report();
-		
+
+		void printReport();
+
 	protected:
+  
 		virtual EventBuffer<Pulse> * handleEvents (EventBuffer<RawPulse> *inBuffer); 
-		
+	
+		  
+
 	private:
 		DAQ::TOFPET::P2 *lut;
 		
 		bool killZeroToT;
 		bool killTDenormals;
 		bool killEDenormals;
-		volatile u_int32_t nEvent;
-		volatile u_int32_t nZeroToT;
-		volatile u_int32_t nPassed;
-		volatile u_int32_t nNotNormal;
+		u_int32_t nEvent;
+		u_int32_t nZeroToT;
+		u_int32_t nPassed;
+	    u_int32_t nNotNormal;
 	};
 }}
 #endif

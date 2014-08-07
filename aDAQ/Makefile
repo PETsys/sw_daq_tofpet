@@ -1,4 +1,4 @@
-SRCS := $(wildcard Common/*cpp) $(wildcard Core/*cpp) $(wildcard TOFPET/*cpp) $(wildcard ENDOTOFPET/*cpp)
+SRCS := $(wildcard Common/*cpp) $(wildcard Core/*cpp) $(wildcard TOFPET/*cpp) $(wildcard ENDOTOFPET/*cpp) $(wildcard STICv3/*cpp) $(wildcard DSIPM/*cpp)
 BSRCS := $(wildcard Apps/*cpp)
 
 
