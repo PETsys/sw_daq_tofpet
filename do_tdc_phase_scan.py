@@ -44,7 +44,7 @@ if argv[2] == "tdca":
   tdcaMode = True
   vbias = 5
   frameInterval = 0
-  invertTP = False
+  pulseLow = False
 	
 
 elif argv[2] == "fetp":
@@ -52,7 +52,7 @@ elif argv[2] == "fetp":
   tpDAC = int(argv[3])
   vbias = float(argv[4])
   frameInterval = 16
-  invertTP = True
+  pulseLow = False
 
 else:
   print "Unkown mode!"
@@ -72,14 +72,7 @@ rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
 activeChannels = [ y for y in range(64) ]
-#activeChannels = [0, 2, 4, 6, 7, 9, 17, 23, 38, 49, 54, 63]
-#activeChannels = [0, 6, 9, 15, 23,  49, 58, 63]
-#activeChannels = [20]
 activeAsics =  [ x for x in range(2) ]
-
-
-for c in range(8):
-  uut.setHVDAC(c, vbias)
 
 minEventsA *= len(activeAsics)
 minEventsB *= len(activeAsics)
@@ -89,8 +82,13 @@ hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
 
 for tChannel in activeChannels:
 	atbConfig = loadLocalConfig()
+	for c in range(len(atbConfig.hvBias)):
+		atbConfig.hvBias[c] = vbias
+
 	for tAsic in activeAsics:
 		atbConfig.asicConfig[tAsic].globalConfig.setValue("test_pulse_en", 1)
+
+
 
 	for tAsic in activeAsics:
 		# Overwrite test channel config
@@ -139,7 +137,7 @@ for tChannel in activeChannels:
 			tpCoarsePhase = phaseStep/M
 			tpFinePhase = phaseStep % M
 
-		uut.setTestPulsePLL(tpLength, frameInterval, tpFinePhase, invertTP)
+		uut.setTestPulsePLL(tpLength, frameInterval, tpFinePhase, pulseLow)
 		uut.doSync()
 		t0 = time()
 		
@@ -149,7 +147,8 @@ for tChannel in activeChannels:
 		nReceivedEvents = 0
 		nAcceptedEvents = 0
 		nReceivedFrames = 0
-		while nAcceptedEvents < minEventsA and nReceivedFrames < (1.2 * minEventsA * (frameInterval+1)):
+		t0 = time()
+		while nAcceptedEvents < minEventsA and (time() - t0) < 10:
 			decodedFrame = uut.getDataFrame()
 
 			nReceivedFrames += 1
@@ -241,7 +240,7 @@ for tChannel in activeChannels:
 				tpCoarsePhase = phaseStep/M
 				tpFinePhase = phaseStep % M
 
-			uut.setTestPulsePLL(tpLength, interval, tpFinePhase, invertTP)
+			uut.setTestPulsePLL(tpLength, interval, tpFinePhase, pulseLow)
 			uut.doSync()
 			t0 = time()
 			
@@ -251,7 +250,8 @@ for tChannel in activeChannels:
 			nReceivedEvents = 0
 			nAcceptedEvents = 0
 			nReceivedFrames = 0
-			while nAcceptedEvents < minEventsB and nReceivedFrames < (1.2 * minEventsB * (frameInterval+1)):
+			t0 = time()
+			while nAcceptedEvents < minEventsB and (time() - t0) < 15:
 				decodedFrame = uut.getDataFrame()
 				nReceivedFrames += 1
 
