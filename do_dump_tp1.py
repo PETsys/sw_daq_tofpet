@@ -77,5 +77,5 @@ for step1 in range(0,64,4): # vib
   
 
 # Set SiPM bias to zero when finished!
-for c in range(8):
+for c in range(len(atbConfig.hvBias)):
 	uut.setHVDAC(c, 0)
