@@ -40,7 +40,7 @@ N = 30
 for step1 in targetHVBias:
 	print "SiPM Vbias = ", step1
 
-	for c in len(atbConfig.hvBias):
+	for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = step1
 
 	uut.uploadConfig()
