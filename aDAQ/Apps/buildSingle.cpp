@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 
 				new Sanity(100E-9, 		      
-				new P2Extract(lut, false, false, false,
+				new P2Extract(lut, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new EventWriter(lmData

@@ -14,7 +14,7 @@ namespace DAQ { namespace TOFPET {
 	
 	class P2Extract : public OverlappedEventHandler<RawPulse, Pulse> {
 	public:
-		P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, bool killTDenormals, bool killEDenormals, EventSink<Pulse> *sink);
+		P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTolerance, float eDenormalTolerance, EventSink<Pulse> *sink);
 		
 		bool handleEvent(RawPulse &raw, Pulse &Pulse);
 
@@ -32,8 +32,8 @@ namespace DAQ { namespace TOFPET {
 		DAQ::TOFPET::P2 *lut;
 		
 		bool killZeroToT;
-		bool killTDenormals;
-		bool killEDenormals;
+		float tDenormalTolerance;
+		float eDenormalTolerance;
 		u_int32_t nEvent;
 		u_int32_t nZeroToT;
 		u_int32_t nPassed;

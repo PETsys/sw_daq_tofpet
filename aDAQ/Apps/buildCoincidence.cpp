@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
 
 		const unsigned nChannels = 2*128; 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
-				new P2Extract(P2, false, true, true,
+				new P2Extract(P2, false, 1.0, 1.0,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(20, 100E-9,
