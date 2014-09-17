@@ -72,7 +72,7 @@ rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
 activeChannels = [ y for y in range(64) ]
-activeAsics =  [ x for x in range(2) ]
+activeAsics =  [ x for x in range(1) ]
 
 minEventsA *= len(activeAsics)
 minEventsB *= len(activeAsics)

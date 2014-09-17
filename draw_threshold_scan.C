@@ -1,4 +1,10 @@
+void draw_threshold_scan(bool Save = false)
 {
+    
+ 
+  
+	TFile *hFile = new TFile("draw_threshold_scan.root", "RECREATE");
+
 	gStyle->SetPalette(1);
 	gStyle->SetOptFit(1);
 	gStyle->SetOptStat(0);
@@ -34,8 +40,8 @@
 	f->SetParName(1, "x0");
 	f->SetParName(2, "Sigma");
 
-	FILE *thFile1 = fopen("MA.baseline", "w");
-	FILE *thFile2 = fopen("MB.baseline", "w");
+	FILE *thFile1 = fopen("M0.baseline", "w");
+	FILE *thFile2 = fopen("M1.baseline", "w");
 	for(Int_t i = 1; i < hRate->GetNbinsX() + 1; i++) {
 		Int_t C = i-1;
 		char hName[128];
@@ -128,4 +134,10 @@
 	hSigma->GetXaxis()->SetTitle("vth_T (ADC)");
 	hSigma->GetYaxis()->SetTitle("Number of channels");
 	hSigma->Draw();
+	hFile->Write();
+	
+	if(Save){
+		  c1->SaveAs("/tmp/baseline_dummy.pdf");
+		  exit();
+	}
 }
