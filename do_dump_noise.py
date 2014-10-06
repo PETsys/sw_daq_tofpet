@@ -15,7 +15,9 @@ if (len(argv) != 2):
 
 prefix, ext = splitext(argv[1])
 
-targetAsics = [ x for x in range(2) ]
+atbConfig = loadLocalConfig(useBaseline=False)
+
+targetAsics = [ x for x in range(len(atbConfig.asicConfig)) ]
 
 # All channels
 targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
@@ -29,13 +31,12 @@ targetHVBias = [ 50 ]
 # Operating clock period
 T = 6.25E-9
 
-atbConfig = loadLocalConfig(useBaseline=False)
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
-uut.initialize()
 uut.config = atbConfig
+uut.initialize()
 uut.uploadConfig()
 uut.doSync(False)
 

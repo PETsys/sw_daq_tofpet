@@ -4,6 +4,7 @@ from time import sleep
 from sys import argv
 
 uut = atb.ATB("/tmp/d.sock")
+uut.config = atb.BoardConfig()
 f = open(argv[1])
 
 print "Configuring SI53xx clock filter"

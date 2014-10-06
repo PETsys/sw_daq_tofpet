@@ -1,7 +1,7 @@
 {
 
-	Int_t CA = 69;
-	Int_t CB = 5;
+	Int_t CA = 131;
+	Int_t CB = 63;
 	
 	Float_t T = 6250;
 	FILE * ctrTable = fopen("ctr.txt", "w");
@@ -265,7 +265,8 @@
         stepBegin = stepEnd;  
 	//if(currentStep1 == 44 && currentStep2 ==52)break;
        
-	c = new TCanvas();
+	//c = new TCanvas();
+	c->Clear();
 	c->Divide(3,1);
 	c->cd(1);
 	hToT1->Draw();
@@ -274,9 +275,9 @@
 	c->cd(3);
 	hToT2->Draw();
       	char pdffilename[128];
-	sprintf(pdffilename,"~/Luis/pdfs/postamp%d_vth%d.pdf",int(step1), int(step2));
+	sprintf(pdffilename,"pdfs/postamp%d_vth%d.pdf",int(step1), int(step2));
 	c->SaveAs(pdffilename);
-        delete c;
+        //delete c;
     } while(stepBegin < nEvents); 
 
     fclose(ctrTable);

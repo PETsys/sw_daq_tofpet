@@ -4,18 +4,16 @@ import atb
 from time import sleep
 
 uut = atb.ATB("/tmp/d.sock")
-#uut.initialize()
-#uut.config = atb.BoardConfig()
-#uut.uploadConfig()
-##for c in range(8):
-	##uut.config.hvBias[c] = 68.0
-##for ac in uut.config.asicConfig:
-	##ac.globalConfig.setValue("vib1", 32)
+uut.config = atb.BoardConfig();
 
-#uut.uploadConfig()
+while True:
+	status, data0 = uut.doAsicCommand(0, "rdChDark", channel = 9)
+	status, data1 = uut.doAsicCommand(1, "rdChDark", channel = 9)
+	print data0, data1
 
-#uut.sendCommand(0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
-uut.sendCommand(0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+
+	
+
 
 
 

@@ -17,7 +17,8 @@
 #include <math.h>
 #include <boost/lexical_cast.hpp>
 
-static const int nASIC= 2;
+static const int nBoard = 2;
+static const int nASIC = 2 * nBoard;
 static const int nTAC = nASIC*64*2*4;
 struct TacInfo {
 	TH2 *hA_Fine;
@@ -751,8 +752,8 @@ int main(int argc, char *argv[])
 	
 	
 	
-	myP2.storeFile( 0,  64, tableFileName1);
-	myP2.storeFile(64, 128, tableFileName2);
+	myP2.storeFile(  0, 128, tableFileName1);
+	myP2.storeFile(128, 256, tableFileName2);
 	resumeFile->Write();
 	resumeFile->Close();
 

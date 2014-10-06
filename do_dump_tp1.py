@@ -35,17 +35,17 @@ atbConfig = loadLocalConfig(useBaseline=False)
 for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = 50.0
 
-for tAsic in range(2):
-	atbConfig.asicConfig[tAsic].globalConfig.setValue("test_pulse_en", 1)
-	atbConfig.asicConfig[tAsic].channelTConfig[tChannel] = bitarray('1')
-	atbConfig.asicConfig[tAsic].globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
+for ac in atbConfig.asicConfig:
+	ac.globalConfig.setValue("test_pulse_en", 1)
+	ac.channelTConfig[tChannel] = bitarray('1')
+	ac.globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
 	#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", 32);
 	#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("fe_test_mode", 1);
 	#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0);
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
-uut.initialize()
 uut.config = atbConfig
+uut.initialize()
 uut.uploadConfig()
 uut.doSync()
 uut.openAcquisition(dataFilePrefix, cWindow)

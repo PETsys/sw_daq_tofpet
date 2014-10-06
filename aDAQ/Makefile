@@ -21,7 +21,7 @@ DEPS := $(SRCS:=.d) $(BSRCS:=.d)
 APPS := $(foreach APP,$(BSRCS:.cpp=), $(subst Apps/,,$(APP)))
 BINARIES := $(BSRCS:=.b)
 
-CHANNEL_MAPS := TOFPET/FEBA_PAB.map TOFPET/MEZ1_PAB.map
+CHANNEL_MAPS := TOFPET/FEBA_PAB.map TOFPET/MEZ1_PAB.map TOFPET/FEBA_PAB_MEZ2.map
 
 
 default: $(APPS) $(CHANNEL_MAPS)
@@ -35,7 +35,7 @@ ifneq ($(MAKECMDGOALS),clean)
 endif
 
 %.cpp.o: %.cpp.d
-	@echo Comping $<
+	@echo Compiling $<
 	$(CXX) -c -o $@ $(CXXFLAGS) $(CPPFLAGS) $(@:.o=) 
 
 %.cpp.d: %.cpp
@@ -48,6 +48,9 @@ endif
 
 TOFPET/FEBA_PAB.map:	TOFPET/FEBA_STANDALONE.tsv TOFPET/FEBA_PAB.map.py
 	python TOFPET/FEBA_PAB.map.py TOFPET/FEBA_STANDALONE.tsv TOFPET/FEBA_PAB.map
+
+TOFPET/FEBA_PAB_MEZ2.map: TOFPET/FEBA_STANDALONE.tsv TOFPET/FEBA_PAB_MEZ2.map.py
+	python TOFPET/FEBA_PAB_MEZ2.map.py TOFPET/FEBA_STANDALONE.tsv TOFPET/FEBA_PAB_MEZ2.map
 
 TOFPET/MEZ1_PAB.map:	TOFPET/MEZ1_STANDALONE.tsv TOFPET/MEZ1_PAB.map.py
 	python TOFPET/MEZ1_PAB.map.py TOFPET/MEZ1_STANDALONE.tsv TOFPET/MEZ1_PAB.map

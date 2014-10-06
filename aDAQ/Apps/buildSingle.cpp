@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
 	
-	TOFPET::P2 *lut = new TOFPET::P2(128);
+	TOFPET::P2 *lut = new TOFPET::P2(4096);
 	if (strcmp(argv[1], "none") == 0) {
 		lut->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");

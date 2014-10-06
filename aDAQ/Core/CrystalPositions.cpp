@@ -70,6 +70,7 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 		if(raw.time < tMin || raw.time >= tMax) continue;
 		
 		int id = raw.crystalID;
+		if(map[id].region == -1) continue;
 		
 		Hit &hit = outBuffer->getWriteSlot();
 		hit.raw = raw;
@@ -78,7 +79,7 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 		hit.missingEnergy = raw.missingEnergy;
 		hit.nMissing = raw.nMissing;
 
-		if(map[id].region == -1) continue;
+		
 		hit.region = map[id].region;		
 		hit.x = map[id].x;
 		hit.y = map[id].y;

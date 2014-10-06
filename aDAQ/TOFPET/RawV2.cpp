@@ -1,4 +1,5 @@
 #include "RawV2.hpp"
+#include <Common/Constants.hpp>
 
 #include <algorithm>
 #include <functional>
@@ -148,13 +149,13 @@ void RawReaderV2::run()
 		
 
 			RawPulse &p = outBuffer->getWriteSlot();
-		
+			
 			// Carefull with the float/double/integer conversions here..
 			p.d.tofpet.T = T * 1E12;
 			p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * p.d.tofpet.T;
 			p.timeEnd = (1024LL * rawEvent.frameID + rawEvent.eCoarse) * p.d.tofpet.T;
 			if((p.timeEnd - p.time) < -256*p.d.tofpet.T) p.timeEnd += (1024LL * p.d.tofpet.T);
-			p.channelID = 64 * rawEvent.asicID + rawEvent.channelID;
+			p.channelID = (64 * rawEvent.asicID) + rawEvent.channelID;
 			p.channelIdleTime = rawEvent.channelIdleTime;
 			p.region = (64 * rawEvent.asicID + rawEvent.channelID) / 16;
 			p.feType = RawPulse::TOFPET;
@@ -166,12 +167,11 @@ void RawReaderV2::run()
 			p.d.tofpet.efine = rawEvent.eFine;
 			p.channelIdleTime = rawEvent.channelIdleTime;
 			p.d.tofpet.tacIdleTime = rawEvent.tacIdleTime;
-			
 		
 			if(rawEvent.frameID < minFrameID) minFrameID = rawEvent.frameID;
 			if(rawEvent.frameID > maxFrameID) maxFrameID = rawEvent.frameID;
 				
-			if(p.channelID >= 128)
+			if(p.channelID >= SYSTEM_NCHANNELS)
 				continue;
 		
 			if(p.time > tMax)
