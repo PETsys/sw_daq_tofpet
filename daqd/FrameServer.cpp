@@ -142,8 +142,8 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 		printf("\n");
 	}
 	
-	int nEvents = (buffer[0] << 8) + buffer[1];
-	unsigned long frameID = (buffer[2] << 24) + (buffer[3] << 16) + (buffer[4] << 8) + buffer[5];
+	int nEvents = (buffer[4] << 8) + buffer[5];
+	unsigned long frameID = (buffer[0] << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
 	
 	bool frameLost = false;
 	if (nEvents & 0xC000) {
@@ -151,16 +151,10 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 		nEvents = 0;
 	}
 	
-	nEvents /= 2;
-	
-
-	if(m->debugLevel > 0 && nBytes != 6 + 16 * nEvents) {
-		printf("Inconsistent size: got %4d, expected %4d (%d events).\n", nBytes, 6 + 16 * nEvents, nEvents);
+	if(m->debugLevel > 0 && nBytes != 6 + 8 * nEvents) {
+		printf("Inconsistent size: got %4d, expected %4d (%d events).\n", nBytes, 6 + 8 * nEvents, nEvents);
 		return false;
 	}
-	
-
-
 	
 	DataFramePtr *dataFrame = NULL;
 	
@@ -182,48 +176,60 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 	
 	int nGoodEvents = 0;
 	for(int n = 0; n < nEvents; n++) {
-		unsigned char *p1 = buffer + 6 + 16*n;
-		unsigned char *p2 = p1 + 3;		
-		unsigned asicID = (p1[0] << 8) + p1[1];
-		unsigned channelID = p2[4] >> 2;		
-		unsigned tacID  = p2[4] & 0x3;
+ 		unsigned char *p1 = buffer + 6 + 8*n;
+	
+		uint64_t eventWord = 0;
+		for(int k = 0; k < 8;k++)  eventWord = (eventWord << 8) + p1[k];
 		
-		if(asicID >= N_ASIC) continue;
-		if(channelID >= 64) continue;
-		if(tacID >= 4) continue;
-
+		unsigned asicID = eventWord >> 48;
+		unsigned tCoarse = (eventWord >> 38) & 0x3FF;
+		unsigned tFine = (eventWord >> 28) & 0x3FF;
+		unsigned eCoarse = (eventWord >> 18) & 0x3FF;
+		unsigned eFine = (eventWord >> 8) & 0x3FF;
+		unsigned channelID = (eventWord >> 2) & 0x3F;
+		unsigned tacID = (eventWord >> 0) & 0x3;
 		
-		unsigned tCoarse        = ((p2[0] << 2) + (p2[1] >> 6)) & 0x3FF;
-		tCoarse = grayToBinary(tCoarse);
-		
+// 		unsigned char *p2 = p1 + 3;		
+// 		unsigned asicID = (p1[0] << 8) + p1[1];
+// 		unsigned channelID = p2[4] >> 2;		
+// 		unsigned tacID  = p2[4] & 0x3;
+// 		
+// 		if(asicID >= N_ASIC) continue;
+// 		if(channelID >= 64) continue;
+// 		if(tacID >= 4) continue;
+// 
+// 		
+// 		unsigned tCoarse        = ((p2[0] << 2) + (p2[1] >> 6)) & 0x3FF;
+// 		tCoarse = grayToBinary(tCoarse);
+// 		
 		// Update last event time
 		uint64_t eventTime = 1024ULL*frameID + tCoarse;
 		int channelIndex = channelID + 64*asicID;
 		int tacIndex = tacID + 4 * channelIndex;
 		int64_t tacIdleTime = eventTime - m->tacLastEventTime[tacIndex];
 		int64_t channelIdleTime = eventTime - m->channelLastEventTime[channelIndex];
-		
-		unsigned tSoC   = ((p2[1] << 4) + (p2[2] >> 4)) & 0x3FF;
-		unsigned tEoC   = ((p2[2] << 6) + (p2[3] >> 2)) & 0x3FF;
-		tSoC = grayToBinary(tSoC);
-		tEoC = grayToBinary(tEoC);                
-		
-		p2 = p1 + 3 + 8;
-		unsigned eCoarse        = ((p2[0] << 2) + (p2[1] >> 6)) & 0x3FF;
-		unsigned eSoC   = ((p2[1] << 4) + (p2[2] >> 4)) & 0x3FF;
-		unsigned eEoC   = ((p2[2] << 6) + (p2[3] >> 2)) & 0x3FF;
-		eCoarse = grayToBinary(eCoarse);
-		eSoC = grayToBinary(eSoC);
-		eEoC = grayToBinary(eEoC);                
-
-
-		unsigned tFine = (tEoC >= tSoC) ? (tEoC - tSoC) : (1024 + tEoC - tSoC);
-		unsigned eFine = (eEoC >= eSoC) ? (eEoC - eSoC) : (1024 + eEoC - eSoC);
-		
-		if(tSoC != eSoC) {
-			if(m->debugLevel > 1) fprintf(stderr, "tSoC != eSoC\n");
-			continue;
-		}
+// 		
+// 		unsigned tSoC   = ((p2[1] << 4) + (p2[2] >> 4)) & 0x3FF;
+// 		unsigned tEoC   = ((p2[2] << 6) + (p2[3] >> 2)) & 0x3FF;
+// 		tSoC = grayToBinary(tSoC);
+// 		tEoC = grayToBinary(tEoC);                
+// 		
+// 		p2 = p1 + 3 + 8;
+// 		unsigned eCoarse        = ((p2[0] << 2) + (p2[1] >> 6)) & 0x3FF;
+// 		unsigned eSoC   = ((p2[1] << 4) + (p2[2] >> 4)) & 0x3FF;
+// 		unsigned eEoC   = ((p2[2] << 6) + (p2[3] >> 2)) & 0x3FF;
+// 		eCoarse = grayToBinary(eCoarse);
+// 		eSoC = grayToBinary(eSoC);
+// 		eEoC = grayToBinary(eEoC);                
+// 
+// 
+// 		unsigned tFine = (tEoC >= tSoC) ? (tEoC - tSoC) : (1024 + tEoC - tSoC);
+// 		unsigned eFine = (eEoC >= eSoC) ? (eEoC - eSoC) : (1024 + eEoC - eSoC);
+// 		
+// 		if(tSoC != eSoC) {
+// 			if(m->debugLevel > 1) fprintf(stderr, "tSoC != eSoC\n");
+// 			continue;
+// 		}
 
 		if(m->debugLevel > 2) {
 			fprintf(stderr, "%u; %u; %u; %u; %u; %u; %u; %u, %lld\n", 

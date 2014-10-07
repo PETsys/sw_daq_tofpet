@@ -34,7 +34,7 @@ minEventsB = 300
 
 
 Nmax = 8
-tpLength = 900
+tpLength = 128
 
 
 rootFileName = argv[1]
@@ -73,7 +73,7 @@ rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
 activeChannels = [ x for x in range(64) ]
-activeAsics =  [ x for x in range(4) ]
+activeAsics =  [ i for i,ac in enumerate(uut.config.asicConfig) ]
 
 minEventsA *= len(activeAsics)
 minEventsB *= len(activeAsics)
@@ -150,7 +150,8 @@ for tChannel in activeChannels:
 		nReceivedFrames = 0
 		t0 = time()
 		while nAcceptedEvents < minEventsA and (time() - t0) < 10:
-			decodedFrame = uut.getDataFrame()
+			decodedFrame = uut.getDataFrame(waitForDataFrame = False)
+			if decodedFrame is None: continue
 
 			nReceivedFrames += 1
 			
@@ -191,13 +192,15 @@ for tChannel in activeChannels:
 			y = p.GetBinContent(j);
 			e = p.GetBinError(j);
 			x = p.GetBinCenter(j)
-
+			nc = p.GetBinEntries(j);
 			#print  "PREV", minADCJ, minADCX, minADCY
 			#print  "CURR", j, x, y, e
 
-			if x < 1.0: continue
-			if e > 0.90: continue
-                        if y < 0.5 * nominal_m: continue;
+			if nc < minEventsA/10 : continue # not enough events
+			if x < 1.0: continue # too early
+			if e < 0.10: continue # yeah, righ!
+			if e > 0.90: continue # too noisy
+                        if y < 0.5 * nominal_m: continue; # out of range
 			#if(y < 0.5 * nominal_m) and minADCJ != 0: break
 
 			if y < minADCY:
@@ -255,7 +258,9 @@ for tChannel in activeChannels:
 			nReceivedFrames = 0
 			t0 = time()
 			while nAcceptedEvents < minEventsB and (time() - t0) < 15:
-				decodedFrame = uut.getDataFrame()
+				decodedFrame = uut.getDataFrame(waitForDataFrame = False)
+				if decodedFrame is None: continue
+
 				nReceivedFrames += 1
 
 				for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:

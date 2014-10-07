@@ -297,7 +297,7 @@ class AsicConfig:
 	
 
 class BoardConfig:
-	def __init__(self, nASIC=2, nDAC=1):
+	def __init__(self, nASIC=4, nDAC=1):
 		
                 self.asicConfigFile = [ "Default Configuration" for x in range(nASIC) ]
                 self.asicBaselineFile = [ "None" for x in range(nASIC) ]
@@ -531,8 +531,10 @@ class ATB:
 	def getDataFrame(self, waitForDataFrame = True):
 		
 		index = None
-		while index is None and waitForDataFrame:
+		w = True
+		while index is None and w:
 			index = self.getDataFrameByIndex()
+			w = waitForDataFrame
 
 		if index is None:
 			return None
