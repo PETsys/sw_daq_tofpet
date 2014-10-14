@@ -177,7 +177,7 @@ for tChannel in activeChannels:
 
 
 	edgesX = [ -1.0 for x in activeAsics ]
-
+	print activeAsics
 	for n in range(len(activeAsics)):
 
 		minADCY = 1024
@@ -194,9 +194,9 @@ for tChannel in activeChannels:
 			x = p.GetBinCenter(j)
 			nc = p.GetBinEntries(j);
 			#print  "PREV", minADCJ, minADCX, minADCY
-			#print  "CURR", j, x, y, e
+			#print  "CURR", nc, j, x, y, e
 
-			if nc < minEventsA/10 : continue # not enough events
+			if nc < minEventsA/(10*len(activeAsics)) : continue # not enough events
 			if x < 1.0: continue # too early
 			if e < 0.10: continue # yeah, righ!
 			if e > 0.90: continue # too noisy
@@ -209,13 +209,15 @@ for tChannel in activeChannels:
 				minADCX = x
                                 minADCE = e
 
-		if minADCJ == 0: continue
+		if minADCJ == 0: 
+			print "Min point not found for ASIC %d" % n
+			continue
 		
 		print "ASIC %d Found min ADC point at %f, %f with RMS %f" % (n, minADCX, minADCY, minADCE)
 
 		edgesX[n] = minADCX
 
-	if min(edgesX) == -1: continue
+	if max(edgesX) == -1: continue # Didn't find edges for any ASIC
 
 	
 	intervals = [ x for x in range(frameInterval, 1000, 40) ]
