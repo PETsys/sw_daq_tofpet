@@ -11,17 +11,18 @@
 int main(int argc, char *argv[])
 {
 	//Arguments (to be automatized...) 
-	Int_t nchannels=128;
-	Int_t used_channels=1;
+	Int_t nchannels=128;  // number of channels of setup
+	Int_t used_channels=128; // the number of channels that will actually be corrected
 	Int_t Ch[used_channels];
 	Int_t j=0;
-	 // for (int i=1;i<nchannels;i+=2){
+	 
+	for (int i=0;i<nchannels;i++){
 		
-	 // 	Ch[j]=i;
-	 // 	j++;
+	  	Ch[j]=i;
+	  	j++;
 	
-	 // }
-	 Ch[0]=72;
+	}
+	 
   
 	Float_t nBins_tqT[used_channels];   // for channel 118 (has to be read from file)
 	Float_t nBins_tqE[used_channels];  // for channel 118  (has to be read from file)
@@ -29,11 +30,11 @@ int main(int argc, char *argv[])
 	if (argc != 6){
 		printf("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 		printf("USAGE: ./calibrate_tQ M0_tdc_cal M1_tdc_cal M0_tq_cal M1_tq_cal root_file\n");
-		printf( "M0_tdc_cal - TDC calibration file for mezzanine in slot 0\n");
-		printf( "M1_tdc_cal - TDC calibration file for mezzanine in slot 1\n");
-		printf( "M0_tdc_cal - Output file containing the TQ calibration for mezzanine in slot 0\n");
-		printf( "M1_tdc_cal - Output file containing the TQ calibration for mezzanine in slot 1\n");
-		printf("root_file - File containing the events (single) for the long time aquisition with a gamma source\n");
+		printf( "tdc0_cal - TDC calibration file for board 0\n");
+		printf( "tdc1_cal - TDC calibration file for board 1\n");
+		printf( "tq0_cal - Output file containing the TQ calibration for board 0\n");
+		printf( "tq1_cal - Output file containing the TQ calibration for board 1\n");
+		printf( "root_file - File containing the events (single) for a long time aquisition with expeted uniform distribution in tQ\n");
 		printf( "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 		return 0;
 
@@ -53,7 +54,7 @@ int main(int argc, char *argv[])
 	Int_t cal_channel;
 	char cal_branch[10];
 	Float_t binning;
-  	printf("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
  
 	TTree* lmData= dynamic_cast<TTree*>(hfile.Get("lmData"));
 
@@ -98,7 +99,7 @@ int main(int argc, char *argv[])
 		fclose(MB_cal);
 		nBins_tqT[i]/=4.0;
 		nBins_tqE[i]/=4.0;
-		printf("channel, nbins=%d %f %f\n", Ch[i],nBins_tqT[i],  nBins_tqE[i] );
+		printf("Channel %d: nbins_t = %d and nbins_e = %d\n", Ch[i],int(nBins_tqT[i]),  int(nBins_tqE[i]) );
 	}
 
 	
@@ -114,15 +115,12 @@ int main(int argc, char *argv[])
 	Float_t tqE;		lmData->SetBranchAddress("tqE", &tqE);
 
 	
-	
-	//Double_t tBinWidth = 2.0/ nBins_tqT;
-	//Double_t eBinWidth = 2.0/ nBins_tqE;
 
 
 
 	Int_t stepBegin = 0;
 	Int_t nEvents = lmData->GetEntries();
-	printf("nevents= %d\n", nEvents);
+	//	printf("nevents= %d\n", nEvents);
 
 	
 	char args1[128];

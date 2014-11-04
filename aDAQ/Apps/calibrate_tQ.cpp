@@ -11,18 +11,18 @@
 int main(int argc, char *argv[])
 {
 	//Arguments (to be automatized...) 
-	Int_t nchannels=128;
-	Int_t used_channels=1;
+	Int_t nchannels=128;  // number of channels of setup
+	Int_t used_channels=128; // the number of channels that will actually be corrected
 	Int_t Ch[used_channels];
 	Int_t j=0;
-	// for (int i=1;i<nchannels;i+=2){
+	 
+	for (int i=0;i<nchannels;i++){
 		
-	// 	Ch[j]=i;
-	// 	j++;
+	  	Ch[j]=i;
+	  	j++;
 	
-	// }
-	Ch[0]=63;
-
+	}
+	 
   
 	Float_t nBins_tqT[used_channels];   // for channel 118 (has to be read from file)
 	Float_t nBins_tqE[used_channels];  // for channel 118  (has to be read from file)
@@ -30,11 +30,11 @@ int main(int argc, char *argv[])
 	if (argc != 6){
 		printf("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 		printf("USAGE: ./calibrate_tQ M0_tdc_cal M1_tdc_cal M0_tq_cal M1_tq_cal root_file\n");
-		printf( "M0_tdc_cal - TDC calibration file for mezzanine in slot 0\n");
-		printf( "M1_tdc_cal - TDC calibration file for mezzanine in slot 1\n");
-		printf( "M0_tdc_cal - Output file containing the TQ calibration for mezzanine in slot 0\n");
-		printf( "M1_tdc_cal - Output file containing the TQ calibration for mezzanine in slot 1\n");
-		printf("root_file - File containing the events (single) for the long time aquisition with a gamma source\n");
+		printf( "tdc0_cal - TDC calibration file for board 0\n");
+		printf( "tdc1_cal - TDC calibration file for board 1\n");
+		printf( "tq0_cal - Output file containing the TQ calibration for board 0\n");
+		printf( "tq1_cal - Output file containing the TQ calibration for board 1\n");
+		printf( "root_file - File containing the events (single) for a long time aquisition with expeted uniform distribution in tQ\n");
 		printf( "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 		return 0;
 
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 	Int_t cal_channel;
 	char cal_branch[10];
 	Float_t binning;
-  	printf("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
  
 	TTree* lmData= dynamic_cast<TTree*>(hfile.Get("lmData"));
 
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 		fclose(MB_cal);
 		nBins_tqT[i]/=4.0;
 		nBins_tqE[i]/=4.0;
-		printf("channel, nbins=%d %f %f\n", Ch[i],nBins_tqT[i],  nBins_tqE[i] );
+		printf("Channel %d: nbins_t = %d and nbins_e = %d\n", Ch[i],int(nBins_tqT[i]),  int(nBins_tqE[i]) );
 	}
 
 	
@@ -115,21 +115,19 @@ int main(int argc, char *argv[])
 	Float_t tqE;		lmData->SetBranchAddress("tqE", &tqE);
 
 	
-	
-	//Double_t tBinWidth = 2.0/ nBins_tqT;
-	//Double_t eBinWidth = 2.0/ nBins_tqE;
 
 
 
 	Int_t stepBegin = 0;
 	Int_t nEvents = lmData->GetEntries();
-	printf("nevents= %d\n", nEvents);
+	//	printf("nevents= %d\n", nEvents);
 
 	
 	char args1[128];
 	char args2[128];
 	char ch_str[128];
-	
+	char totl_str[128];
+	char toth_str[128];
 
 
 	FILE *f1 = fopen(filename_MAtq, "w");
@@ -141,7 +139,7 @@ int main(int argc, char *argv[])
 	float start_e = 0.94;
 	float end_e = 2.835;
 
-
+	
        	for(int i = 0; i < used_channels ; i++) {
 		nBins_tqT[i]*=end_t-start_t;  
 		nBins_tqE[i]*=end_e-start_e;
@@ -150,25 +148,28 @@ int main(int argc, char *argv[])
 		TH1F *htqE = new TH1F("htqE", "tqE",int(nBins_tqE[i]), start_e, end_e);
 	  
 		for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
-	    
-			bool isT = (whichBranch == 0);
-			sprintf(ch_str,"%d",Ch[i]);       
-			sprintf(args1, "tq%s>>htq%s", isT ? "T" : "E", isT ? "T" : "E");
-			sprintf(args2, "tot > 240 && channel == %s", ch_str);
+			for(int j=0;j<6;j++){
+				bool isT = (whichBranch == 0);
+				sprintf(ch_str,"%d",Ch[i]);   
+				sprintf(totl_str, "%d",j*50 );
+				sprintf(toth_str, "%d",(j+1)*50);	
+				sprintf(args1, "tq%s>>htq%s", isT ? "T" : "E", isT ? "T" : "E");
+				sprintf(args2, "tot > %s && tot < %s && channel == %s",totl_str, toth_str, ch_str);
+			
+				lmData->Draw(args1, args2);  
+				
+				Double_t C = isT ? (end_t-start_t)/htqT->Integral() : (end_e-start_e)/htqE->Integral() ;
+				
+				printf("%s\t%s\t%10.6e\t%10.6e\n",ch_str, isT ? "T" : "E", C, isT ? htqT->Integral() : htqE->Integral());
 
-			lmData->Draw(args1, args2);  
-	  
-			Double_t C = isT ? (end_t-start_t)/htqT->Integral() : (end_e-start_e)/htqE->Integral() ;
-	   
-			printf("%s\t%s\t%10.6e\t%10.6e\n",ch_str, isT ? "T" : "E", C, isT ? htqT->Integral() : htqE->Integral());
-
-			cumul=0;
-	  
-			int nbins= isT ? int(nBins_tqT[i]) : int(nBins_tqE[i]) ;
-			FILE *f= (Ch[i]<=63) ? f1 : f2 ;
-			for(int bin = 1; bin < nbins+1; bin++) {
-				if(bin != 1)cumul+= isT ? htqT->GetBinContent(bin) : htqE->GetBinContent(bin); 
-				fprintf(f, "%5d\t%c\t%d\t%10.6e\t%10.6e\n",(Ch[i]<=63) ? Ch[i] : (Ch[i]-64), isT ? 'T' : 'E', bin-1, isT ?  htqT->GetBinContent(bin) :  htqE->GetBinContent(bin), C*cumul); 
+				cumul=0;
+				
+				int nbins= isT ? int(nBins_tqT[i]) : int(nBins_tqE[i]) ;
+				FILE *f= (Ch[i]<=63) ? f1 : f2 ;
+				for(int bin = 1; bin < nbins+1; bin++) {
+					if(bin != 1)cumul+= isT ? htqT->GetBinContent(bin) : htqE->GetBinContent(bin); 
+					fprintf(f, "%5d\t%c\t%d\t%d\t%10.6e\t%10.6e\n",(Ch[i]<=63) ? Ch[i] : (Ch[i]-64), isT ? 'T' : 'E', j, bin-1, isT ?  htqT->GetBinContent(bin) :  htqE->GetBinContent(bin), C*cumul); 
+				}
 			}
 		}
 		delete htqT;
