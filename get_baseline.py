@@ -141,24 +141,19 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
 #####################################################################################
 
 post=[]
-post.append(50)
-post.append(50)
-n_asics=2
+n_asics=4
 
-if not (len(argv) >=3 and len(argv) <=6):
-    print "USAGE: python %s root_file N_iterations [postamp0] [postamp1] [N_ASICS]" % argv[0]
+if not (len(argv) >=3 and len(argv) <=8):
+    print "USAGE: python %s root_file N_iterations [N_ASICS] [postamp0] [postamp1] ... [postampNASICS]" % argv[0]
     exit(1)
 
-if (len(argv)  == 4):
-    post[0] = int(argv[3])
-if (len(argv) == 5):
-    post[0] = int(argv[3])
-    post[1] = int(argv[4])
-if (len(argv) ==6):
-     post[0] = int(argv[3])
-     post[1] = int(argv[4])
-     n_asics= int(argv[5])
+if (len(argv)  >= 4):
+    n_asics= int(argv[3])
 
+for i in range(n_asics):
+    post.append(50)
+    if (len(argv) >= 5+i):
+        post[i] = int(argv[4+i]) 
 
         
 T = 6.25E-9
@@ -234,8 +229,8 @@ while i<=n_iter:
     for j in range(n_asics):
         
         
-        os.system("cp M%d.baseline /tmp/M%d_%d.baseline" % (j,j,i))
-        data=readBaselineProposal("M%d.baseline"% j)
+        os.system("cp asic%d.baseline /tmp/asic%d_%d.baseline" % (j,j,i))
+        data=readBaselineProposal("asic%d.baseline"% j)
             
         th=data[0]
         sig=data[1]
@@ -269,7 +264,7 @@ while i<=n_iter:
                 #targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
             success[j]=True
 
-        print "\n\n############ ASIC/Mezzanine %d: Postamp = %d ############" % (j, postamp[j])
+        print "\n\n############ ASIC %d: Postamp = %d ############" % (j, postamp[j])
         if success[j]:
             print "############  !!!!CONVERGED!!!!! ###########"
         print "Mean threshold: ", average_th, " +/- ", np.std(th)
@@ -279,7 +274,7 @@ while i<=n_iter:
         print "Number of channels with no counts: ", nr_dead
         print "\n"
 
-        log_f.write( "\n\n############ ASIC/Mezzanine %d: Postamp = %d ############\n" % (j, postamp[j]))  
+        log_f.write( "\n\n############ ASIC %d: Postamp = %d ############\n" % (j, postamp[j]))  
         if success[j]:
             log_f.write("############  !!!!CONVERGED!!!!! ###########\n")
         log_f.write( "Mean threshold: %f +/- %f\n" % (average_th,np.std(th)))
@@ -315,7 +310,7 @@ while i<=n_iter:
         print "\n\n-------------- OPTIONS -------------------" 
         print "1 - Quit"
         print "2 - Quit and Save baseline files"
-        print "3 - Refine (with user defined postamp)"
+        print "3 - Refine (with user defined postamp value(s))"
         opt=raw_input("Please choose an option:")
          
         option=int(opt)
@@ -328,12 +323,14 @@ while i<=n_iter:
             break
         elif(option==2):
             i=n_iter+1
-            for j in range(n_asics):
-                prefix, ext = splitext(uut.config.asicConfigFile[j])
-                os.system("cp M%d.baseline %s.baseline" % (j,prefix))
+            n_boards=n_asics/2;
+            for j in range(n_boards):
+                prefix, ext = splitext(uut.config.asicConfigFile[j*2])
+                os.system("cat asic%d.baseline >> asic%d.baseline" % (2*j+1,2*j))
+                os.system("cp asic%d.baseline %s.baseline" % (2*j,prefix))
             break
         elif(option==3):
-            n_refine=raw_input("Please enter the number of ASICS/Mezzanines you need to refine (1 or 2):")
+            n_refine=raw_input("Please enter the number of ASICS/Mezzanines you need to refine:")
             print "Please enter the ID number and postamp value for the ASICS/Mezzanines you want to refine (0 or 1):" 
             for k in range(int(n_refine)):
                 id_number= raw_input("ID:")

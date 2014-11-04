@@ -1,7 +1,7 @@
 {
 //	gStyle->SetOptTitle(1);
 	gStyle->SetOptStat(0);
-	C=9;
+	C=30;
 
 
 	TNtuple *nTuple = (TNtuple *)_file0->Get("data");

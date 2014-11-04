@@ -297,14 +297,14 @@ class AsicConfig:
 	
 
 class BoardConfig:
-	def __init__(self):
+	def __init__(self, nASIC=4, nDAC=1):
 		
-                self.asicConfigFile = [ "Default Configuration" for x in range(2) ]
-                self.asicBaselineFile = [ "None" for x in range(2) ]
+                self.asicConfigFile = [ "Default Configuration" for x in range(nASIC) ]
+                self.asicBaselineFile = [ "None" for x in range(nASIC) ]
                 self.HVDACParamsFile = "None"
-                self.asicConfig = [ AsicConfig() for x in range(2) ]
-		self.hvBias = [ 0.0 for x in range(32) ]
-		self.hvParam = [ (1.0, 0.0) for x in range(32) ]
+                self.asicConfig = [ AsicConfig() for x in range(nASIC) ]
+		self.hvBias = [ 0.0 for x in range(32*nDAC) ]
+		self.hvParam = [ (1.0, 0.0) for x in range(32*nDAC) ]
 		return None
 
         def writeParams(self, prefix):
@@ -489,7 +489,7 @@ class ATB:
 		self.__shm = SharedMemory(shmName)
 		self.__shmmap = mmap.mmap(self.__shm.fd, self.__shm.size)
 		#os.close(self.__shm.fd)
-		self.config = BoardConfig()
+		self.config = None
 		return None
 
 	def start(self, mode=2):
@@ -531,8 +531,10 @@ class ATB:
 	def getDataFrame(self, waitForDataFrame = True):
 		
 		index = None
-		while index is None and waitForDataFrame:
+		w = True
+		while index is None and w:
 			index = self.getDataFrameByIndex()
+			w = waitForDataFrame
 
 		if index is None:
 			return None
@@ -609,11 +611,12 @@ class ATB:
 
 	
 		
-	def sendCommand(self, commandType, payload, getReply=True, nTries=10):
+	def sendCommand(self, commandType, payload, getReply=True, maxTries=10):
+		assert self.config is not None
 
 		nTries = 0;
 		reply = None
-		while reply == None and nTries < 10:
+		while reply == None and nTries < maxTries:
 			nTries = nTries + 1
 
 			sn = self.__lastSN
@@ -661,6 +664,7 @@ class ATB:
 	  
 	
 	def doAsicCommand(self, asicID, command, value=None, channel=None):
+
 		commandInfo = {
 		#	commandID 		: (code,   ch,   read, data length)
 			"wrChCfg"		: (0b0000, True, False, 53),
@@ -722,7 +726,7 @@ class ATB:
 			return (status, None)
 
 	def initialize(self, maxTries = 10):
-
+		assert self.config is not None
 
 		for c in range(len(self.config.hvParam)):
 			self.setHVDAC(c, 0)
@@ -752,7 +756,7 @@ class ATB:
 
 			defaultAsicChannelConfig = AsicChannelConfig()
 			defaultAsicGlobalConfig = AsicGlobalConfig()
-			for asic in range(2):
+			for asic in range(16):
 				for channel in range(64):
 					status, _ = self.doAsicCommand(asic, "wrChCfg", value=defaultAsicChannelConfig, channel=channel)
 					status, _ = self.doAsicCommand(asic, "wrChTCfg", value=bitarray('0'), channel=channel)
@@ -761,7 +765,7 @@ class ATB:
 				status, _ = self.doAsicCommand(asic, "wrGlobalTCfg", value=bitarray("1111110"))
 			
 			# Set normal RX mode and sync to start
-			self.sendCommand(0x03, bytearray([0x04] + [0x00 for x in range(7)] + [0x0F]))
+			self.sendCommand(0x03, bytearray([0x04, 0x00, 0x0F]))
 			self.sendCommand(0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 			sleep(pause)
 			self.start()			
@@ -798,6 +802,8 @@ class ATB:
 	  
 		
 	def setHVDAC(self, channel, voltage):
+		assert self.config is not None
+
 		m, b = self.config.hvParam[channel]
 		voltage = voltage * m + b
 
@@ -810,8 +816,8 @@ class ATB:
 
 
 		whichDAC = 1
-		channelMap = [	30, 18, 24, 28,  3,  7,  1,  5, \
-				0,   0,  0,  0,  0,  0,  0,  0, \
+		channelMap = [	30, 18, 24, 28, 31, 22, 23, 27, \
+				 3,  7,  1,  5,  0,  2,  6,  4, \
 				15, 10, 20, 21, 13, 11, 14, 26, \
 				16,  9, 17, 19, 12,  8, 25, 29  \
 				]

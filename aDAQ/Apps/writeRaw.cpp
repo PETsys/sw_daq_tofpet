@@ -63,9 +63,9 @@ struct SortEntry {
 static bool operator< (SortEntry lhs, SortEntry rhs) { return lhs.tCoarse < rhs.tCoarse; }
 
 
-class EventWriter : public OverlappedEventHandler<GammaPhoton, GammaPhoton> {
+class EventWriter_GP : public OverlappedEventHandler<GammaPhoton, GammaPhoton> {
 public:
-	EventWriter(FILE *dataFile, FILE *indexFile, float step1, float step2, EventSink<GammaPhoton> *sink) 
+	EventWriter_GP(FILE *dataFile, FILE *indexFile, float step1, float step2, EventSink<GammaPhoton> *sink) 
 	: dataFile(dataFile), indexFile(indexFile), step1(step1), step2(step2), 
 	OverlappedEventHandler<GammaPhoton, GammaPhoton>(sink, true)
 	{
@@ -75,7 +75,7 @@ public:
 	};
 	
 	
-	~EventWriter() {
+	~EventWriter_GP() {
 		
 	};
 
@@ -107,7 +107,7 @@ public:
 // 					rawPulse.d.tofpet.ecoarse,
 // 					rawPulse.d.tofpet.tfine,
 // 					rawPulse.d.tofpet.efine,
-// 					rawPulse.d.tofpet.channelIdleTime,
+// 					rawPulse.channelIdleTime,
 // 					rawPulse.d.tofpet.tacIdleTime
 // 					);
 				DAQ::TOFPET::RawEventV2 eventOut = {
@@ -143,7 +143,7 @@ public:
 		fflush(indexFile);
 	};
 	void report() { 
-		fprintf(stderr, ">> EventWriter report\n");
+		fprintf(stderr, ">> EventWriter_GP report\n");
 		fprintf(stderr, " events passed\n");
 		fprintf(stderr, "  %10ld total\n", nEventsPassed);
 		OverlappedEventHandler<GammaPhoton, GammaPhoton>::report();
@@ -156,6 +156,78 @@ private:
 	long stepBegin;
 	long nEventsPassed;
 };
+
+class EventWriter_RP : public OverlappedEventHandler<RawPulse, RawPulse> {
+public:
+	EventWriter_RP(FILE *dataFile, FILE *indexFile, float step1, float step2, EventSink<RawPulse> *sink) 
+	: dataFile(dataFile), indexFile(indexFile), step1(step1), step2(step2), 
+	OverlappedEventHandler<RawPulse, RawPulse>(sink, true)
+	{
+		long position = ftell(dataFile);
+		stepBegin = position / sizeof(DAQ::TOFPET::RawEventV2);
+		nEventsPassed = 0;
+	};
+	
+	
+	~EventWriter_RP() {
+		
+	};
+
+	EventBuffer<RawPulse> * handleEvents(EventBuffer<RawPulse> *inBuffer) {
+		
+		long long tMin = inBuffer->getTMin();
+		long long tMax = inBuffer->getTMax();
+		unsigned nEvents =  inBuffer->getSize();
+	
+		for(unsigned i = 0; i < nEvents; i++) {
+			RawPulse &rawPulse = inBuffer->get(i);
+					
+			DAQ::TOFPET::RawEventV2 eventOut = {
+				rawPulse.d.tofpet.frameID,
+				rawPulse.channelID / 64,
+				rawPulse.channelID % 64,
+				rawPulse.d.tofpet.tac,
+				rawPulse.d.tofpet.tcoarse,
+				rawPulse.d.tofpet.ecoarse,
+				rawPulse.d.tofpet.tfine,
+				rawPulse.d.tofpet.efine,
+				rawPulse.channelIdleTime,
+				rawPulse.d.tofpet.tacIdleTime
+			};
+			
+			
+			
+			fwrite(&eventOut, sizeof(eventOut), 1, dataFile);			
+			nEventsPassed++;			
+		}
+		
+		return inBuffer;
+	};
+	
+	void pushT0(double t0) { };
+	void finish() {
+		OverlappedEventHandler<RawPulse, RawPulse>::finish();
+		long position = ftell(dataFile);
+		long stepEnd = position/sizeof(DAQ::TOFPET::RawEventV2);
+		fflush(dataFile);
+		fprintf(indexFile, "%f %f %ld %ld\n", step1, step2, stepBegin, stepEnd);
+		fflush(indexFile);
+	};
+	void report() { 
+		fprintf(stderr, ">> EventWriter_RP report\n");
+		fprintf(stderr, " events passed\n");
+		fprintf(stderr, "  %10ld total\n", nEventsPassed);
+		OverlappedEventHandler<RawPulse, RawPulse>::report();
+	};
+private: 
+	FILE *dataFile;
+	FILE *indexFile;
+	float step1;
+	float step2;
+	long stepBegin;
+	long nEventsPassed;
+};
+
 
 int main(int argc, char *argv[])
 {
@@ -314,15 +386,22 @@ int main(int argc, char *argv[])
 		step2 = blockHeader.step2;
 		
 		
-		if(sink == NULL) {			
-			sink = new CoarseExtract(false,
-				new SingleReadoutGrouper(
-				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(20, 100E-9,
-				new CoincidenceFilter(cWindow, 0,
-				new EventWriter(outputDataFile, outputIndexFile, step1, step2,
-				new NullSink<GammaPhoton>()
-				))))));		
+		if(sink == NULL) {
+			if (cWindow == 0) {
+				sink = new EventWriter_RP(outputDataFile, outputIndexFile, step1, step2,
+					new NullSink<RawPulse>()
+					);
+			}
+			else {
+				sink = new CoarseExtract(false,
+					new SingleReadoutGrouper(
+					new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
+					new NaiveGrouper(20, 100E-9,
+					new CoincidenceFilter(cWindow, 0,
+					new EventWriter_GP(outputDataFile, outputIndexFile, step1, step2,
+					new NullSink<GammaPhoton>()
+					))))));		
+			}
 		}
 		
 		

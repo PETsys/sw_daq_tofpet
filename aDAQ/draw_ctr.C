@@ -1,21 +1,8 @@
 {
 
-	Int_t CA = 56;
-	Int_t CB = 9;
+	Int_t CA = 131;
+	Int_t CB = 63;
 	
-/*	CA = 119;
-	CB = 10;*/
-	//CA+=64; CB+=64;
-	
-	//	CA = 113; CB = 1; //A
-//	CA = 114; CB = 0; //B
-// 	CA = 115; CB = 5; //C
-// 	CA = 118; CB = 4; //D
- 	CA = 118; CB = 10; //E
-//	CA = 122; CB = 15;
-//	CA = 119; CB = 9;
-	CA = 119; CB=4;
-
 	Float_t T = 6250;
 	FILE * ctrTable = fopen("ctr.txt", "w");
 	Float_t step1;      lmData->SetBranchAddress("step1", &step1);   
@@ -40,7 +27,7 @@
 	hToTx->GetYaxis()->SetTitle("Crystal 2 ToT (ns)");
 		
 	Double_t tBinWidth = 50E-12;
-	Double_t wMax = 10E-9;
+	Double_t wMax = 5E-9;
 	TH1F *hDelta = new TH1F("hDelta", "Delta", 2*wMax/tBinWidth, -wMax, wMax);	
 	TH1F *hDeltaTW1 = new TH1F("hDelta_tw1", "delta_tw1", 2*wMax/tBinWidth, -wMax, wMax);
 	TH1F *hDeltaTW2 = new TH1F("hDlta_tw2", "delta_tw2", 2*wMax/tBinWidth, -wMax, wMax);	
@@ -60,6 +47,8 @@
 
 	
 	Int_t stepBegin = 0;
+      
+
       Int_t nEvents = lmData->GetEntries();
 
     do {
@@ -72,7 +61,9 @@
         lmData->GetEntry(stepBegin);
         Float_t currentStep1 = step1;
         Float_t currentStep2 = step2;
-        
+      
+
+	printf("STEP: %ld %ld %ld %ld\n", step1, step2, currentStep1, currentStep2);
         Int_t stepEnd = stepBegin + 1;
         while(stepEnd < nEvents) {
 		lmData->GetEntry(stepEnd);	    
@@ -264,27 +255,35 @@
             fprintf(ctrTable, "%f\t%f\t%f\t%f\t%f\t%f\t%e\t%e\t%e\t%e\t\n", 
                 step1, step2, 
                 x1, sigma1, x2, sigma2, 
-                fabs(ff->GetParameter(2)), ff->GetParError(2),
+                fabs(ff->GetParameter(2))*1.0e12, ff->GetParError(2),
                 ff->GetParameter(1), ff->GetParError(1)
 //                ff->GetNFD() != 0 ? (ff->GetChisquare()/ff->GetNDF()) : INFINITY
                 );
 	    fflush(ctrTable);
         }          
         
-        stepBegin = stepEnd;   
+        stepBegin = stepEnd;  
+	//if(currentStep1 == 44 && currentStep2 ==52)break;
+       
+	//c = new TCanvas();
+	c->Clear();
+	c->Divide(3,1);
+	c->cd(1);
+	hToT1->Draw();
+	c->cd(2);
+	hDelta->Draw();
+	c->cd(3);
+	hToT2->Draw();
+      	char pdffilename[128];
+	sprintf(pdffilename,"pdfs/postamp%d_vth%d.pdf",int(step1), int(step2));
+	c->SaveAs(pdffilename);
+        //delete c;
     } while(stepBegin < nEvents); 
 
     fclose(ctrTable);
     
-    c->Close();
-    c = new TCanvas();
-    c->Divide(3,1);
-    c->cd(1);
-    hToT1->Draw();
-    c->cd(2);
-    hDelta->Draw();
-    c->cd(3);
-    hToT2->Draw();
+   
+   
     
 /*    c = new TCanvas();
     c->Divide(2,1);

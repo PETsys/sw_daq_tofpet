@@ -34,7 +34,7 @@ minEventsB = 300
 
 
 Nmax = 8
-tpLength = 900
+tpLength = 128
 
 
 rootFileName = argv[1]
@@ -52,7 +52,7 @@ elif argv[2] == "fetp":
   tpDAC = int(argv[3])
   vbias = float(argv[4])
   frameInterval = 16
-  pulseLow = False
+  pulseLow = True
 
 else:
   print "Unkown mode!"
@@ -64,6 +64,7 @@ if vbias > 50: minEventsA *= 10
 if vbias > 50: minEventsB *= 10
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
+uut.config = loadLocalConfig()
 uut.initialize()
 
 
@@ -71,8 +72,8 @@ rootFile = ROOT.TFile(rootFileName, "RECREATE");
 rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
-activeChannels = [ y for y in range(64) ]
-activeAsics =  [ x for x in range(2) ]
+activeChannels = [ x for x in range(64) ]
+activeAsics =  [ i for i,ac in enumerate(uut.config.asicConfig) ]
 
 minEventsA *= len(activeAsics)
 minEventsB *= len(activeAsics)
@@ -149,7 +150,8 @@ for tChannel in activeChannels:
 		nReceivedFrames = 0
 		t0 = time()
 		while nAcceptedEvents < minEventsA and (time() - t0) < 10:
-			decodedFrame = uut.getDataFrame()
+			decodedFrame = uut.getDataFrame(waitForDataFrame = False)
+			if decodedFrame is None: continue
 
 			nReceivedFrames += 1
 			
@@ -175,12 +177,13 @@ for tChannel in activeChannels:
 
 
 	edgesX = [ -1.0 for x in activeAsics ]
-
+	print activeAsics
 	for n in range(len(activeAsics)):
 
 		minADCY = 1024
 		minADCX = 0
 		minADCJ = 0
+                minADCE = 1E6
 
 		h = hTFine[n][0]
 		p =  h.ProfileX(h.GetName()+"_px", 1, -1, "s")
@@ -189,27 +192,32 @@ for tChannel in activeChannels:
 			y = p.GetBinContent(j);
 			e = p.GetBinError(j);
 			x = p.GetBinCenter(j)
-
+			nc = p.GetBinEntries(j);
 			#print  "PREV", minADCJ, minADCX, minADCY
-			#print  "CURR", j, x, y, e
+			#print  "CURR", nc, j, x, y, e
 
-			if x < 1.0: continue
-
-			if(e > 5.0): continue
-			if(y < 0.5 * nominal_m): break
+			if nc < minEventsA/(10*len(activeAsics)) : continue # not enough events
+			if x < 1.0: continue # too early
+			if e < 0.10: continue # yeah, righ!
+			if e > 0.90: continue # too noisy
+                        if y < 0.5 * nominal_m: continue; # out of range
+			#if(y < 0.5 * nominal_m) and minADCJ != 0: break
 
 			if y < minADCY:
 				minADCY = y
 				minADCJ = j
 				minADCX = x
+                                minADCE = e
 
-		if minADCJ == 0: continue
+		if minADCJ == 0: 
+			print "Min point not found for ASIC %d" % n
+			continue
 		
-		print "Found min ADC point at %f, %f" % (minADCX, minADCY)
+		print "ASIC %d Found min ADC point at %f, %f with RMS %f" % (n, minADCX, minADCY, minADCE)
 
 		edgesX[n] = minADCX
 
-	if min(edgesX) == -1: continue
+	if max(edgesX) == -1: continue # Didn't find edges for any ASIC
 
 	
 	intervals = [ x for x in range(frameInterval, 1000, 40) ]
@@ -219,7 +227,7 @@ for tChannel in activeChannels:
 	hEFine = [[ ROOT.TH2F("heFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1014) for tac in range(4) ] for tAsic in activeAsics ]
 
 
-	for nStep, stepDelta in enumerate([-0.2, 0.8, 1.5]): # Pick 3 points for the scan
+	for nStep, stepDelta in enumerate([-0.2]): # Pick points for the scan from the edge
 		phaseStep = sumProfile.FindBin(min(edgesX) + stepDelta) * K 
 		step2 = float(phaseStep)/M + binWidth/2
 		#print minADCX, nStep, stepDelta, phaseStep, step2
@@ -252,7 +260,9 @@ for tChannel in activeChannels:
 			nReceivedFrames = 0
 			t0 = time()
 			while nAcceptedEvents < minEventsB and (time() - t0) < 15:
-				decodedFrame = uut.getDataFrame()
+				decodedFrame = uut.getDataFrame(waitForDataFrame = False)
+				if decodedFrame is None: continue
+
 				nReceivedFrames += 1
 
 				for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:

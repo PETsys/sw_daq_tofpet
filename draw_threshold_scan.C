@@ -1,4 +1,10 @@
+void draw_threshold_scan(bool Save = false)
 {
+    
+ 
+  
+	TFile *hFile = new TFile("draw_threshold_scan.root", "RECREATE");
+
 	gStyle->SetPalette(1);
 	gStyle->SetOptFit(1);
 	gStyle->SetOptStat(0);
@@ -11,9 +17,9 @@
 	Float_t channel; nTuple->SetBranchAddress("channel", &channel);
 	
 	
-	TH2F * hRate = new TH2F("hRate", "Rate", 128, 0, 128, 64, 0, 64);
-	TH1F * hMax = new TH1F("hMax", "Max rate", 128, 0, 128);
-	TGraphErrors *gBaseline = new TGraphErrors(128);
+	TH2F * hRate = new TH2F("hRate", "Rate", 256, 0, 256, 64, 0, 64);
+	TH1F * hMax = new TH1F("hMax", "Max rate", 256, 0, 256);
+	TGraphErrors *gBaseline = new TGraphErrors(256);
 	gBaseline->SetTitle("Baseline");
 	TH1F * hBaseline = new TH1F("Baseline", "Baseline", 64, 0, 64);
 	TH1F * hSigma = new TH1F("Sigma", "Sigma", 20, 0, 2);
@@ -34,18 +40,28 @@
 	f->SetParName(1, "x0");
 	f->SetParName(2, "Sigma");
 
-	FILE *thFile1 = fopen("MA.baseline", "w");
-	FILE *thFile2 = fopen("MB.baseline", "w");
+	FILE *thFile1 = fopen("asic0.baseline", "w");
+	FILE *thFile2 = fopen("asic1.baseline", "w");
+	FILE *thFile3 = fopen("asic2.baseline", "w");
+	FILE *thFile4 = fopen("asic3.baseline", "w");
+
 	for(Int_t i = 1; i < hRate->GetNbinsX() + 1; i++) {
 		Int_t C = i-1;
-		char hName[128];
-		char hTitle[128];
+		char hName[256];
+		char hTitle[256];
 		sprintf(hName, "hRate_%05d", C);
 		sprintf(hTitle, "Channel %5d", C);
 		TH1 *h = hRate->ProjectionY(hName, i, i);
 		h->SetTitle(hTitle);
+		
+	       
+		if(C/64==0){FILE *thFile=thFile1;}
+		if(C/64==1){FILE *thFile=thFile2;}
+		if(C/64==2){FILE *thFile=thFile3;}
+		if(C/64==3){FILE *thFile=thFile4;}
 
-		FILE *thFile = C/64 == 0 ? thFile1 : thFile2;
+		//	FILE *thFile = C/64 == 0 ? thFile1 : thFile2;
+		
 		if(h->GetEntries() < 1) {
 		  fprintf(thFile, "%d\t%d\t%f\t%f\n", C/64, C%64, 0, 100);
 			delete h;
@@ -105,7 +121,7 @@
 	hRate->GetYaxis()->SetRangeUser(32, 64);
 	hRate->GetZaxis()->SetRangeUser(0, 25E6);
 	hRate->Draw("COLZ");*/
-	hMax->GetXaxis()->SetRangeUser(0, 128);
+	hMax->GetXaxis()->SetRangeUser(0, 256);
 	hMax->GetXaxis()->SetTitle("Channel ID");
 	hMax->GetYaxis()->SetRangeUser(0, 25E6);
 	hMax->GetYaxis()->SetTitle("Max trigger rate  (Hz)");
@@ -114,7 +130,7 @@
 	c1->cd(2);
 	gBaseline->Draw("AP");
 	gBaseline->GetXaxis()->SetTitle("Channel ID");
-	gBaseline->GetXaxis()->SetRangeUser(0, 128);
+	gBaseline->GetXaxis()->SetRangeUser(0, 256);
 	gBaseline->GetYaxis()->SetTitle("vth_T (ADC)");
 	gBaseline->GetYaxis()->SetRangeUser(32, 64);
 	
@@ -128,4 +144,10 @@
 	hSigma->GetXaxis()->SetTitle("vth_T (ADC)");
 	hSigma->GetYaxis()->SetTitle("Number of channels");
 	hSigma->Draw();
+	hFile->Write();
+	
+	if(Save){
+		  c1->SaveAs("/tmp/baseline_dummy.pdf");
+		  exit();
+	}
 }

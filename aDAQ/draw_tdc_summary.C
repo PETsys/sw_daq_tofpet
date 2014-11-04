@@ -1,12 +1,12 @@
 {
 	TGraphErrors *gSummary = new TGraphErrors(128);
 	TH1 * hSummary = new TH1F("summary1", "Summary", 1000, 0, 500E-12);
-	TH1 * hCounts = new TH1F("counts1", "Counts", 128, 0, 128);
+	TH1 * hCounts = new TH1F("counts1", "Counts", 256, 0, 256);
 
 	TCanvas *c = new TCanvas();
 
 	Int_t nPoints = 0;
-	for(Int_t asic = 0; asic < 2; asic += 1) {
+	for(Int_t asic = 0; asic < 4; asic += 1) {
 		for(Int_t channel = 0; channel < 64; channel+= 1) {
 			
 			char hName[128];
@@ -61,13 +61,13 @@
 	
 	
 	c = new TCanvas();
-	TGraphErrors *gSummary = new TGraphErrors(128);
+	TGraphErrors *gSummary = new TGraphErrors(256);
 	TH1 * hSummary = new TH1F("summary2", "summary", 1000, 0, 500E-12);
-	TH1 * hCounts = new TH1F("counts2", "Counts", 128, 0, 128);
+	TH1 * hCounts = new TH1F("counts2", "Counts", 256, 0, 256);
 	TGraph *gLeakage = new TGraph(4*128);
 	
 	nPoints = 0;
-	for(Int_t asic = 0; asic < 2; asic += 1) {
+	for(Int_t asic = 0; asic < 4; asic += 1) {
 		for(Int_t channel = 0; channel < 64; channel+= 1) {
 			
 			char hName[128];
@@ -101,7 +101,7 @@
 	}
 	
 	nPoints = 0;
-	for(Int_t asic = 0; asic < 2; asic += 1) {
+	for(Int_t asic = 0; asic < 4; asic += 1) {
 		for(Int_t channel = 0; channel < 64; channel+= 1) {
 			for (Int_t tac = 0; tac < 4; tac += 1) {
 				sprintf(hName, "C%03d_%02d_%d_B_T_pFine_X", asic, channel, tac);
@@ -126,7 +126,7 @@
 	gSummary->GetXaxis()->SetTitle("Channel");
 	gSummary->GetYaxis()->SetTitle("Resolution (s RMS)");
 	gSummary->Set(nPoints);
-	gSummary->GetXaxis()->SetRangeUser(0, 128);
+	gSummary->GetXaxis()->SetRangeUser(0, 256);
 	gSummary->GetYaxis()->SetRangeUser(0, 0.5E-9);
 	gSummary->Draw("AP");
 	c->cd(2);
@@ -142,7 +142,7 @@
 	gLeakage->SetTitle("Leakage");
 	gLeakage->GetXaxis()->SetTitle("Channel");
 	gLeakage->GetYaxis()->SetTitle("Leakage (ADC/ms)");
-	gLeakage->GetXaxis()->SetRangeUser(0, 128);
+	gLeakage->GetXaxis()->SetRangeUser(0, 256);
 	gLeakage->GetYaxis()->SetRangeUser(0, 10);	
 	gLeakage->Draw("AL");
 	
