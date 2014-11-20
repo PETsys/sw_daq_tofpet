@@ -46,7 +46,7 @@ UDPFrameServer::UDPFrameServer(int debugLevel)
 	memset(buffer, 0xFF, sizeof(buffer));
 	send(udpSocket, buffer, sizeof(buffer), 0);
 		
-
+	startWorker();
 }
 
 
@@ -57,10 +57,10 @@ UDPFrameServer::~UDPFrameServer()
 
 
 
-void *UDPFrameServer::doWork(void *arg)
+void *UDPFrameServer::doWork()
 {	
 	printf("UDPFrameServer::runWorker starting...\n");
-	UDPFrameServer *m = (UDPFrameServer *)arg;
+	UDPFrameServer *m = this;
 	
 	for(int i = 0; i < N_ASIC * 64 * 4; i++) {
 		m->tacLastEventTime[i] = 0;

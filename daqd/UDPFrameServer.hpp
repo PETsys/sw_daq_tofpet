@@ -22,7 +22,7 @@ private:
 	int udpSocket;
 
 protected:
-	void * doWork(void *);
+	void * doWork();
 	
 };
 

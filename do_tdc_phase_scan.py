@@ -199,9 +199,8 @@ for tChannel in activeChannels:
 			if nc < minEventsA/(10*len(activeAsics)) : continue # not enough events
 			if x < 1.0: continue # too early
 			if e < 0.10: continue # yeah, righ!
-			if e > 0.90: continue # too noisy
+			if e > 5.0: continue # too noisy
                         if y < 0.5 * nominal_m: continue; # out of range
-			#if(y < 0.5 * nominal_m) and minADCJ != 0: break
 
 			if y < minADCY:
 				minADCY = y

@@ -12,7 +12,9 @@
 #include <sys/stat.h>
 #include <map>
 
-#include "UDPFrameServer.hpp"
+//#include "UDPFrameServer.hpp"
+#include "DAQFrameServer.hpp"
+#include "FrameServer.hpp"
 #include "Protocol.hpp"
 #include "Client.hpp"
 #include <boost/lexical_cast.hpp>
@@ -20,12 +22,12 @@
 /*
  * Used to stop on CTRL-C or kill
  */
-static bool globalUserStop = 0;
+static bool globalUserStop = false;
 static FrameServer *globalFrameServer = NULL;
 
 static void catchUserStop(int signal) {
 	fprintf(stderr, "Caught signal %d\n", signal);
-	globalUserStop = 1;
+	globalUserStop = true;
 }
 
 static int createListeningSocket(char *socketName);
@@ -54,8 +56,9 @@ int main(int argc, char *argv[])
 	if(listeningSocket < 0)
 		return -1;
 
- 	globalFrameServer = new UDPFrameServer(debugLevel);
-	
+
+ 	globalFrameServer = new DAQFrameServer(debugLevel);
+
 	pollSocket(listeningSocket, globalFrameServer);	
 	close(listeningSocket);	
 	unlink(socketName);

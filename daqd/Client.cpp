@@ -71,7 +71,7 @@ int Client::doCommandToFrontEnd(int commandLength)
 	memcpy(buffer, socketBuffer + sizeof(CmdHeader_t), commandLength);
 	int replyLength = frameServer->sendCommand(buffer, sizeof(buffer), commandLength);
 	
-	printf("We have a reply, with %d bytes\n", replyLength);
+	//printf("We have a reply, with %d bytes\n", replyLength);
 	uint16_t trl = replyLength;
 	send(socket, &trl, sizeof(trl), MSG_NOSIGNAL);
 	send(socket, buffer, replyLength, MSG_NOSIGNAL);

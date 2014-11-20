@@ -7,7 +7,7 @@
 #include "Protocol.hpp"
 
 static const char *shmObjectPath = "/daqd_shm";
-static const int MaxDataFrameQueueSize = 16*1024;
+static const int MaxDataFrameQueueSize = 4*1024;
 static const int N_ASIC=4;
 
 class FrameServer {
@@ -45,7 +45,7 @@ protected:
 	DataFrame *dataFrameSharedMemory;
 	
 	static void *runWorker(void *);
-	virtual void * doWork(void *) = 0;
+	virtual void * doWork() = 0;
 	static bool decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes);
 	void startWorker();
 	void stopWorker();

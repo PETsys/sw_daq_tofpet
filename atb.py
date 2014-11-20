@@ -476,7 +476,7 @@ class ATB:
 		self.__socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		self.__socket.connect(self.__socketPath)
 		self.__crcFunc = crcmod.mkCrcFun(0x104C11DB7, rev=False, initCrc=0x0A1CB27F)
-		self.__lastSN = randrange(0, 2**16-1)
+		self.__lastSN = randrange(0, 2**15-1)
 		self.__pendingReplies = 0
 		self.__recvBuffer = bytearray([]);
 		self.__debug = debug
@@ -612,15 +612,26 @@ class ATB:
 	
 		
 	def sendCommand(self, commandType, payload, getReply=True, maxTries=10):
-		assert self.config is not None
-
+		#getReply = True ## 
 		nTries = 0;
 		reply = None
-		while reply == None and nTries < maxTries:
+		doOnce = True
+		while doOnce or ((getReply == True and reply == None) and nTries < maxTries):
+			doOnce = False
+
+			if nTries > 0:
+				print "Sending command %d of %d\n" % (nTries+1, maxTries)
 			nTries = nTries + 1
 
 			sn = self.__lastSN
-			self.__lastSN = (sn + 1) & 0xFFFF
+			self.__lastSN = (sn + 1) & 0x7FFF
+
+			# Use even SN if a reply is desired, else use an odd SN
+			if getReply == True:
+				sn = 2 * sn + 0
+			else:
+				sn = 2 * sn + 1
+
 			rawFrame = bytearray([(sn >> 8) & 0xFF, (sn >> 0) & 0xFF, commandType]) + payload
 			rawFrame = str(rawFrame)
 
@@ -630,6 +641,7 @@ class ATB:
 			n = struct.calcsize(template1) + len(rawFrame)
 			data = struct.pack(template1, 0x05, n)
 			self.__socket.send(data)
+                        
 			self.__socket.send(rawFrame);
 
 			template2 = "@H"
@@ -640,7 +652,7 @@ class ATB:
 			if nn < 4:
 				continue
 
-			#print "Trying to read %d bytes" % nn
+                       # print "Trying to read %d bytes" % nn
 			data = self.__socket.recv(nn)
 
 			data = data[3:]
@@ -663,8 +675,7 @@ class ATB:
 
 	  
 	
-	def doAsicCommand(self, asicID, command, value=None, channel=None):
-
+	def doAsicCommand(self, asicID, command, value=None, channel=None, forceReply=False):
 		commandInfo = {
 		#	commandID 		: (code,   ch,   read, data length)
 			"wrChCfg"		: (0b0000, True, False, 53),
@@ -679,9 +690,11 @@ class ATB:
 			"rdGlobalTCfg"	: (0b1101, False, True, 7),
 			"wrTestPulse"	: (0b1010, False, False, 10+8+8)
 		}
-		
 	
 		commandCode, isChannel, isRead, dataLength = commandInfo[command]
+
+		getReply = forceReply or isRead
+
 		byte0 = [ (commandCode << 4) + (asicID & 0xFF) ]
 		if isChannel:
 				
@@ -712,7 +725,10 @@ class ATB:
 			#status = reply[0]		
 		#assert status == 0x00
 
-		reply = self.sendCommand(0x00, cmd)
+		reply = self.sendCommand(0x00, cmd, getReply=getReply)
+		if not getReply:
+			return None
+
 		status = reply[0]		
 
 		if isRead:
@@ -758,11 +774,11 @@ class ATB:
 			defaultAsicGlobalConfig = AsicGlobalConfig()
 			for asic in range(16):
 				for channel in range(64):
-					status, _ = self.doAsicCommand(asic, "wrChCfg", value=defaultAsicChannelConfig, channel=channel)
-					status, _ = self.doAsicCommand(asic, "wrChTCfg", value=bitarray('0'), channel=channel)
+					self.doAsicCommand(asic, "wrChCfg", value=defaultAsicChannelConfig, channel=channel)
+					self.doAsicCommand(asic, "wrChTCfg", value=bitarray('0'), channel=channel)
 				
-				status, _ = self.doAsicCommand(asic, "wrGlobalCfg", value=defaultAsicGlobalConfig);
-				status, _ = self.doAsicCommand(asic, "wrGlobalTCfg", value=bitarray("1111110"))
+				self.doAsicCommand(asic, "wrGlobalCfg", value=defaultAsicGlobalConfig);
+				self.doAsicCommand(asic, "wrGlobalTCfg", value=bitarray("1111110"))
 			
 			# Set normal RX mode and sync to start
 			self.sendCommand(0x03, bytearray([0x04, 0x00, 0x0F]))
@@ -815,13 +831,13 @@ class ATB:
 			voltage = 0
 
 
-		whichDAC = 1
-		channelMap = [	30, 18, 24, 28, 31, 22, 23, 27, \
-				 3,  7,  1,  5,  0,  2,  6,  4, \
-				15, 10, 20, 21, 13, 11, 14, 26, \
-				16,  9, 17, 19, 12,  8, 25, 29  \
-				]
-		channel = channelMap [channel]
+		whichDAC = channel / 32
+		channel = channel % 32
+
+		whichBoard = whichDAC / 2
+		whichDAC = whichDAC % 2
+
+		whichDAC = 1 - whichDAC # Wrong decoding in ad5535.vhd
 
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
 		dacBytes = bytearray(dacBits.tobytes())
@@ -960,11 +976,11 @@ class ATB:
 
 		for asic in range(len(self.config.asicConfig)):
 			for channel in range(64):
-				status, _ = self.doAsicCommand(asic, "wrChCfg", channel=channel, value=self.config.asicConfig[asic].channelConfig[channel])
-				status, _ = self.doAsicCommand(asic, "wrChTCfg", channel=channel, value=self.config.asicConfig[asic].channelTConfig[channel])
+				self.doAsicCommand(asic, "wrChCfg", channel=channel, value=self.config.asicConfig[asic].channelConfig[channel])
+				self.doAsicCommand(asic, "wrChTCfg", channel=channel, value=self.config.asicConfig[asic].channelTConfig[channel])
 
-			status, _ = self.doAsicCommand(asic, "wrGlobalCfg", value=self.config.asicConfig[asic].globalConfig)
-			status, _ = self.doAsicCommand(asic, "wrGlobalTCfg", value=self.config.asicConfig[asic].globalTConfig)
+			self.doAsicCommand(asic, "wrGlobalCfg", value=self.config.asicConfig[asic].globalConfig)
+			self.doAsicCommand(asic, "wrGlobalTCfg", value=self.config.asicConfig[asic].globalTConfig)
 
 		for dacChannel, hvValue in enumerate(self.config.hvBias):			
 			self.setHVDAC(dacChannel, hvValue)

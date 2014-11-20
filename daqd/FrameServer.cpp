@@ -65,7 +65,6 @@ FrameServer::FrameServer(int debugLevel)
 	tacLastEventTime = new uint64_t[N_ASIC * 64 * 4];
 	channelLastEventTime = new uint64_t[N_ASIC * 64];
 	
-	startWorker();
 }
 
 FrameServer::~FrameServer()
@@ -134,7 +133,9 @@ void FrameServer::stopAcquisition()
 
 bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes)
 {
-	if(m->debugLevel > 2) {
+
+	
+	if(m->debugLevel > 0) {
 		for(int i = 0; i < nBytes; i++)
 		{
 			printf("%02X ", unsigned(buffer[i]));		
@@ -142,17 +143,33 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 		printf("\n");
 	}
 	
+<<<<<<< HEAD
+	int nEvents = ((buffer[0] << 8) + buffer[1]) & 0x3FFF;
+
+	// TO DO: Check size and number of events ,  unisgned int nevents= 0x3FFF
+	unsigned long frameID = (buffer[2] << 24) + (buffer[3] << 16) + (buffer[4] << 8) + buffer[5];
+
+=======
 	int nEvents = (buffer[4] << 8) + buffer[5];
 	unsigned long frameID = (buffer[0] << 24) + (buffer[1] << 16) + (buffer[2] << 8) + buffer[3];
 	
+>>>>>>> 18bc6e52cfbf6aeaab2f81c6d3377ba0e99db31b
 	bool frameLost = false;
 	if (nEvents & 0xC000) {
 		frameLost = true;
 		nEvents = 0;
 	}
 	
+<<<<<<< HEAD
+	nEvents /= 2;
+	
+
+	if(m->debugLevel >= 0 && nBytes != 6 + 16 * nEvents) {
+		printf("Inconsistent size: got %4d, expected %4d (%d events).\n", nBytes, 6 + 16 * nEvents, nEvents);
+=======
 	if(m->debugLevel > 0 && nBytes != 6 + 8 * nEvents) {
 		printf("Inconsistent size: got %4d, expected %4d (%d events).\n", nBytes, 6 + 8 * nEvents, nEvents);
+>>>>>>> 18bc6e52cfbf6aeaab2f81c6d3377ba0e99db31b
 		return false;
 	}
 	
@@ -208,6 +225,31 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 		int tacIndex = tacID + 4 * channelIndex;
 		int64_t tacIdleTime = eventTime - m->tacLastEventTime[tacIndex];
 		int64_t channelIdleTime = eventTime - m->channelLastEventTime[channelIndex];
+<<<<<<< HEAD
+		
+		unsigned tSoC   = ((p2[1] << 4) + (p2[2] >> 4)) & 0x3FF;
+		unsigned tEoC   = ((p2[2] << 6) + (p2[3] >> 2)) & 0x3FF;
+		tSoC = grayToBinary(tSoC);
+		tEoC = grayToBinary(tEoC);                
+		
+		p2 = p1 + 3 + 8;
+		unsigned eCoarse        = ((p2[0] << 2) + (p2[1] >> 6)) & 0x3FF;
+		unsigned eSoC   = ((p2[1] << 4) + (p2[2] >> 4)) & 0x3FF;
+		unsigned eEoC   = ((p2[2] << 6) + (p2[3] >> 2)) & 0x3FF;
+		eCoarse = grayToBinary(eCoarse);
+		eSoC = grayToBinary(eSoC);
+		eEoC = grayToBinary(eEoC);                
+
+
+		unsigned tFine = (tEoC >= tSoC) ? (tEoC - tSoC) : (1024 + tEoC - tSoC);
+		unsigned eFine = (eEoC >= eSoC) ? (eEoC - eSoC) : (1024 + eEoC - eSoC);
+		
+		if(tSoC != eSoC) {
+			if(m->debugLevel > 1) fprintf(stderr, "tSoC != eSoC\n");
+			continue;
+		}
+		//if(nEvents>2){
+=======
 // 		
 // 		unsigned tSoC   = ((p2[1] << 4) + (p2[2] >> 4)) & 0x3FF;
 // 		unsigned tEoC   = ((p2[2] << 6) + (p2[3] >> 2)) & 0x3FF;
@@ -231,6 +273,7 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 // 			continue;
 // 		}
 
+>>>>>>> 18bc6e52cfbf6aeaab2f81c6d3377ba0e99db31b
 		if(m->debugLevel > 2) {
 			fprintf(stderr, "%u; %u; %u; %u; %u; %u; %u; %u, %lld\n", 
 					frameID, asicID, channelID, tacID,
@@ -332,7 +375,7 @@ void FrameServer::startWorker()
 
 void FrameServer::stopWorker()
 {
-	printf("UDPFrameServer::stopWorker called...\n");
+	printf("FrameServer::stopWorker called...\n");
 	
 	die = true;
 	
@@ -355,13 +398,13 @@ void FrameServer::stopWorker()
 	pthread_mutex_unlock(&lock);
 
 
-	printf("UDPFrameServer::stopWorker exiting...\n");
+	printf("FrameServer::stopWorker exiting...\n");
 }
 
 void *FrameServer::runWorker(void *arg)
 {
 	FrameServer *F = (FrameServer *)arg;
-        return F->doWork(arg);
+        return F->doWork();
 }
 
 
