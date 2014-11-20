@@ -64,7 +64,7 @@ if vbias > 50: minEventsA *= 10
 if vbias > 50: minEventsB *= 10
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
-uut.config = loadLocalConfig()
+uut.config = loadLocalConfig(useBaseline=False)
 uut.initialize()
 
 
@@ -82,7 +82,7 @@ hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
 
 
 for tChannel in activeChannels:
-	atbConfig = loadLocalConfig()
+	atbConfig = loadLocalConfig(useBaseline=False)
 	for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = vbias
 
