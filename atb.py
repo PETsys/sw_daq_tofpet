@@ -618,6 +618,7 @@ class ATB:
 		reply = None
 		while reply == None and nTries < maxTries:
 			nTries = nTries + 1
+			if nTries > 5: print "Timeout sending command. Retry %d of %d" % (nTries, maxTries)
 
 			sn = self.__lastSN
 			self.__lastSN = (sn + 1) & 0xFFFF

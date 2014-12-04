@@ -7,6 +7,7 @@ from time import time, sleep
 import ROOT
 from rootdata import DataFile
 import serial
+from os.path import dirname, isdir
 
 # Parameters
 T = 6.25E-9
@@ -38,6 +39,7 @@ tpLength = 128
 
 
 rootFileName = argv[1]
+assert isdir(dirname(rootFileName))
 
 vbias = 5
 if argv[2] == "tdca":
@@ -64,11 +66,12 @@ if vbias > 50: minEventsA *= 10
 if vbias > 50: minEventsB *= 10
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
-uut.config = loadLocalConfig()
+uut.config = loadLocalConfig(useBaseline=False)
 uut.initialize()
 
 
 rootFile = ROOT.TFile(rootFileName, "RECREATE");
+
 rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
@@ -82,7 +85,7 @@ hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
 
 
 for tChannel in activeChannels:
-	atbConfig = loadLocalConfig()
+	atbConfig = loadLocalConfig(useBaseline=False)
 	for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = vbias
 
@@ -177,7 +180,6 @@ for tChannel in activeChannels:
 
 
 	edgesX = [ -1.0 for x in activeAsics ]
-	print activeAsics
 	for n in range(len(activeAsics)):
 
 		minADCY = 1024
@@ -214,10 +216,11 @@ for tChannel in activeChannels:
 			continue
 		
 		print "ASIC %d Found min ADC point at %f, %f with RMS %f" % (n, minADCX, minADCY, minADCE)
-
+		while minADCX > 2.0: minADCX -= 2.0
 		edgesX[n] = minADCX
 
-	if max(edgesX) == -1: continue # Didn't find edges for any ASIC
+	edgesX = [x for x in edgesX if x >= 0 ]
+	if edgesX == []: continue # Didn't find edges for any ASIC
 
 	
 	intervals = [ x for x in range(frameInterval, 1000, 40) ]
@@ -228,7 +231,9 @@ for tChannel in activeChannels:
 
 
 	for nStep, stepDelta in enumerate([-0.2]): # Pick points for the scan from the edge
-		phaseStep = sumProfile.FindBin(min(edgesX) + stepDelta) * K 
+		x = min(edgesX) + stepDelta
+		while x < 0: x += 2.0
+		phaseStep = sumProfile.FindBin(x) * K 
 		step2 = float(phaseStep)/M + binWidth/2
 		#print minADCX, nStep, stepDelta, phaseStep, step2
 
