@@ -22,10 +22,11 @@ struct EventOut {
 	unsigned short	channel;		// Channel ID
 	float		tot;			// Time-over-Threshold, in ns
 	unsigned char	tac;			// TAC ID
+	unsigned char 	badEvent;		// 0 if OK, 1 if bad
 } __attribute__((packed));
 
 
-class EventWriter : public EventSink<Hit> {
+class EventWriter : public EventSink<Pulse> {
 public:
 	EventWriter(FILE *dataFile, float step1, float step2) 
 	: dataFile(dataFile), step1(step1), step2(step2) {
@@ -36,16 +37,13 @@ public:
 		
 	};
 
-	void pushEvents(EventBuffer<Hit> *buffer) {
+	void pushEvents(EventBuffer<Pulse> *buffer) {
 		if(buffer == NULL) return;	
 		
 		unsigned nEvents = buffer->getSize();
 		for(unsigned i = 0; i < nEvents; i++) {
-			Hit &hit = buffer->get(i);
-			
-			RawHit &raw= hit.raw;
-		
-			EventOut e = { step1, step2, raw.time, raw.crystalID, raw.energy, raw.top.raw.d.tofpet.tac };
+			Pulse & p = buffer->get(i);
+			EventOut e = { step1, step2, p.time, p.channelID, p.energy, p.raw.d.tofpet.tac, p.badEvent ? 1 : 0 };
 			fwrite(&e, sizeof(e), 1, dataFile);
 		}
 		
@@ -97,12 +95,10 @@ int main(int argc, char *argv[])
 
 		const unsigned nChannels = 2*128; 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
-				new P2Extract(lut, false, true, true,
-				new SingleReadoutGrouper(
-				new FakeCrystalPositions(
+				new P2Extract(lut, false, 0.0, 0.20,
 				new EventWriter(lmFile, step1, step2
 
-		)))));
+		)));
 		
 		reader->wait();
 		delete reader;

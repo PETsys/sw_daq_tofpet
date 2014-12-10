@@ -46,7 +46,7 @@ UDPFrameServer::UDPFrameServer(int debugLevel)
 	memset(buffer, 0xFF, sizeof(buffer));
 	send(udpSocket, buffer, sizeof(buffer), 0);
 		
-
+	startWorker();
 }
 
 
