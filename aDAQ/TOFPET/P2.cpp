@@ -142,14 +142,14 @@ float P2::getQmodulationCorrected(float tQ, int channel, bool isT, float coarseT
 {
 
 	int totbin = coarseToT / 50;
-	//	printf("tqdac= %f %d %d %f\n", tQ, channel, isT, coarseToT);
+
 	if (coarseToT < 0) totbin = 0;
 	if (coarseToT > 300)totbin = 5;
 	int TQindex = getIndexTQ(channel, isT, totbin);
 	TQ &TQe = TQtable[TQindex];
 	
-	float start = isT ? 0.99 : 0.94;
-	float end = isT ? 2.99 : 2.835;
+	float start = isT ? 1.0 : 1.0;
+	float end = isT ? 3.0 : 3.0;
 	float delta_t= (end - start) / TQe.nbins;
 	
 	float tQ3 = tQ;
@@ -169,7 +169,7 @@ float P2::getQmodulationCorrected(float tQ, int channel, bool isT, float coarseT
 		// Let's just return it without touching
 		return tQ;
 	}
-	
+	//	printf("tqdac= %f %d %d %f %f %d\n", tQ, channel, isT, coarseToT, tQ3,TQe.nbins );
 	return  tQ3; 
 	  
 	
@@ -281,7 +281,7 @@ void P2::loadTQFile(int start, int end, const char *fTQName)
 	  TQe.channel=col1;
 	  // printf("channel=%d %d",channel,col1 );
 	  TQe.isT= isT;
-	  TQe.nbins=col4+1;
+	  TQe.nbins=col4;
 	  TQe.tcorr[col4]=col6; 
 
 	  // printf("%s %d %d %d %f\n", col2, TQindex, TQtable[TQindex].channel, TQtable[TQindex].nbins ,TQe.tcorr[col3]);

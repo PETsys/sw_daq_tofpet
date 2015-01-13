@@ -35,6 +35,8 @@ static int		eventYi;
 static float		eventX;
 static float 		eventY;
 static float 		eventZ;
+static float		eventTQT_nocorr;
+static float		eventTQE_nocorr;
 static float		eventTQT;
 static float		eventTQE;
 
@@ -69,6 +71,8 @@ public:
 			eventTacIdleTime = raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
 			eventTQT = raw.top.tofpet_TQT;
 			eventTQE = raw.top.tofpet_TQE;
+			eventTQT_nocorr = raw.top.tofpet_TQT_nocorr;
+			eventTQE_nocorr = raw.top.tofpet_TQE_nocorr;
 			eventX = hit.x;
 			eventY = hit.y;
 			eventZ = hit.z;
@@ -139,6 +143,8 @@ int main(int argc, char *argv[])
 	lmData->Branch("z", &eventY, bs);
 	lmData->Branch("tqT", &eventTQT, bs);
 	lmData->Branch("tqE", &eventTQE, bs);
+	lmData->Branch("tqT_nocorr", &eventTQT_nocorr, bs);
+	lmData->Branch("tqE_nocorr", &eventTQE_nocorr, bs);
 	
 	TTree *lmIndex = new TTree("lmIndex", "Step Index", 2);
 	lmIndex->Branch("step1", &eventStep1, bs);

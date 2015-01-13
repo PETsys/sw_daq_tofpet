@@ -63,6 +63,9 @@ namespace DAQ { namespace Core {
 		
 		float tofpet_TQT;
 		float tofpet_TQE;
+
+		float tofpet_TQT_nocorr;
+		float tofpet_TQE_nocorr;
 		
 		Pulse() {
 			time = -1;

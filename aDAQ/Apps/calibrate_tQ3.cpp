@@ -12,17 +12,17 @@ int main(int argc, char *argv[])
 {
 	//Arguments (to be automatized...) 
 	Int_t nchannels=128;  // number of channels of setup
-	Int_t used_channels=128; // the number of channels that will actually be corrected
+	Int_t used_channels=1; // the number of channels that will actually be corrected
 	Int_t Ch[used_channels];
 	Int_t j=0;
-	 
-	for (int i=0;i<nchannels;i++){
+
+	// for (int i=0;i<nchannels;i++){
 		
-	  	Ch[j]=i;
-	  	j++;
+	//   	Ch[j]=i;
+	//   	j++;
 	
-	}
-	 
+	// }
+	Ch[0]=118; 	 
   
 	Float_t nBins_tqT[used_channels];   // for channel 118 (has to be read from file)
 	Float_t nBins_tqE[used_channels];  // for channel 118  (has to be read from file)
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 				if(cal_channel == Ch[i]-64 && cal_branch[0] == 'E'){
 					nBins_tqE[i]+=binning;
 				} 
-				//printf("channel= %d %d\n", cal_channel, Ch[i]);
+				printf("channel= %d %d\n", cal_channel, Ch[i]);
 			}
 
 		}
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 	char toth_str[128];
 
 
-	FILE *f1 = fopen(filename_MAtq, "w");
+	FILE *f = fopen(filename_MAtq, "w");
 	FILE *f2 = fopen(filename_MBtq, "w");
 	//FILE *fe = fopen(filenametqE, "w");
 	Double_t cumul;
@@ -165,10 +165,10 @@ int main(int argc, char *argv[])
 				cumul=0;
 				
 				int nbins= isT ? int(nBins_tqT[i]) : int(nBins_tqE[i]) ;
-				FILE *f= (Ch[i]<=63) ? f1 : f2 ;
+				
 				for(int bin = 1; bin < nbins+1; bin++) {
 					if(bin != 1)cumul+= isT ? htqT->GetBinContent(bin) : htqE->GetBinContent(bin); 
-					fprintf(f, "%5d\t%c\t%d\t%d\t%10.6e\t%10.6e\n",(Ch[i]<=63) ? Ch[i] : (Ch[i]-64), isT ? 'T' : 'E', j, bin-1, isT ?  htqT->GetBinContent(bin) :  htqE->GetBinContent(bin), C*cumul); 
+					fprintf(f, "%5d\t%c\t%d\t%d\t%10.6e\t%10.6e\n", Ch[i], isT ? 'T' : 'E', j, bin-1, isT ?  htqT->GetBinContent(bin) :  htqE->GetBinContent(bin), C*cumul); 
 				}
 			}
 		}
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
 		delete htqE;
 	}
 
-	fclose(f1);
-	fclose(f2);
+	fclose(f);
+	
 
 }
