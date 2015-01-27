@@ -17,8 +17,15 @@ Sticv3Handler::Sticv3Handler()
 	
 	if(raw.feType != RawPulse::STIC) return false;
 
+        pulse.raw = raw;                
+        // WARNING: rounding sensitive!
+        pulse.time = raw.time;  
+        pulse.timeEnd = raw.timeEnd;
+        pulse.region = raw.region;
+        pulse.channelID = raw.channelID;
+        pulse.energy = 1E-3*(pulse.timeEnd - pulse.time);
 
-	// extract data from rawPulse as you see fit
+	//printf("%lld %lld %f\n", pulse.time, pulse.timeEnd, pulse.energy);
 
 
 	return true; 

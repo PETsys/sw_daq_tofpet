@@ -55,6 +55,8 @@ int Client::handleRequest()
 		actionStatus = doReturnEventFrameBuffers();
 	else if(cmdHeader.type == commandToFrontEnd)
 		actionStatus = doCommandToFrontEnd(nBytesNext);
+	if(cmdHeader.type == commandGetTOFPETDataFRame)
+		actionStatus = doGetTOFPETDataFrame();
 	
 	
 	if(actionStatus == -1) {
@@ -69,12 +71,13 @@ int Client::doCommandToFrontEnd(int commandLength)
 {
 	char buffer[256];
 	memcpy(buffer, socketBuffer + sizeof(CmdHeader_t), commandLength);
-	int replyLength = frameServer->sendCommand(buffer, sizeof(buffer), commandLength);
+	int febID = buffer[0];
+	int replyLength = frameServer->sendCommand(febID, buffer+1, sizeof(buffer), commandLength-1);
 	
-	//printf("We have a reply, with %d bytes\n", replyLength);
 	uint16_t trl = replyLength;
+
 	send(socket, &trl, sizeof(trl), MSG_NOSIGNAL);
-	send(socket, buffer, replyLength, MSG_NOSIGNAL);
+	send(socket, buffer+1, replyLength, MSG_NOSIGNAL);
 	return 0;
 }
 
@@ -95,7 +98,10 @@ int Client::doAcqOnOff()
 int Client::doGetEventFrameBuffers()
 {
 	uint16_t nFramesRequested = 0;
+	uint16_t nonEmpty = 0;
 	memcpy(&nFramesRequested, socketBuffer + sizeof(CmdHeader_t), sizeof(uint16_t));
+	memcpy(&nonEmpty, socketBuffer + sizeof(CmdHeader_t) + sizeof(uint16_t), sizeof(uint16_t));
+	
 //	printf("Client requested %u frames\n", nFramesRequested);
 
 	unsigned maxFramesPerRequest = 1024;
@@ -105,10 +111,10 @@ int Client::doGetEventFrameBuffers()
 	uint16_t nFramesForClient = 0;
 	
 	for(unsigned n = 0; n < nFramesRequested; n++) {		
-		FrameServer::DataFramePtr *dataFramePtr = frameServer->getDataFrameByPtr();
+		FrameServer::DataFramePtr *dataFramePtr = frameServer->getDataFrameByPtr(nonEmpty == 0 ? false : true);
 		if (dataFramePtr == NULL) {
-/*			fprintf(stderr, "Client asked for %d frames, but will only get %d\n", nFramesRequested, nFramesForClient);
-			fprintf(stderr, "Client owns %u frame buffers\n", ownedDataFramePtrs.size());*/
+			fprintf(stderr, "Client asked for %d frames, but will only get %d\n", nFramesRequested, nFramesForClient);
+			fprintf(stderr, "Client owns %u frame buffers\n", ownedDataFramePtrs.size());
 			break;
 		}
 		
@@ -133,6 +139,52 @@ int Client::doGetEventFrameBuffers()
 	
 	
 	return 0;
+}
+
+int Client::doGetTOFPETDataFrame()
+{
+	struct { uint64_t id; uint16_t valid; uint16_t nEvents; uint16_t lost; uint16_t vetoed; } header =  { 0, 0, 0, 0, 0 };	
+	FrameServer::DataFramePtr *dataFramePtr = frameServer->getDataFrameByPtr(false);
+	if (dataFramePtr == NULL) {
+		int status = send(socket,  &header, sizeof(header), MSG_NOSIGNAL);
+		return status;
+	}
+	DataFrame &df = *(dataFramePtr->p);
+	
+	header.valid = 1;
+	header.id = df.frameID;
+	header.lost = df.frameLost ? 1 : 0;
+	header.vetoed = 0;
+	unsigned tofpetEvents = 0;
+	for(unsigned i = 0; i  < df.nEvents; i++)
+		if(df.events[i].type == 0) tofpetEvents ++;
+	header.nEvents = tofpetEvents;
+	int status = send(socket,  &header, sizeof(header), MSG_NOSIGNAL);
+	if(status < sizeof(header)) return -1;
+	
+	for(unsigned i = 0; i  < df.nEvents; i++) {
+		Event &e = df.events[i];
+		if(e.type != 0) continue;
+		
+		struct {uint64_t tacIdleTime; 
+			uint64_t channelIdleTime; 
+			uint16_t asicID; uint16_t channelID; uint16_t tacID;
+			uint16_t tCoarse; uint16_t eCoarse;
+			uint16_t tFine; uint16_t eFine;
+		} event = {
+			e.d.tofpet.tacIdleTime,
+			e.d.tofpet.channelIdleTime,
+			e.asicID, e.channelID, e.d.tofpet.tacID,
+			e.tCoarse, e.d.tofpet.eCoarse,
+			e.d.tofpet.tFine, e.d.tofpet.eFine
+		};
+		
+		status = status = send(socket,  &event, sizeof(event), MSG_NOSIGNAL);
+		if(status < 0) break;	
+	}
+	frameServer->returnDataFramePtr(dataFramePtr);
+	
+	return status;
 }
 
 int Client::doReturnEventFrameBuffers()

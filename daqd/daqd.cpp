@@ -18,6 +18,9 @@
 #include "Protocol.hpp"
 #include "Client.hpp"
 #include <boost/lexical_cast.hpp>
+#include <string.h>
+#include <getopt.h>
+
 
 /*
  * Used to stop on CTRL-C or kill
@@ -37,16 +40,69 @@ static void pollSocket(int listeningSocket, FrameServer *frameServer);
 
 int main(int argc, char *argv[])
 {
-	if(argc < 2) {
-		fprintf(stderr, "Usage: %s </path/to/socket>\n", argv[0]);
-		return 1;
-	}
-	char *socketName = argv[1];
-	
+	bool feTypeHasBeenSet = false;
+	int feType[5] = { -1, -1, -1, -1, -1 };
+	char *socketName = NULL;	
 	int debugLevel = 0;
-	if(argc >= 3)
-		debugLevel = boost::lexical_cast<int>(argv[2]);
+	
+	static struct option longOptions[] = {
+		{ "fe-type", required_argument, 0, 0 },
+		{ "socket-name", required_argument, 0, 0 },
+		{ "debug-level", required_argument, 0, 0 },
+		{ NULL, 0, 0, 0 }
+	};
+	while(1) {
 		
+		int optionIndex = 0;
+		int c = getopt_long(argc, argv, "", longOptions, &optionIndex);
+		
+		if (c == -1) {
+			break;
+		}
+		
+		if (c == 0 && optionIndex == 0) {
+			char *s = (char *)optarg;
+			if(strlen(s) != 5) break;
+			for (int i = 0; i < 5; i++) {
+				switch(s[i]) {
+				case 't':
+				case 'T': 
+					feType[i] = 0; 
+					break;
+				case 's':
+				case 'S': 
+					feType[i] = 1; 
+					break;
+				case 'd':
+				case 'D': 
+					feType[i] = 2; break;
+				case '0':
+					feType[i] = -1; break;
+				default : 
+					fprintf(stderr, "Valid values for x are 0 (not present) t (TOFPET), s (STiCv3) or d (dSiPM)\n");
+					return -1;
+				}
+			}
+			feTypeHasBeenSet = true;
+		}
+		else if (c == 0 && optionIndex == 1) 
+			socketName = (char *)optarg;
+		else if (c == 0 && optionIndex == 2)
+			debugLevel = boost::lexical_cast<int>((char *)optarg);
+		else {
+			fprintf(stderr, "Error: unknown option!\n");
+		}
+		
+	}
+	
+	if(socketName == NULL) {
+		fprintf(stderr, "--socket-name </path/to/socket> required\n");
+		return -1;
+	}
+	if(!feTypeHasBeenSet) {
+		fprintf(stderr, "--fe-type xxxxx required\n");
+		return -1;
+	}
 
  	globalUserStop = false;					
 	signal(SIGTERM, catchUserStop);
@@ -57,7 +113,7 @@ int main(int argc, char *argv[])
 		return -1;
 
 
- 	globalFrameServer = new DAQFrameServer(debugLevel);
+ 	globalFrameServer = new DAQFrameServer(5, feType, debugLevel);
 
 	pollSocket(listeningSocket, globalFrameServer);	
 	close(listeningSocket);	

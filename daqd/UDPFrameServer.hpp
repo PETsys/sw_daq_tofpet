@@ -14,7 +14,7 @@ public:
 	UDPFrameServer(int debugLevel);
 	virtual ~UDPFrameServer();	
 
-	int sendCommand(char *buffer, int bufferSize, int commandLength);
+	int sendCommand(int febID, char *buffer, int bufferSize, int commandLength);
 	
 
 private:

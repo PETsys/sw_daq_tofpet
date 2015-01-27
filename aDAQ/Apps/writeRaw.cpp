@@ -26,6 +26,7 @@
 #include <Core/CrystalPositions.hpp>
 #include <Core/NaiveGrouper.hpp>
 #include <Core/CoincidenceFilter.hpp>
+#include <ENDOTOFPET/Raw.hpp>
 
 
 using namespace std;
@@ -228,6 +229,108 @@ private:
 	long nEventsPassed;
 };
 
+class EventWriter_ENDOTOFPET_RP : public OverlappedEventHandler<RawPulse, RawPulse> {
+public:
+	  EventWriter_ENDOTOFPET_RP(FILE *dataFile, float step1, float step2, EventSink<RawPulse> *sink) 
+			: 	OverlappedEventHandler<RawPulse, RawPulse>(sink, true),
+				dataFile(dataFile), step1(step1), step2(step2) 
+	  {
+			currentFrameID=0;
+	  };
+	  
+	  ~EventWriter_ENDOTOFPET_RP() {
+		
+	  };
+
+	  EventBuffer<RawPulse> * handleEvents(EventBuffer<RawPulse> *inBuffer) {
+			long long tMin = inBuffer->getTMin();
+			long long tMax = inBuffer->getTMax();
+			unsigned nEvents =  inBuffer->getSize();
+			
+			for(unsigned i = 0; i < nEvents; i++) {
+				RawPulse & raw = inBuffer->get(i);
+				
+				
+				if(raw.time < tMin || raw.time >= tMax)
+					continue;
+			
+				if (raw.feType == RawPulse::TOFPET) {
+					if(raw.d.tofpet.frameID < currentFrameID) {					
+						events_missed++;
+						continue;
+					}
+					
+					if(raw.d.tofpet.frameID != currentFrameID){
+						DAQ::ENDOTOFPET::FrameHeader FrHeaderOut = {
+								0x01,
+								raw.d.tofpet.frameID,
+								0,
+						};				
+						fwrite(&FrHeaderOut, sizeof(DAQ::ENDOTOFPET::FrameHeader), 1, dataFile);
+						currentFrameID=raw.d.tofpet.frameID;
+					}				
+			
+					DAQ::ENDOTOFPET::RawTOFPET eventOut = {
+							0x02,
+							raw.d.tofpet.tac,
+							raw.channelID,
+							raw.d.tofpet.tcoarse,
+							raw.d.tofpet.ecoarse,
+							raw.d.tofpet.tfine,
+							raw.d.tofpet.efine,
+							raw.d.tofpet.tacIdleTime,
+							raw.channelIdleTime};
+					
+					fwrite(&eventOut, sizeof(DAQ::ENDOTOFPET::RawTOFPET), 1, dataFile);	     
+				}
+				
+				else if (raw.feType == RawPulse::STIC) {\
+					if(raw.d.stic.frameID < currentFrameID) {					
+						events_missed++;
+						continue;
+					}
+					
+					if(raw.d.stic.frameID != currentFrameID){
+						DAQ::ENDOTOFPET::FrameHeader FrHeaderOut = {
+								0x01,
+								raw.d.stic.frameID,
+								0,
+						};				
+						fwrite(&FrHeaderOut, sizeof(DAQ::ENDOTOFPET::FrameHeader), 1, dataFile);
+						currentFrameID=raw.d.stic.frameID;
+					}				
+			
+					DAQ::ENDOTOFPET::RawSTICv3 eventOut = {
+							0x03,
+							raw.channelID,
+							raw.d.stic.tcoarse,
+							raw.d.stic.ecoarse,
+							raw.d.stic.tfine,
+							raw.d.stic.efine,
+							raw.d.stic.tBadHit,
+							raw.d.stic.eBadHit,
+							raw.channelIdleTime};
+					
+					fwrite(&eventOut, sizeof(DAQ::ENDOTOFPET::RawSTICv3), 1, dataFile);	     
+				}
+					
+			}
+	  
+			return inBuffer;
+	  };
+
+	
+	  void pushT0(double t0) { };	
+	  void report() { };
+private: 
+	  FILE *dataFile;
+	  float step1;
+	  float step2;
+	  uint32_t currentFrameID;
+	  uint32_t events_missed;
+	  uint32_t events_passed;
+	  
+};
 
 int main(int argc, char *argv[])
 {
@@ -259,13 +362,15 @@ int main(int argc, char *argv[])
 	
 	
 
-	char dataFileName[512];
+/*	char dataFileName[512];
 	char indexFileName[512];
 	sprintf(dataFileName, "%s.raw2", outputFilePrefix);
 	sprintf(indexFileName, "%s.idx2", outputFilePrefix);
 	
 	FILE *outputDataFile = fopen(dataFileName, "w");
-	FILE *outputIndexFile = fopen(indexFileName, "w");
+	FILE *outputIndexFile = fopen(indexFileName, "w");*/
+
+	FILE *outputDataFile = fopen(outputFilePrefix, "w");
 		
 	
 	bool firstBlock = true;
@@ -358,7 +463,7 @@ int main(int argc, char *argv[])
 		// FrameID order check
 		int32_t shmIndex = shmIndexList[0];
 		DataFrame &dataFrame = dataFrameSharedMemory[shmIndex];	
-		bool blockOK = isBefore(lastFrameID, dataFrame.frameID);		
+		bool blockOK = isBefore(lastFrameID, dataFrame.frameID);
 		for(int n = 1; n < blockHeader.nFrames; n++)
 		{
 			int32_t shmIndex1 = shmIndexList[n-1];
@@ -387,20 +492,21 @@ int main(int argc, char *argv[])
 		
 		
 		if(sink == NULL) {
+			assert (cWindow == 0); // We don't support coincidence filtering when writing to endotofpet files yet
 			if (cWindow == 0) {
-				sink = new EventWriter_RP(outputDataFile, outputIndexFile, step1, step2,
+				sink = new EventWriter_ENDOTOFPET_RP(outputDataFile, step1, step2,
 					new NullSink<RawPulse>()
 					);
 			}
 			else {
-				sink = new CoarseExtract(false,
-					new SingleReadoutGrouper(
-					new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-					new NaiveGrouper(20, 100E-9,
-					new CoincidenceFilter(cWindow, 0,
-					new EventWriter_GP(outputDataFile, outputIndexFile, step1, step2,
-					new NullSink<GammaPhoton>()
-					))))));		
+// 				sink = new CoarseExtract(false,
+// 					new SingleReadoutGrouper(
+// 					new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
+// 					new NaiveGrouper(20, 100E-9,
+// 					new CoincidenceFilter(cWindow, 0,
+// 					new EventWriter_GP(outputDataFile, outputIndexFile, step1, step2,
+// 					new NullSink<GammaPhoton>()
+// 					))))));		
 			}
 		}
 		
@@ -417,7 +523,7 @@ int main(int argc, char *argv[])
 			sortList.clear();
 			sortList.reserve(512);
 			for(unsigned i = 0; i < dataFrame.nEvents; i++) {
-				EventTOFPET &eventIn = dataFrame.events[i].d.tofpet;
+				Event &eventIn = dataFrame.events[i];
 				SortEntry entry = { eventIn.tCoarse, i };
 				sortList.push_back(entry);				
 			}
@@ -431,24 +537,44 @@ int main(int argc, char *argv[])
 			}
 
 			for(unsigned j = 0; j < sortList.size(); j++) {
-				EventTOFPET &eventIn = dataFrame.events[sortList[j].index].d.tofpet;			
+				Event &eventIn = dataFrame.events[sortList[j].index];			
 				
 				long long correctedFrameID = dataFrame.frameID + nWraps * 0x100000000LL;				
 				RawPulse &p = outBuffer->getWriteSlot();
+
+				if (eventIn.type == 0) {
+					p.feType = RawPulse::TOFPET;
+					p.d.tofpet.T = T * 1E12;
+					p.time = (1024LL * correctedFrameID + eventIn.tCoarse) * p.d.tofpet.T;
+					p.channelID = 64 * eventIn.asicID + eventIn.channelID;
+					p.region = (64 * eventIn.asicID + eventIn.channelID) / 16;
+					p.d.tofpet.frameID = correctedFrameID;
+					p.d.tofpet.tac = eventIn.d.tofpet.tacID;
+					p.d.tofpet.tcoarse = eventIn.tCoarse;
+					p.d.tofpet.ecoarse = eventIn.d.tofpet.eCoarse;
+					p.d.tofpet.tfine =  eventIn.d.tofpet.tFine;
+					p.d.tofpet.efine = eventIn.d.tofpet.eFine;
+					p.channelIdleTime = eventIn.d.tofpet.channelIdleTime;				
+					p.d.tofpet.tacIdleTime = eventIn.d.tofpet.tacIdleTime;
+				}
+				else if (eventIn.type == 1) {
+					p.feType = RawPulse::STIC;					
+					p.d.stic.T = T * 1E12;
+					unsigned tCoarse = (eventIn.d.sticv3.tCoarseL  >> 2) & 0x3FF;					
+					p.time = (1024LL * correctedFrameID + tCoarse) * p.d.stic.T;
+					p.channelID = 64 * eventIn.asicID + eventIn.channelID;
+					p.region = (64 * eventIn.asicID + eventIn.channelID) / 16;
+					p.d.stic.frameID = correctedFrameID;
+					p.d.stic.tcoarse = eventIn.d.sticv3.tCoarseL;
+					p.d.stic.ecoarse = eventIn.d.sticv3.eCoarseL;
+					p.d.stic.tfine =  eventIn.d.sticv3.tFine;
+					p.d.stic.efine = eventIn.d.sticv3.eFine;
+					p.channelIdleTime = eventIn.d.sticv3.channelIdleTime;
+					p.d.stic.tBadHit = eventIn.d.sticv3.tBadHit;
+					p.d.stic.eBadHit = eventIn.d.sticv3.eBadHit;
+				}
 				
-				p.d.tofpet.T = T * 1E12;
-				p.time = (1024LL * correctedFrameID + eventIn.tCoarse) * p.d.tofpet.T;
-				p.channelID = 64 * eventIn.asicID + eventIn.channelID;
-				p.region = (64 * eventIn.asicID + eventIn.channelID) / 16;
-				p.feType = RawPulse::TOFPET;
-				p.d.tofpet.frameID = correctedFrameID;
-				p.d.tofpet.tac = eventIn.tacID;
-				p.d.tofpet.tcoarse = eventIn.tCoarse;
-				p.d.tofpet.ecoarse = eventIn.eCoarse;
-				p.d.tofpet.tfine =  eventIn.tFine;
-				p.d.tofpet.efine = eventIn.eFine;
-				p.channelIdleTime = eventIn.channelIdleTime;				
-				p.d.tofpet.tacIdleTime = eventIn.tacIdleTime;				
+				
 									
 				if(p.time > tMax) {
 					tMax = p.time;
@@ -519,7 +645,7 @@ int main(int argc, char *argv[])
 	
 
 	
-	fclose(outputIndexFile);
+	//fclose(outputIndexFile);
 	fclose(outputDataFile);
 	
 	return 0;

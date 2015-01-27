@@ -7,12 +7,12 @@
 #include "Protocol.hpp"
 
 static const char *shmObjectPath = "/daqd_shm";
-static const int MaxDataFrameQueueSize = 4*1024;
-static const int N_ASIC=4;
+static const int MaxDataFrameQueueSize = 128*1024;
+static const int N_ASIC=5*16;
 
 class FrameServer {
 public:
-	FrameServer(int debugLevel);
+	FrameServer(int nFEB, int *feTypeMap, int debugLevel);
         ~FrameServer();	
 	struct DataFramePtr {
 	public:
@@ -28,25 +28,28 @@ public:
 	// bufferSize is the max capacity of the size
 	// commandLength is the length of the command in
 	// return the reply length or -1 if error
-	virtual int sendCommand(char *buffer, int bufferSize, int commandLength) = 0;
+	virtual int sendCommand(int febID, char *buffer, int bufferSize, int commandLength) = 0;
 	
 	virtual const char *getDataFrameSharedMemoryName();
-	virtual DataFramePtr *getDataFrameByPtr();
+	virtual DataFramePtr *getDataFrameByPtr(bool nonEmpty);
 	virtual void returnDataFramePtr(DataFramePtr *ptr);
 	
 	virtual void startAcquisition(int mode);
 	virtual void stopAcquisition();
 	
 	
-protected:
-	
+protected:	
 	int debugLevel;
+	
+	int nFEB;
+	int *feTypeMap;
+	
 	int dataFrameSharedMemory_fd;
 	DataFrame *dataFrameSharedMemory;
 	
 	static void *runWorker(void *);
 	virtual void * doWork() = 0;
-	static bool decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes);
+	bool decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes);
 	void startWorker();
 	void stopWorker();
 	
@@ -73,8 +76,10 @@ protected:
 	uint64_t *tacLastEventTime;
 	uint64_t *channelLastEventTime;
 	
-
-
+	int16_t m_lut[ 1 << 15 ];
+	
+	private:
+	bool decodeSTiCv3Event(uint64_t *data, Event &event);
 
 };
 

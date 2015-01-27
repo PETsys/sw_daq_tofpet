@@ -98,7 +98,7 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		while(!sorted) {
 			sorted = true;
 			for(int k = 1; k < nHits; k++) {
-				if(hits[k-1]->time > hits[k]->time) {
+				if(hits[k-1]->energy < hits[k]->energy) {
 					sorted = false;
 					Hit *tmp = hits[k-1];
 					hits[k-1] = hits[k];

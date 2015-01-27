@@ -14,7 +14,7 @@ namespace DAQ { namespace Core {
 		public EventSink<TEventInput>,
 		public EventSource<TEventOutput> {
 	public:
-		static const long overlap = 1000000; // 200 ns
+		static const long overlap = 200000; // 200 ns
 	
 		OverlappedEventHandler(EventSink<TEventOutput> *sink, bool singleWorker = false, ThreadPool *pool = GlobalThreadPool);
 		~OverlappedEventHandler();

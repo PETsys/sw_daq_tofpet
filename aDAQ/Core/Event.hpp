@@ -37,6 +37,7 @@ namespace DAQ { namespace Core {
 			  short efine;
 			  bool tBadHit;
 			  bool eBadHit;
+			  long long T;
 			  // Write here any other STIC auxiliary fields that may be relevant for data analysis;
 		  } stic;
 		  struct {

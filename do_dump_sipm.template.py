@@ -22,7 +22,6 @@ uut.openAcquisition(dataFilePrefix, cWindow)
 for c in range(len(uut.config.hvBias)):
 	uut.config.hvBias[c] = 67.250
 
-uut.config.writeParams(dataFilePrefix)
 
 for step1 in [0]:
   for step2 in [0]:

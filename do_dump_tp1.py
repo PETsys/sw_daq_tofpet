@@ -36,6 +36,9 @@ for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = 50.0
 
 for ac in atbConfig.asicConfig:
+	if not isistance(ac, tofpet.AsicConfig):
+		continue
+
 	ac.globalConfig.setValue("test_pulse_en", 1)
 	ac.channelTConfig[tChannel] = bitarray('1')
 	ac.globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
@@ -66,6 +69,9 @@ for step1 in range(0,64,4): # vib
 			#atbConfig.asicConfig[tAsic].channelConfig[c].setValue("vbl", step2)
 
 	for ac in atbConfig.asicConfig:
+		if not isistance(ac, tofpet.AsicConfig):
+			continue
+
 		ac.globalConfig.setValue("vib1", step1);
 		for cc in ac.channelConfig:
 			cc.setValue("vbl", step2);

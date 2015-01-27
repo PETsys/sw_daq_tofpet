@@ -7,9 +7,12 @@
 #include <limits.h>
 #include <iostream>
 
+#include <Common/Constants.hpp>
+
 using namespace std;
 using namespace DAQ::Core;
 using namespace DAQ::ENDOTOFPET;
+using namespace DAQ::Common;
 
 static const unsigned outBlockSize = 128*1024;
 static const unsigned maxEventsPerFrame = 16*1024;
@@ -59,7 +62,7 @@ void RawReader::run()
 		  events++;
 		  
 		  
-		  if(code>0x02){
+		  if(code>0x03){
 				fprintf(stderr, "Impossible code: %u, at event %ld\n\n", code, events);
 				break;
 		  }
@@ -94,6 +97,8 @@ void RawReader::run()
 			
 				RawPulse &p = outBuffer->getWriteSlot();
 				
+
+
 				// Carefull with the float/double/integer conversions here..
 				p.d.tofpet.T = T * 1E12;
 				p.time = (1024LL * CurrentFrameID + rawEvent.tCoarse) * p.d.tofpet.T;
@@ -110,12 +115,13 @@ void RawReader::run()
 				p.d.tofpet.tfine =  rawEvent.tFine;
 				p.d.tofpet.efine = rawEvent.eFine;
 				p.d.tofpet.tacIdleTime = rawEvent.tacIdleTime;
-				
-		
+
+				//printf("DBG T frameID = %20lld tCoarse = %6u time = %20lld\n", CurrentFrameID, rawEvent.tCoarse, p.time);
+
 				if(CurrentFrameID < minFrameID) minFrameID = CurrentFrameID;
 				if(CurrentFrameID > maxFrameID) maxFrameID = CurrentFrameID;
 				
-				if(p.channelID >= 128)
+				if(p.channelID >= SYSTEM_NCHANNELS)
 					  continue;
 				
 				if(p.time > tMax)
@@ -142,20 +148,38 @@ void RawReader::run()
 				
 				
 				RawPulse &p = outBuffer->getWriteSlot();
-				
-				// Add in the following block any other STIC auxiliary fields relevant for data analysis and constructed from raw data 
+			
+				//long long clocksElapsed = CurrentFrameID *1024*4ULL;
+				long long clocksElapsed = (CurrentFrameID%256) *1024*4ULL;	// Periodic reset every 256 frames
+				long long wrapNumber	= clocksElapsed / 32767;
+				long long wrapRemainder	= clocksElapsed % 32767;
+
+				unsigned tCoarse = rawEvent2.tCoarse;
+				unsigned eCoarse = rawEvent2.eCoarse;
+
+				if(tCoarse < wrapRemainder)
+					tCoarse += 32767;
+				tCoarse -= wrapRemainder;
 
 				
-				//	p.d.tofpet.T = T * 1E12;
-				p.time = (1024LL * CurrentFrameID + rawEvent2.tCoarse) * p.d.tofpet.T;
-				p.timeEnd = (1024LL * CurrentFrameID + rawEvent2.eCoarse) * p.d.tofpet.T;
-				if((p.timeEnd - p.time) < -256*p.d.tofpet.T) p.timeEnd += (1024LL * p.d.tofpet.T);
+				if(eCoarse < wrapRemainder)
+					eCoarse += 32767;
+				eCoarse -= wrapRemainder;
+
+				//printf("wrapRemainder: %6lld\n", wrapRemainder);
+				//printf("tCoarse: %6lu %6lu\n", rawEvent2.tCoarse, tCoarse);
+
+			
+				p.d.stic.T = T * 1E12;
+				p.time = 1024LL * CurrentFrameID * p.d.stic.T + tCoarse * p.d.stic.T/4;
+				p.timeEnd = 1024LL * CurrentFrameID * p.d.stic.T + eCoarse * p.d.stic.T/4;
+				if((p.timeEnd - p.time) < -256*p.d.stic.T) p.timeEnd += (1024LL * p.d.stic.T);
 				p.channelID = rawEvent2.channelID;
 				p.channelIdleTime = rawEvent2.channelIdleTime;
-				p.region = rawEvent2.channelID / 16;
+				
+				
 				p.feType = RawPulse::STIC;
-				p.d.stic.frameID = CurrentFrameID;
-   
+				p.d.stic.frameID = CurrentFrameID;				   
 				p.d.stic.tcoarse = rawEvent2.tCoarse;
 				p.d.stic.ecoarse = rawEvent2.eCoarse;
 				p.d.stic.tfine =  rawEvent2.tFine;
@@ -163,11 +187,12 @@ void RawReader::run()
 				p.d.stic.tBadHit = rawEvent2.tBadHit;
 				p.d.stic.eBadHit = rawEvent2.eBadHit;
 				
+				//printf("DBG S frameID = %20lld tCoarse = %6u time = %20lld\n", CurrentFrameID, tCoarse >> 2, p.time);
 		
 				if(CurrentFrameID < minFrameID) minFrameID = CurrentFrameID;
 				if(CurrentFrameID > maxFrameID) maxFrameID = CurrentFrameID;
 				
-				if(p.channelID >= 128)
+				if(p.channelID >= SYSTEM_NCHANNELS)
 					  continue;
 				
 				if(p.time > tMax)

@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 import atb
-from loadLocalConfig import loadLocalConfig
+from loadLocalConfig_TDC import loadLocalConfig
 from bitarray import bitarray
 from sys import argv, stdout, exit
 from time import time, sleep
 import ROOT
 from rootdata import DataFile
 import serial
+import tofpet
 
 # Parameters
 T = 6.25E-9
@@ -17,9 +18,9 @@ Generator = 1
 M = 0x348	# 80 MHz PLL, 80 MHz ASIC
 M = 392		# 160 MHz PLL, 160 MHz ASIC
 #M = 2*392	# 160 MHz PLL, 80 MHz ASIC 
-K = 19
-minEventsA = 1000
-minEventsB = 300
+K = 19  *8
+minEventsA = 1000    /3
+minEventsB = 300     /3
 
 ###
 
@@ -58,22 +59,22 @@ else:
   print "Unkown mode!"
   exit(1)
 
-
-
 if vbias > 50: minEventsA *= 10
 if vbias > 50: minEventsB *= 10
+
+rootFile = ROOT.TFile(rootFileName, "RECREATE");
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig(useBaseline=False)
 uut.initialize()
 
 
-rootFile = ROOT.TFile(rootFileName, "RECREATE");
 rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
-activeChannels = [ x for x in range(64) ]
-activeAsics =  [ i for i,ac in enumerate(uut.config.asicConfig) ]
+activeChannels = [ x for x in range(0,64,2) ]
+activeAsics =  [ i for i,ac in enumerate(uut.config.asicConfig) if isinstance(ac, tofpet.AsicConfig) ]
+systemAsics = [ i for i in range(len(uut.config.asicConfig)) ]
 
 minEventsA *= len(activeAsics)
 minEventsB *= len(activeAsics)
@@ -83,20 +84,17 @@ hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
 
 for tChannel in activeChannels:
 	atbConfig = loadLocalConfig(useBaseline=False)
-	for c in range(len(atbConfig.hvBias)):
+	for c, v in enumerate(atbConfig.hvBias):
+		if v is None: continue
 		atbConfig.hvBias[c] = vbias
-
-	for tAsic in activeAsics:
-		atbConfig.asicConfig[tAsic].globalConfig.setValue("test_pulse_en", 1)
-
 
 
 	for tAsic in activeAsics:
 		# Overwrite test channel config
-		tChannelConfig = atbConfig.asicConfig[tAsic].channelConfig[tChannel]
-		tChannelTConfig = atbConfig.asicConfig[tAsic].channelTConfig[tChannel]
-
-		atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("fe_test_mode", 1)
+		atbConfig.asicConfig[tAsic].globalConfig.setValue("test_pulse_en", 1)
+		#tChannelConfig = atbConfig.asicConfig[tAsic].channelConfig[tChannel]
+		#tChannelTConfig = atbConfig.asicConfig[tAsic].channelTConfig[tChannel]
+		#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("fe_test_mode", 1)
 		if tdcaMode:
 			
 			# Both TDC branches
@@ -108,8 +106,11 @@ for tChannel in activeChannels:
 			atbConfig.asicConfig[tAsic].channelTConfig[tChannel] = bitarray('1')
 			atbConfig.asicConfig[tAsic].globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
 
+	uut.stop()
 	uut.config = atbConfig
 	uut.uploadConfig()
+	uut.start()
+	uut.doSync()
 
 
 	nBins = int(Nmax * M / K)
@@ -117,11 +118,10 @@ for tChannel in activeChannels:
 
 	print nBins, binWidth
 	sumProfile = ROOT.TProfile("pAll_%02d" % tChannel, "ALL", nBins, 0, nBins*binWidth, "s")
-	hTFine = [[ ROOT.TH2F("htFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nBins, 0, nBins*binWidth, 1024, 0, 1024) for tac in range(4) ] for tAsic in activeAsics ]
-	hEFine = [[ ROOT.TH2F("heFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nBins, 0, nBins*binWidth, 1024, 0, 1014) for tac in range(4) ] for tAsic in activeAsics ]
+	hTFine = [[ ROOT.TH2F("htFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nBins, 0, nBins*binWidth, 1024, 0, 1024) for tac in range(4) ] for tAsic in systemAsics ]
+	hEFine = [[ ROOT.TH2F("heFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nBins, 0, nBins*binWidth, 1024, 0, 1014) for tac in range(4) ] for tAsic in systemAsics ]
 
 
-	uut.doSync()
 
 	step1 = 1
 	for bin in range(nBins):
@@ -139,27 +139,29 @@ for tChannel in activeChannels:
 			tpFinePhase = phaseStep % M
 
 		uut.setTestPulsePLL(tpLength, frameInterval, tpFinePhase, pulseLow)
+		#uut.start(2)
 		uut.doSync()
+		#uut.start(1)
 		t0 = time()
 		
 		print "Channel %02d acquiring %1.4f (%d)  @ %d" % (tChannel, step2, phaseStep, frameInterval)
 
-		uut.start(1)
+		
 		nReceivedEvents = 0
 		nAcceptedEvents = 0
 		nReceivedFrames = 0
 		t0 = time()
 		while nAcceptedEvents < minEventsA and (time() - t0) < 10:
-			decodedFrame = uut.getDataFrame(waitForDataFrame = False)
+			decodedFrame = uut.getDataFrame(nonEmpty = True)
 			if decodedFrame is None: continue
 
-			nReceivedFrames += 1
-			
+			nReceivedFrames += 1			
 			for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:
 				nReceivedEvents += 1
 				#print decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime
 				if asic not in activeAsics or channel != tChannel:
 					continue;
+				#print ".. accepting ", nAcceptedEvents
 				
 				nAcceptedEvents += 1				
 			
@@ -171,14 +173,13 @@ for tChannel in activeChannels:
 				
 		print "Got %(nReceivedFrames)d frames" % locals()
 		print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
-		uut.start(2)
 
 	rootData1.write()
-
-
-	edgesX = [ -1.0 for x in activeAsics ]
+	#continue
+	
+	edgesX = [ -1.0 for x in systemAsics ]
 	print activeAsics
-	for n in range(len(activeAsics)):
+	for n in activeAsics:
 
 		minADCY = 1024
 		minADCX = 0
@@ -222,8 +223,8 @@ for tChannel in activeChannels:
 	intervals = [ x for x in range(frameInterval, 1000, 40) ]
 	nIntervals = len(intervals)
 
-	hTFine = [[ ROOT.TH2F("htFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1024) for tac in range(4) ] for tAsic in activeAsics ]
-	hEFine = [[ ROOT.TH2F("heFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1014) for tac in range(4) ] for tAsic in activeAsics ]
+	hTFine = [[ ROOT.TH2F("htFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1024) for tac in range(4) ] for tAsic in systemAsics ]
+	hEFine = [[ ROOT.TH2F("heFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1014) for tac in range(4) ] for tAsic in systemAsics ]
 
 
 	for nStep, stepDelta in enumerate([-0.2]): # Pick points for the scan from the edge
@@ -253,13 +254,13 @@ for tChannel in activeChannels:
 			
 			print "Channel %02d acquiring %1.4f (%d) @ %d" % (tChannel, step2, tpFinePhase, interval)
 
-			uut.start(1)
+			#uut.start(1)
 			nReceivedEvents = 0
 			nAcceptedEvents = 0
 			nReceivedFrames = 0
 			t0 = time()
 			while nAcceptedEvents < minEventsB and (time() - t0) < 15:
-				decodedFrame = uut.getDataFrame(waitForDataFrame = False)
+				decodedFrame = uut.getDataFrame(nonEmpty = True)
 				if decodedFrame is None: continue
 
 				nReceivedFrames += 1
@@ -280,7 +281,7 @@ for tChannel in activeChannels:
 					
 			print "Got %(nReceivedFrames)d frames" % locals()
 			print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
-			uut.start(2)
+			#uut.start(2)
 
 
 		rootData2.write()

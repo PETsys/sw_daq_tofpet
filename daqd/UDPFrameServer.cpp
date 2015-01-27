@@ -19,10 +19,10 @@ static const unsigned short fePort = 2000;
 
 //static const int N_ASIC=4;
 
-
+static int feTypeMap[1] = { 0 };
 
 UDPFrameServer::UDPFrameServer(int debugLevel)
-	: FrameServer(debugLevel)
+	: FrameServer(1, feTypeMap, debugLevel)
 {
 	udpSocket = socket(AF_INET,SOCK_DGRAM,0);
 	assert(udpSocket != -1);
@@ -151,7 +151,7 @@ void *UDPFrameServer::doWork()
 }
 
 
-int UDPFrameServer::sendCommand(char *buffer, int bufferSize, int commandLength)
+int UDPFrameServer::sendCommand(int febID, char *buffer, int bufferSize, int commandLength)
 {
 	send(udpSocket, buffer, commandLength, 0);
 	
