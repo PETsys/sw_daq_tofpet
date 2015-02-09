@@ -1,7 +1,8 @@
 
+
 OBJS := FrameServer.cpp.o DtFlyP.cpp.o DAQFrameServer.cpp.o UDPFrameServer.cpp.o Client.cpp.o 
 
-CPPFLAGS := $(CPPFLAGS) -I$(DTFLY_PATH)/include $(shell python-config --includes)
+CPPFLAGS := $(CPPFLAGS) $(shell python-config --includes)
 CXXFLAGS := -g -O2  -std=c++0x
 LDFLAGS := $(LDFLAGS)  -ldtfly -lwdapi1011 -lpthread -lrt
 
