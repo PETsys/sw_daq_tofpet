@@ -240,6 +240,7 @@ class ATB:
 		n = struct.calcsize(template1) + struct.calcsize(template2);
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, mode)
 		self.__socket.send(data)
+		sleep(0.1)
 		return None
 
 	def stop(self):
@@ -629,6 +630,7 @@ class ATB:
 		febID = min(activeFEBs)
 		reply = self.sendCommand(febID, 0x03, bytearray([0x02]))
 		status = reply[0]
+		#print  [hex(x) for x in reply[1:] ]
 		data = reply[2:6]
 
 		data = sum([ data[i] * 2**(24 - 8*i) for i in range(len(data)) ])
@@ -636,7 +638,7 @@ class ATB:
 
 	def doSync(self, clearFrames=True):
 		_, targetFrameID = self.getCurrentFrameID()
-		#print "Waiting for frame %d" % frameID
+		#print "Waiting for frame %d" % targetFrameID
 		while True:
 			df = self.getDataFrame()
 			assert df != None
@@ -644,6 +646,7 @@ class ATB:
 				continue;
 
 			if  df['id'] > targetFrameID:
+				#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
 				break
 
 			indexes = self.getDataFramesByRawIndex(128)
@@ -660,7 +663,11 @@ class ATB:
 
 		m, b = self.config.hvParam[channel]
 		voltage = voltageRequested* m + b
-		#print channel, voltageRequested, voltage
+		#print "%4d %f => %f, %f => %f" % (channel, voltageRequested, m, b, voltage)
+		self.setHVDAC_(channel, voltage)
+
+	def setHVDAC_(self, channel, voltage):
+		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
 
 		voltage = int(voltage * 2**14 / (50 * 2.048))
 		if voltage > 2**14-1:
@@ -678,7 +685,9 @@ class ATB:
 
 		whichDAC = 1 - whichDAC # Wrong decoding in ad5535.vhd
 
-		if whichBoard not in activeFEBs: return
+		if whichBoard not in activeFEBs: 
+			print "Not setting voltage for FEB/D without configured ASICs"
+			return
 
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
 		dacBytes = bytearray(dacBits.tobytes())

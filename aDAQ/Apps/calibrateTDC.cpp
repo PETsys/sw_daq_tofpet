@@ -17,7 +17,7 @@
 #include <math.h>
 #include <boost/lexical_cast.hpp>
 
-static const int nBoard = 2;
+static const int nBoard = 32;
 static const int nASIC = 2 * nBoard;
 static const int nTAC = nASIC*64*2*4;
 struct TacInfo {
@@ -161,7 +161,7 @@ bool isCanonical(int coarse, float q)
 
 int main(int argc, char *argv[])
 {
-	if (argc != 6) {
+	if (argc != 5) {
 		fprintf(stderr, "USAGE: %s t_branch_data.root e_branch_data.root"
 				" 128"
 				" mezzanine1.tdc.cal mezzanine2.tdc.cal"
@@ -169,11 +169,10 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "t_branch_data.root -- Data to be used for T branch calibration");
 		fprintf(stderr, "E_branch_data.root -- Data to be used for E branch calibration");
 		fprintf(stderr, "128 -- Nominal TDC interpolation factor");
-		fprintf(stderr, "board1.tdc.cal -- Output calibration constants for board 1");
-		fprintf(stderr, "board2.tdc.cal -- Output calibration constants for board 2");
+		fprintf(stderr, "tdc_calibration_prefix -- Prefix for output calibration files; 2 ASICs per file");
 		return 1;
 	}	
-	assert(argc == 6);
+	assert(argc == 5);
 //	TVirtualFitter::SetDefaultFitter("Minuit2");
 	
 	TRandom *random = new TRandom();
@@ -182,8 +181,7 @@ int main(int argc, char *argv[])
 	TFile * eDataFile = new TFile(argv[2], "READ");
 	TFile * resumeFile = new TFile("tdcSummary.root", "RECREATE");	
 	float nominalM = boost::lexical_cast<float>(argv[3]);
-	char *tableFileName1 = argv[4];
-	char *tableFileName2 = argv[5];
+	char *tableFileNamePrefix = argv[4];
 	
 	DAQ::TOFPET::P2 myP2(64*nASIC);
 
@@ -752,8 +750,12 @@ int main(int argc, char *argv[])
 	
 	
 	
-	myP2.storeFile(  0, 128, tableFileName1);
-	myP2.storeFile(128, 256, tableFileName2);
+	for(unsigned i = 0; i < nBoard; i++) {
+		char tableFileName[1024];
+		sprintf(tableFileName, "%s_%04u.tdc.cal", tableFileNamePrefix, i);
+		myP2.storeFile(  128*i, 128*(i+1), tableFileName);
+	}
+	
 	resumeFile->Write();
 	resumeFile->Close();
 

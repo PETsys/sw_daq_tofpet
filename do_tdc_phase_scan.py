@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import atb
-from loadLocalConfig_TDC import loadLocalConfig
+from loadLocalConfig import loadLocalConfig
 from bitarray import bitarray
 from sys import argv, stdout, exit
 from time import time, sleep
@@ -18,9 +18,9 @@ Generator = 1
 M = 0x348	# 80 MHz PLL, 80 MHz ASIC
 M = 392		# 160 MHz PLL, 160 MHz ASIC
 #M = 2*392	# 160 MHz PLL, 80 MHz ASIC 
-K = 19  *8
-minEventsA = 1000    /3
-minEventsB = 300     /3
+K = 19
+minEventsA = 1000    
+minEventsB = 300     
 
 ###
 
