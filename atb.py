@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+## @package atb
+# This module defines all the classes, variables and methods to operate the TOFPET ASIC via a UNIX socket  
+
 import crcmod
 import serial
 from math import log, ceil
@@ -17,6 +21,9 @@ from subprocess import Popen, PIPE
 from sys import maxint
 
 class AsicGlobalConfig(bitarray):
+  ## Constructor. 
+  # Defines and sets all fields to a default configuration. Most important fields are:
+  # 
   def __init__(self, initial=None, endian="big"):
 	super(AsicGlobalConfig, self).__init__()
 
@@ -136,41 +143,50 @@ class AsicGlobalConfig(bitarray):
 	self.setValue("vib1", 24)
 	self.setValue("sipm_idac_dcstart", 48)
 
-	
-
+  ## Set the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be set
+  # @param value  Integer corresponding to the value to be set
   def setValue(self, key, value):
 	b = intToBin(value, len(self.__fields[key]))
 	self.setBits(key, b)
-	
+  
+  ## Set the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be set
+  # @param value  Bitarray corresponding to the value to be set	
   def setBits(self, key, value):
 	index = self.__fields[key]
 	assert len(value) == len(index)
 	for a,b in enumerate(index):
 	  self[109 - b] = value[a]
-	
+
+  ## Returns the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be returned	
   def getBits(self, key):
 	index = self.__fields[key]
 	value = bitarray(len(index))
 	for a,b in enumerate(index):
 	  value[a] = self[109 - b]
 	return value
-	
+
+  ## Returns the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be returned
   def getValue(self, key):
 	return binToInt(self.getBits(key))
-	
+  ## Prints the content of all parameters as a bitarray
   def printAllBits(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getBits(key)
-
+  ## Prints the content of all parameters as integers
   def printAllValues(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getValue(key)
-
+  ## Returns all the keys (variables) in this class
   def getKeys(self):
 	return self.__fields.keys()
 
-
+## Contains parameters and methods related to the operation of one channel of the ASIC. 
 class AsicChannelConfig(bitarray):
+  ## Constructor
   def __init__(self, initial=None, endian="big"):
 	super(AsicChannelConfig, self).__init__()
 
@@ -249,44 +265,60 @@ class AsicChannelConfig(bitarray):
 	# Introduced after oscillation problems were found
 	self.setValue("vbl", 44)
 
-	
+  ## Set the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be set
+  # @param value  Integer corresponding to the value to be set	
   def setValue(self, key, value):
 	b = intToBin(value, len(self.__fields[key]))
 	self.setBits(key, b)
-	
+  
+  ## Set the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be set
+  # @param value  Bitarray corresponding to the value to be set	
   def setBits(self, key, value):
 	index = self.__fields[key]
 	assert len(value) == len(index)
 	for a,b in enumerate(index):
 	  self[52 - b] = value[a]
-	
+  
+  ## Returns the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be returned		
   def getBits(self, key):
 	index = self.__fields[key]
 	value = bitarray(len(index))
 	for a,b in enumerate(index):
 	  value[a] = self[52 - b]
 	return value
-	
+ 
+  ## Returns the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be returned	
   def getValue(self, key):
 	return binToInt(self.getBits(key))
-	
+ 
+  ## Prints the content of all parameters as a bitarray	
   def printAllBits(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getBits(key)
 
+  ## Prints the content of all parameters as integers
   def printAllValues(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getValue(key)
 
+  ## Set the baseline value in units of ADC (63 to 0)
   def setBaseline(self, v):
 	self.__baseline = v
 
+  ## Returns the baseline value for this channel
   def getBaseline(self):
 	return self.__baseline
 
+  ## Returns all the keys (variables) in this class
   def getKeys(self):
 	return self.__fields.keys()
 
+## A class containing instances of AsicGlobalConfig and AsicChannelConfig
+#, as well as 2 other bitarrays related to test pulse configuration. Is related to one given ASIC.
 class AsicConfig:
 	def __init__(self):
 		self.channelConfig = [ AsicChannelConfig() for x in range(64) ]
@@ -295,8 +327,11 @@ class AsicConfig:
 		self.globalTConfig = bitarray('1111110')	
 		return None
 	
-
+## A class that contains all instances and additional variables required to configure every ASIC in the system  
 class BoardConfig:
+        ## Constructor
+        # @param nASIC Number of ASICs present in the system (can be for several boards)
+        # @param nDAC Number of HV DAC configuration files required for this system
 	def __init__(self, nASIC=4, nDAC=1):
 		
                 self.asicConfigFile = [ "Default Configuration" for x in range(nASIC) ]
@@ -306,7 +341,9 @@ class BoardConfig:
 		self.hvBias = [ 0.0 for x in range(32*nDAC) ]
 		self.hvParam = [ (1.0, 0.0) for x in range(32*nDAC) ]
 		return None
-
+        
+        ## Writes formatted text file with all parameters and additional information regarding the state of the system  
+        # @param prefix Prefix of the file name to be written (it will have the suffix .params)
         def writeParams(self, prefix):
     
           defaultAsicConfig = AsicConfig()
@@ -469,8 +506,12 @@ def grayToBin(g):
 def grayToInt(v):
 	return binToInt(grayToBin(v))
 	
-	
+## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
 class ATB:
+        ## Constructor, sets the UNIX socket parameters and other data transmission properties
+        # @param socketPath Should match the socket name in daqd, which is by default "/tmp/d.sock"
+        # @param debug When set to true, enables the printing of debug messages
+        # @param F Frequency of the clock, default is 160 MHz
 	def __init__(self, socketPath, debug=False, F=160E6):
 		self.__socketPath = socketPath
 		self.__socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -492,14 +533,17 @@ class ATB:
 		self.config = None
 		return None
 
-	def start(self, mode=2):
+        ## Starts the data acquisition
+	# @param mode If set to 1, only data frames  with at least one event are transmitted. If set to 2, all data frames are transmitted. If set to 0, the data transmission is stopped
+        def start(self, mode=2):
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, mode)
 		self.__socket.send(data)
 		return None
-
+       
+        ## Stops the data acquisition, the same as calling start(mode=0)
 	def stop(self):
 		template1 = "@HH"
 		template2 = "@H"
@@ -508,13 +552,16 @@ class ATB:
 		self.__socket.send(data)
 		return None
 
+        ## Returns the size of the allocated memory block 
 	def __getSharedMemorySize(self):
 		return self.__shm.size
 
+        ## Returns the name of the shared memory block
 	def __getSharedMemoryName(self):
 		name, s0, p1, s1 =  self.__getSharedMemoryInfo()
 		return name
 
+        ## Returns array info 
 	def __getSharedMemoryInfo(self):
 		template = "@HH"
 		n = struct.calcsize(template)
@@ -527,7 +574,8 @@ class ATB:
 		length, s0, p1, s1 = struct.unpack(template, data)
 		name = self.__socket.recv(length - n);
 		return (name, s0, p1, s1)
-
+        
+        ## Returns a data frame read form the shared memory block by order ??
 	def getDataFrame(self, waitForDataFrame = True):
 		
 		index = None
@@ -610,7 +658,10 @@ class ATB:
 	
 
 	
-		
+	## Sends a command to the FPGA
+        # @param commandType Information for the FPGA firmware regarding the type of command being transmitted
+	# @param payload The actual command to be transmitted
+        # @param maxTries The maximum number of attempts to send the command without obtaining a valid reply   
 	def sendCommand(self, commandType, payload, getReply=True, maxTries=10):
 		assert self.config is not None
 
@@ -653,7 +704,9 @@ class ATB:
 	
 		
 		
-
+        ## Writes in the FPGA register (Clock frequency, etc...)
+        # @param regNum Identification of the register to be written
+        # @param regValue The value to be written
 	def setSI53xxRegister(self, regNum, regValue):
 		reply = self.sendCommand(0x02, bytearray([0b00000000, regNum]))	
 		reply = self.sendCommand(0x02, bytearray([0b01000000, regValue]))
@@ -662,8 +715,11 @@ class ATB:
 	
 	
 
-	  
-	
+	## Defines all possible commands structure that can be sent to the ASIC and calls for sendCommand to actually transmit the command
+        # @param asicID Identification of the ASIC that will receive the command
+	# @param command Command type to be sent. The list of possible keys for this parameter is hardcoded in this function
+        # @param value The actual value to be transmitted to the ASIC if it applies to the command type   
+        # @param If the command is destined to a specific channel, this parameter sets its ID. 
 	def doAsicCommand(self, asicID, command, value=None, channel=None):
 
 		commandInfo = {
@@ -726,7 +782,9 @@ class ATB:
 		else:
 			return (status, None)
 
-	def initialize(self, maxTries = 10):
+	## Sends the entire configuration (needs to be assigned to the abstract ATB.config data structure) to the ASIC and starts to write data to the shared memory block
+        # @param maxTries The maximum number of attempts to read a valid dataframe after uploading configuration  
+        def initialize(self, maxTries = 10):
 		assert self.config is not None
 
 		for c in range(len(self.config.hvParam)):
@@ -784,6 +842,7 @@ class ATB:
 		data = sum([ data[i] * 2**(24 - 8*i) for i in range(len(data)) ])
 		return status, data
 
+        ## Discards all data frames which may have been generated before the function is called. Used to synchronize data reading with the effect of previous configuration commands.
 	def doSync(self, clearFrames=True):
 		_, targetFrameID = self.getCurrentFrameID()
 		#print "Waiting for frame %d" % frameID
@@ -802,6 +861,9 @@ class ATB:
 		return
 	  
 		
+        ## Sets the HVDAC voltage
+        # @param channel The HVDAC channel to be set
+        # @param voltage The voltage to be set in units of Volts
 	def setHVDAC(self, channel, voltage):
 		assert self.config is not None
 
@@ -828,19 +890,26 @@ class ATB:
 		dacBytes = bytearray(dacBits.tobytes())
 		return self.sendCommand(0x01, dacBytes)
 	
+        ## Disables test pulse 
 	def setTestPulseNone(self):
 		cmd =  bytearray([0x01] + [0x00 for x in range(8)])
 		return self.sendCommand(0x03,cmd)
 
-	def setTestPulseArb(self, invert):
-		if not invert:
-			tpMode = 0b11000000
-		else:
-			tpMode = 0b11100000
 
-		cmd =  bytearray([0x01] + [tpMode] + [0x00 for x in range(7)])
-		return self.sendCommand(0x03,cmd)
+#	def setTestPulseArb(self, invert):
+#		if not invert:
+#			tpMode = 0b11000000
+#		else:
+#			tpMode = 0b11100000
+
+#		cmd =  bytearray([0x01] + [tpMode] + [0x00 for x in range(7)])
+#		return self.sendCommand(0x03,cmd)
 		
+        ## Sets the properties of the internal FPGA pulse generator
+        # @param length Sets the length of the test pulse, from 1 to 1023 clock periods. 0 disables the test pulse.
+        # @param interval Sets the interval between test pulses. The actual interval will be (interval+1)*1024 clock cycles.
+        # @param finePhase Defines the delay of the test pulse regarding the start of the frame, in units of 1/392 of the clock.
+        # @param invert Sets the polarity of the test pulse: active low when ``True'' and active high when ``False'
 	def setTestPulsePLL(self, length, interval, finePhase, invert):
 		if not invert:
 			tpMode = 0b10000000
@@ -858,23 +927,25 @@ class ATB:
 		cmd =  bytearray([0x01, tpMode, finePhase2, finePhase1, finePhase0, interval1, interval0, length1, length0])
 		return self.sendCommand(0x03,cmd)
 
-	def loadArbTestPulse(self, address, isPulse, delay, length):
-		if isPulse:
-			isPulseBit = bitarray('1')
-		else:
-			isPulseBit = bitarray('0')
-
-		delayBits = intToBin(delay, 21)
-		lengthBits = intToBin(length, 10)
-
-		addressBits = intToBin(address,32)
-		
-		bits =  isPulseBit + delayBits + lengthBits + addressBits
-		cmd = bytearray([0x03]) + bytearray(bits.tobytes())
+#	def loadArbTestPulse(self, address, isPulse, delay, length):
+#		if isPulse:
+#			isPulseBit = bitarray('1')
+#		else:
+#			isPulseBit = bitarray('0')
+#
+#		delayBits = intToBin(delay, 21)
+#		lengthBits = intToBin(length, 10)
+#
+#		addressBits = intToBin(address,32)
+#		
+#		bits =  isPulseBit + delayBits + lengthBits + addressBits
+#		cmd = bytearray([0x03]) + bytearray(bits.tobytes())
 		#print [ hex(x) for x in cmd ]
-		return self.sendCommand(0x03,cmd)
+#		return self.sendCommand(0x03,cmd)
 
-	  
+	##Opens the acquisition pipeline, allowing the data frames read from the shared memory block to be written to disk by aDAQ/writeRaw
+        # @param fileName The name of the file containg the data written by aDAQ/writeRaw
+        # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in nanoseconds) will be written to disk.
 	def openAcquisition(self, fileName, cWindow):
 		from os import environ
 		if not environ.has_key('ADAQ_CRYSTAL_MAP'):
@@ -886,6 +957,10 @@ class ATB:
 				fileName ]
 		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
 
+        ## Acquires data and decodes it, while writting through the acquisition pipeline 
+        # @param step1 Tag to a given variable specific to this acquisition 
+        # @param step2 Tag to a given variable specific to this acquisition
+        # @param acquisitionTime Acquisition time in seconds 
 	def acquire(self, step1, step2, acquisitionTime):
 		#print "Python:: acquiring %f %f"  % (step1, step2)
 		(pin, pout) = (self.__acquisitionPipe.stdin, self.__acquisitionPipe.stdout)
@@ -948,6 +1023,7 @@ class ATB:
 		print "Python:: Acquired %d frames in %f seconds, corresponding to %f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
 		return None
 
+        ## Uploads the entire configuration (needs to be assigned to the abstract ATB.config data structure)
 	def uploadConfig(self):
 		# Force parameters!
 		for ac in self.config.asicConfig:
