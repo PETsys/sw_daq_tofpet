@@ -11,9 +11,10 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <map>
-
-//#include "UDPFrameServer.hpp"
+#include "UDPFrameServer.hpp"
+#ifdef __DTFLY__
 #include "DAQFrameServer.hpp"
+#endif
 #include "FrameServer.hpp"
 #include "Protocol.hpp"
 #include "Client.hpp"
@@ -45,10 +46,13 @@ int main(int argc, char *argv[])
 	char *socketName = NULL;	
 	int debugLevel = 0;
 	
+	int daqType = -1;
+	
 	static struct option longOptions[] = {
 		{ "fe-type", required_argument, 0, 0 },
 		{ "socket-name", required_argument, 0, 0 },
 		{ "debug-level", required_argument, 0, 0 },
+		{ "daq-type", required_argument, 0, 0 },
 		{ NULL, 0, 0, 0 }
 	};
 	while(1) {
@@ -89,8 +93,30 @@ int main(int argc, char *argv[])
 			socketName = (char *)optarg;
 		else if (c == 0 && optionIndex == 2)
 			debugLevel = boost::lexical_cast<int>((char *)optarg);
+		else if (c == 0 && optionIndex == 3) {
+			if(strcmp((char *)optarg, "GBE") == 0) {
+				daqType = 0;
+				feTypeHasBeenSet = true;
+			}
+			else if (strcmp((char *)optarg, "DTFLY") == 0) {
+#ifdef	__DTFLY__
+				daqType = 1;
+				feTypeHasBeenSet = true;
+#else
+				fprintf(stderr, "ERROR: This was built without DTFLY support.\n");
+				fprintf(stderr, "Recompile, adding DTFLY=1 to make command to enable DTFLY support\n");
+				return -1;
+#endif 
+			}
+			else {
+				fprintf(stderr, "ERROR: '%s' is not a valid DAQ type\n", (char *)optarg);
+				fprintf(stderr, "Valid DAQ types are 'GBE', 'DTFLY'\n");
+				return -1;
+			}
+			
+		}
 		else {
-			fprintf(stderr, "Error: unknown option!\n");
+			fprintf(stderr, "ERROR: Unknown option!\n");
 		}
 		
 	}
@@ -99,10 +125,17 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "--socket-name </path/to/socket> required\n");
 		return -1;
 	}
+	
+	if (daqType == -1) {
+		fprintf(stderr, "--daq-type xxx required\n");
+		return -1;
+	}
+
 	if(!feTypeHasBeenSet) {
 		fprintf(stderr, "--fe-type xxxxx required\n");
 		return -1;
 	}
+	
 
  	globalUserStop = false;					
 	signal(SIGTERM, catchUserStop);
@@ -113,7 +146,15 @@ int main(int argc, char *argv[])
 		return -1;
 
 
- 	globalFrameServer = new DAQFrameServer(5, feType, debugLevel);
+	
+	if (daqType == 0) {
+		globalFrameServer = new UDPFrameServer(debugLevel);
+	}
+#ifdef __DTFLY__	
+	else if (daqType == 1) {		
+		globalFrameServer = new DAQFrameServer(5, feType, debugLevel);
+	}
+#endif
 
 	pollSocket(listeningSocket, globalFrameServer);	
 	close(listeningSocket);	
@@ -131,7 +172,7 @@ int createListeningSocket(char *socketName)
 	socklen_t address_length;
 	
 	if((socket_fd = socket(PF_UNIX, SOCK_STREAM, 0)) == -1) {
-		fprintf(stderr, "Could not allocate socket (%d)\n", errno);
+		fprintf(stderr, "ERROR: Could not allocate socket (%d)\n", errno);
 		return -1;
 	}
 
@@ -142,18 +183,18 @@ int createListeningSocket(char *socketName)
 
 
 	if(bind(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) != 0) {
-		fprintf(stderr, "Could not bind() socket (%d)\n", errno);
+		fprintf(stderr, "ERROR: Could not bind() socket (%d)\n", errno);
 		fprintf(stderr, "Check that no other instance is running and remove %s\n", socketName);
 		return -1;
 	}
 	
 	if(chmod(socketName, 0660) != 0) {
-		perror("Could not not set socket permissions\n");
+		perror("ERROR: Could not not set socket permissions\n");
 		return -1;
 	}
 	
 	if(listen(socket_fd, 5) != 0) {
-		fprintf(stderr, "Could not listen() socket (%d)\n", errno);
+		fprintf(stderr, "ERROR: Could not listen() socket (%d)\n", errno);
 		return -1;
 	}
 	
@@ -170,7 +211,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 	struct epoll_event event;	
 	int epoll_fd = epoll_create(10);
 	if(epoll_fd == -1) {
-	  fprintf(stderr, "Error %d on epoll_create()\n", errno);
+	  fprintf(stderr, "ERROR: %d on epoll_create()\n", errno);
 	  return;
 	}
 	
@@ -179,7 +220,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 	event.data.fd = listeningSocket;
 	event.events = EPOLLIN;
 	if(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listeningSocket, &event) == -1) {
-	  fprintf(stderr, "Error %d on epoll_ctl()\n", errno);
+	  fprintf(stderr, "ERROR: %d on epoll_ctl()\n", errno);
 	  return;
 	  
 	}
@@ -188,7 +229,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 	
 	while (true) {
 		if (sigprocmask(SIG_BLOCK, &mask, &omask)) {
-			fprintf(stderr, "Could not set sigprockmask() (%d)\n", errno);
+			fprintf(stderr, "ERROR: Could not set sigprockmask() (%d)\n", errno);
 			break;
 		}
 		  
@@ -203,7 +244,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 		sigprocmask(SIG_SETMASK, &omask, NULL);
 	  
 		if (nReady == -1) {
-		  fprintf(stderr, "Error %d on epoll_pwait()\n", errno);
+		  fprintf(stderr, "ERROR: %d on epoll_pwait()\n", errno);
 		  break;
 		  
 		}
@@ -225,7 +266,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 		else {
 //		  fprintf(stderr, "Got a client (%d) event %08llX\n", event.data.fd, event.events);
 		  if ((event.events & EPOLLHUP) || (event.events & EPOLLERR)) {
-			fprintf(stderr, "Client hung up or error\n");
+			fprintf(stderr, "WARNING: Client hung up or error\n");
 			epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event.data.fd, NULL);
 			delete clientList[event.data.fd]; clientList.erase(event.data.fd);
 		  }
@@ -234,7 +275,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 			int actionStatus = client->handleRequest();
 			
 			if(actionStatus == -1) {
-				fprintf(stderr, "Error handling client %d\n", event.data.fd);
+				fprintf(stderr, "ERROR: Handling client %d\n", event.data.fd);
 				epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event.data.fd, NULL);
 				delete clientList[event.data.fd]; clientList.erase(event.data.fd);
 				continue;

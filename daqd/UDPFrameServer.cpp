@@ -2,6 +2,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -19,10 +20,10 @@ static const unsigned short fePort = 2000;
 
 //static const int N_ASIC=4;
 
-static int feTypeMap[1] = { 0 };
+static int myFeTypeMap[1] = { 0 };
 
 UDPFrameServer::UDPFrameServer(int debugLevel)
-	: FrameServer(1, feTypeMap, debugLevel)
+	: FrameServer(1, myFeTypeMap, debugLevel)
 {
 	udpSocket = socket(AF_INET,SOCK_DGRAM,0);
 	assert(udpSocket != -1);
@@ -45,6 +46,13 @@ UDPFrameServer::UDPFrameServer(int debugLevel)
 	char buffer[32];
 	memset(buffer, 0xFF, sizeof(buffer));
 	send(udpSocket, buffer, sizeof(buffer), 0);
+	r = recv(udpSocket, buffer, sizeof(buffer), 0);
+	if (r < 1) {
+		fprintf(stderr, "ERROR: Failed to receive a reply from FPGA\n");
+		exit(0);
+	}
+	printf("Got FPGA reply\n");
+	
 		
 	startWorker();
 }
@@ -74,69 +82,51 @@ void *UDPFrameServer::doWork()
 	
 	
 	unsigned char rxBuffer[2048];
+	uint64_t dataBuffer[2048/sizeof(uint64_t)];
 	while(!m->die) {
 		int r = recv(m->udpSocket, rxBuffer, sizeof(rxBuffer), 0);
 
-		if (r == -1 && (errno = EAGAIN || errno == EWOULDBLOCK)) {
-			pthread_cond_signal(&m->condReplyQueue);
-			
-			pthread_mutex_lock(&m->lock);
-			if(m->dirtyDataFrameQueue.empty()) {
-				m->dirtyDataFrameQueue.push(NULL);
-			}
-			pthread_mutex_unlock(&m->lock);
-			pthread_cond_signal(&m->condDirtyDataFrame);
-			
+		if (r == -1 && (errno = EAGAIN || errno == EWOULDBLOCK)) {	
 			continue;
 		}
 		
-		
 		assert(r >= 0);
-		
-		
+
 		if(rxBuffer[0] == 0x5A) {
 			if(m->debugLevel > 2) printf("Worker:: Found a reply frame with %d bytes\n", r);
-			for(int i = 0; i < r; i++) {
-				printf("%02x ", unsigned(rxBuffer[i]) & 0xFF);
-			}
-			printf("\n");
 			reply_t *reply = new reply_t;
 			memcpy(reply->buffer, rxBuffer + 1, r - 1);
 			reply->size = r - 1;
 			pthread_mutex_lock(&m->lock);
 			m->replyQueue.push(reply);
 			pthread_mutex_unlock(&m->lock);
+			pthread_cond_signal(&m->condReplyQueue);
 		}
 		else if(rxBuffer[0] == 0xA5) {
 			if(m->debugLevel > 2) printf("Worker:: Found a data frame with %d bytes\n", r);
 			if (m->acquisitionMode != 0) {			
-				unsigned char *tmp = rxBuffer + 1;
+				unsigned nWords = (r-1)/sizeof(uint64_t);			
+				memcpy(dataBuffer, rxBuffer+1, nWords*sizeof(uint64_t));
+/*				uint64_t *p1 = (uint64_t *)rxBuffer+1;
+				for(unsigned i = 0; i < nWords; i++)
+					dataBuffer[i] = be64toh(p1[i]);*/
+				
+				uint64_t *p = dataBuffer;
 				do {
-					
-					int  dfLength = (tmp[0] << 8) + tmp[1];
-					tmp += 2;
-					
-					if((tmp + dfLength) > (rxBuffer + r))
-						break;
-					
-					bool decodeOK = decodeDataFrame(m, tmp, dfLength);
+					unsigned frameSize = (p[0] >> 36) & 0x7FFF;
+					bool decodeOK = decodeDataFrame(m, (unsigned char *)p, frameSize * sizeof(uint64_t));
 					if(!decodeOK) break;
+					p += frameSize;
 					
-					tmp += dfLength;
-				}while (tmp < rxBuffer + r);
+				} while(p < dataBuffer + nWords);
+				
 			}
-			pthread_mutex_lock(&m->lock);
-			if(m->dirtyDataFrameQueue.empty()) {
-				m->dirtyDataFrameQueue.push(NULL);
-			}
-			pthread_mutex_unlock(&m->lock);
-			pthread_cond_signal(&m->condDirtyDataFrame);	
 		}
 		else {
 			printf("Worker: found an unknown frame (0x%02X) with %d bytes\n", unsigned(rxBuffer[0]), r);
 			
 		}
-		pthread_cond_signal(&m->condReplyQueue);
+		
 			
 		
 		
@@ -153,43 +143,85 @@ void *UDPFrameServer::doWork()
 
 int UDPFrameServer::sendCommand(int febID, char *buffer, int bufferSize, int commandLength)
 {
+	boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();	
+	uint16_t sentSN = (unsigned(buffer[0]) << 8) + unsigned(buffer[1]);	
+	boost::posix_time::ptime t1 = boost::posix_time::microsec_clock::local_time();
+
 	send(udpSocket, buffer, commandLength, 0);
 	
+	boost::posix_time::ptime t2 = boost::posix_time::microsec_clock::local_time();
+
+	if (sentSN & 0x0001 == 0x0001) {
+		// Commands with odd SN do not require a reply
+		usleep(10000);
+		return 0;
+	}
 	
-	
-	boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();
-	
-	int replyLength = 0;
+	int replyLength = 0;	
+	int nLoops = 0;
 	do {
 		pthread_mutex_lock(&lock);
 		reply_t *reply = NULL;
-		
-		if(replyQueue.empty()) {
+	
+/*		if(replyQueue.empty()) {
 			pthread_cond_wait(&condReplyQueue, &lock);
+		}*/
+
+		if(replyQueue.empty()) {
+			struct timespec ts; 
+			clock_gettime(CLOCK_REALTIME, &ts);
+			ts.tv_nsec += 100000000L; // 100 ms
+			ts.tv_sec += (ts.tv_nsec / 1000000000L);
+			ts.tv_nsec = (ts.tv_nsec % 1000000000L);                        
+			pthread_cond_timedwait(&condReplyQueue, &lock, &ts);
 		}
-		
+
 		if (!replyQueue.empty()) {
 			reply = replyQueue.front();
 			replyQueue.pop();
+			
 		}
 		pthread_mutex_unlock(&lock);
 		
 		if(reply == NULL) {
 			boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-			if ((now - start).total_milliseconds() > 200) 
+			if ((now - start).total_milliseconds() > 100) 
 				break;
 			else
 				continue;
 			
 		}
-		
-		// Check that command and this reply have the same SN
-		if(reply->size >= 2 && reply->buffer[0] == buffer[0] && reply->buffer[1] == buffer[1]) {
-			memcpy(buffer, reply->buffer, reply->size);
-			replyLength = reply->size;
+		//printf("Found something on queue with size: %d\n", reply->size);
+	
+		if (reply->size < 2) {
+			fprintf(stderr, "WARNING: Reply only had %d bytes\n", reply->size);
 		}
-		delete reply;
-	} while(replyLength == 0);
+		else {
+			uint16_t recvSN = (unsigned(reply->buffer[0]) << 8) + reply->buffer[1];
+			if(sentSN == recvSN) {
+				memcpy(buffer, reply->buffer, reply->size);
+				replyLength = reply->size;
+			}
+			else {
+				fprintf(stderr, "Mismatched SN: sent %6hx, got %6hx\n", sentSN, recvSN);
+			}
+		}
 		
+		delete reply;		
+		nLoops++;
+
+	} while(replyLength == 0);
+	
+	boost::posix_time::ptime t3 = boost::posix_time::microsec_clock::local_time();
+	
+	if (replyLength == 0 ) {
+		printf("Command reply timing: (t2 - t1) => %ld, (t3 - t2) => %ld, i = %d, status = %s\n", 
+			(t2 - t1).total_milliseconds(), 
+			(t3 - t2).total_milliseconds(),
+			nLoops,
+			replyLength > 0 ? "OK" : "FAIL"
+		);
+	}
+	
 	return replyLength;
 }
