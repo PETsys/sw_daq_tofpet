@@ -65,7 +65,6 @@ FrameServer::FrameServer(int debugLevel)
 	tacLastEventTime = new uint64_t[N_ASIC * 64 * 4];
 	channelLastEventTime = new uint64_t[N_ASIC * 64];
 	
-	startWorker();
 }
 
 FrameServer::~FrameServer()

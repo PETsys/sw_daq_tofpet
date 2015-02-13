@@ -61,11 +61,11 @@ namespace DAQ { namespace Core {
 		int channelID;
 		float energy;
 		
+		bool badEvent;
 		float tofpet_TQT;
 		float tofpet_TQE;
 
-		float tofpet_TQT_nocorr;
-		float tofpet_TQE_nocorr;
+
 		
 		Pulse() {
 			time = -1;
@@ -74,6 +74,7 @@ namespace DAQ { namespace Core {
 			energy = 0;
 			region = -1;
 			raw = RawPulse();
+			badEvent = true;
 		};
 	};
 

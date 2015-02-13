@@ -9,14 +9,14 @@ def loadLocalConfig(useBaseline=True):
 	loadHVDACParams(atbConfig, "config/pab1/hvdac.Config")
 
 	### Mezzanine A (J15) configuration
-	loadAsicConfig(atbConfig, 0, 2, "config/FEBA01/asic.config")
+	loadAsicConfig(atbConfig, 0, 1, "config/M001/asic.config")
 	if useBaseline:
-		loadBaseline(atbConfig, 0, 2, "config/FEBA01/asic.baseline");
+		loadBaseline(atbConfig, 0, 1, "config/M001/asic.baseline");
 
 	### Mezzanine B (J16) configuration
-	loadAsicConfig(atbConfig, 2, 4, "config/FEBA02/asic.config")
+	loadAsicConfig(atbConfig, 2, 3, "config/M002/asic.config")
 	if useBaseline:
-		loadBaseline(atbConfig, 2, 4, "config/FEBA02/asic.baseline");
+		loadBaseline(atbConfig, 2, 3, "config/M002/asic.baseline");
 
 
 	return atbConfig

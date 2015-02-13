@@ -27,6 +27,9 @@ EventBuffer<RawHit> * SingleReadoutGrouper::handleEvents (EventBuffer<Pulse> *in
 		Pulse &e = inBuffer->get(i);		
 		int crystalID = e.channelID;
 		
+		// WARNING: this needs better handling..
+		if(e.badEvent) continue;
+		
 		RawHit &hit = outBuffer->getWriteSlot();
 		hit.top = e;
 		hit.time = e.time;
