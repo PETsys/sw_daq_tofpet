@@ -750,13 +750,19 @@ class ATB:
 		return self.sendCommand(0x03,cmd)
 
 	  
-	def openAcquisition(self, fileName, cWindow):
+	def openAcquisition(self, fileName, cWindow, writer=None):
+		if writer not in ["writeRaw", "writeRawE"]:
+			print "ERROR: when calling ATB::openAcquisition(), writer must be set of either of"
+			print " writeRaw	-- standard TOFPET RAW data format"
+			print " writeRawE	-- EndTOFPET-US RAW data format"
+
+
 		from os import environ
 		if not environ.has_key('ADAQ_CRYSTAL_MAP'):
 			print 'Error: ADAQ_CRYSTAL_MAP environment variable is not set'
 			exit(1)
 
-		cmd = [ "aDAQ/writeRaw", self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
+		cmd = [ "aDAQ/%s" % writer, self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
 				"%e" % cWindow, \
 				fileName ]
 		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
