@@ -64,6 +64,8 @@ namespace DAQ { namespace Core {
 		bool badEvent;
 		float tofpet_TQT;
 		float tofpet_TQE;
+
+
 		
 		Pulse() {
 			time = -1;

@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		lut->loadFiles(argv[1]);
+		lut->loadFiles(argv[1], true, false, 0,0);
 	}
 	
 	FILE *lmFile = fopen(argv[3], "w");
@@ -92,8 +92,16 @@ int main(int argc, char *argv[])
 		unsigned long long eventsEnd;
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
+		if(N!=1){
+			if (strcmp(argv[1], "none") == 0) {
+				lut->setAll(2.0);
+				printf("BIG FAT WARNING: no calibration file\n");
+			} 
+			else{
+				lut->loadFiles(argv[1], true, true,step1,step2);
+			}
+		}
 
-		const unsigned nChannels = 2*128; 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
 				new P2Extract(lut, false, 0.0, 0.20,
 				new EventWriter(lmFile, step1, step2

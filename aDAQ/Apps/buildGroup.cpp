@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		P2->loadFiles(argv[1]);
+		P2->loadFiles(argv[1], true, false,0,0);
 	}
 	
 	TFile *lmFile = new TFile(argv[3], "RECREATE");
@@ -170,9 +170,16 @@ int main(int argc, char *argv[])
 		unsigned long long eventsEnd;
 		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
-		//		eventsEnd=1000000000+eventsBegin;
-// 		printf("BIG FAT WARNING: limiting event number\n");
-// 		if(eventsEnd > eventsBegin + 10E6) eventsEnd = eventsBegin + 10E6;
+		if(N!=1){
+			if (strcmp(argv[1], "none") == 0) {
+				P2->setAll(2.0);
+				printf("BIG FAT WARNING: no calibration file\n");
+			} 
+			else{
+				P2->loadFiles(argv[1], true, true,eventStep1,eventStep2);
+			}
+		}
+		
 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 								      

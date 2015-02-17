@@ -85,7 +85,7 @@ hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
 
 
 for tChannel in activeChannels:
-	atbConfig = loadLocalConfig(useBaseline=False)
+	atbConfig = loadLocalConfig()
 	for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = vbias
 
