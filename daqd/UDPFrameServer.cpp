@@ -141,7 +141,7 @@ void *UDPFrameServer::doWork()
 }
 
 
-int UDPFrameServer::sendCommand(int febID, char *buffer, int bufferSize, int commandLength)
+int UDPFrameServer::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
 	boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();	
 	uint16_t sentSN = (unsigned(buffer[0]) << 8) + unsigned(buffer[1]);	

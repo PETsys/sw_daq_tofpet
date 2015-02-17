@@ -26,7 +26,7 @@ public:
 	  void stopWorker();
 	  void startWorker();
 	bool cardOK();
-	int sendCommand(int febID, char *buffer, int bufferSize, int commandLength);
+	int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength);
 	int setAcquistionOnOff(bool enable);
 	  static const int ETIMEOUT = -1;
 	  static const int ENOWORDS = -2;

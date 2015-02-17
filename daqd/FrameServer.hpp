@@ -28,7 +28,7 @@ public:
 	// bufferSize is the max capacity of the size
 	// commandLength is the length of the command in
 	// return the reply length or -1 if error
-	virtual int sendCommand(int febID, char *buffer, int bufferSize, int commandLength) = 0;
+	virtual int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength) = 0;
 	
 	virtual const char *getDataFrameSharedMemoryName();
 	virtual DataFramePtr *getDataFrameByPtr(bool nonEmpty);

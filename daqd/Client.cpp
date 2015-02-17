@@ -71,13 +71,14 @@ int Client::doCommandToFrontEnd(int commandLength)
 {
 	char buffer[256];
 	memcpy(buffer, socketBuffer + sizeof(CmdHeader_t), commandLength);
-	int febID = buffer[0];
-	int replyLength = frameServer->sendCommand(febID, buffer+1, sizeof(buffer), commandLength-1);
+	int portID = buffer[0];
+	int slaveID = buffer[1];
+	int replyLength = frameServer->sendCommand(portID, slaveID, buffer+2, sizeof(buffer), commandLength-2);
 	
 	uint16_t trl = replyLength;
 
 	send(socket, &trl, sizeof(trl), MSG_NOSIGNAL);
-	send(socket, buffer+1, replyLength, MSG_NOSIGNAL);
+	send(socket, buffer+2, replyLength, MSG_NOSIGNAL);
 	return 0;
 }
 

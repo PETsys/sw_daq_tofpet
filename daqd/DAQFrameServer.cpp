@@ -65,14 +65,14 @@ void DAQFrameServer::stopAcquisition()
  	FrameServer::stopAcquisition();	
 }
 
-int DAQFrameServer::sendCommand(int febID, char *buffer, int bufferSize, int commandLength)
+int DAQFrameServer::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
 	boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();	
 
 	uint16_t sentSN = (unsigned(buffer[0]) << 8) + unsigned(buffer[1]);	
 
 	boost::posix_time::ptime t1 = boost::posix_time::microsec_clock::local_time();
-	DP->sendCommand(febID, buffer,bufferSize, commandLength);
+	DP->sendCommand(portID, slaveID, buffer,bufferSize, commandLength);
 	
 	boost::posix_time::ptime t2 = boost::posix_time::microsec_clock::local_time();
 	

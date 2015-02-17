@@ -287,7 +287,7 @@ bool DtFlyP::cardOK()
 }
 
 
-int DtFlyP::sendCommand(int febID, char *buffer, int bufferSize, int commandLength)
+int DtFlyP::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
 // 	printf("8 command to send\n");
 // 	for(int i = 0; i < commandLength; i++) {
@@ -302,7 +302,7 @@ int DtFlyP::sendCommand(int febID, char *buffer, int bufferSize, int commandLeng
 
 	uint64_t header = 0;
 	header = header + (8ULL << 36);
-	header = header + (uint64_t(febID) << 61);
+	header = header + (uint64_t(portID) << 61) + (uint64_t(slaveID) << 54);
 	
 	outBuffer[0] = header;
 	outBuffer[1] = commandLength;

@@ -313,3 +313,30 @@ class AsicConfig:
 		self.globalConfig = AsicGlobalConfig()
 		self.globalTConfig = bitarray('1111110')	
 		return None
+
+
+
+class ConfigurationErrorNoAck:
+	def __init__(self, portID, slaveID, asicID):
+		self.addr = (portID, slaveID, asicID)
+	def __str__(self):
+		return "No ACK from ASIC at port %2d, slave %2d, asic %2d" % self.addr
+
+class ConfigurationErrorBadCRC:
+	def __init__(self, portID, slaveID, asicID):
+		self.addr = (portID, slaveID, asicID)
+	def __str__(self):
+		return "Received configuration datta with bad CRC from ASIC at port %2d, slave %2d, asic %2d" % self.addr
+
+class ConfigurationErrorStuckHigh:
+	def __init__(self, portID, slaveID, asicID):
+		self.addr = (portID, slaveID, asicID)
+	def __str__(self):
+		return "MOSI stuck high from ASIC at port %2d, slave %2d, asic %2d" % self.addr
+
+class ConfigurationErrorGeneric:
+	def __init__(self, portID, slaveID, asicID, value):
+		self.addr = (value, portID, slaveID, asicID)
+	def __str__(self):
+		return "Unexpected configuration error %02x from ASIC at port %2d, slave %2d, asic %2d" % self.addr
+

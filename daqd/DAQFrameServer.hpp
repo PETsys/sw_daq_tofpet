@@ -19,7 +19,7 @@ public:
 	//virtual DataFramePtr *getDataFrameByPtr()=0;
 	//virtual void returnDataFramePtr(DataFramePtr *ptr)=0;
 
-	int sendCommand(int febID, char *buffer, int bufferSize, int commandLength);
+	int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength);
 	
 	virtual void startAcquisition(int mode);
 	virtual void stopAcquisition();

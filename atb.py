@@ -205,6 +205,12 @@ def grayToBin(g):
 def grayToInt(v):
 	return binToInt(grayToBin(v))
 	
+
+class CommandErrorTimeout:
+	def __init__(self, portID, slaveID):
+		self.addr = portID, slaveID
+	def __str__(self):
+		return "Time out from FEB/D at port %2d, slave %2d" % self.addr
 	
 class ATB:
 	def __init__(self, socketPath, debug=False, F=160E6):
@@ -232,8 +238,8 @@ class ATB:
 	def start(self, mode=2):
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-		for febID in activeFEBs: self.sendCommand(febID, 0x03, bytearray([0x04, 0x00, 0x0F]))
-		for febID in activeFEBs: self.sendCommand(febID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x0F]))
+		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
 		template1 = "@HH"
 		template2 = "@H"
@@ -253,7 +259,7 @@ class ATB:
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, 0)
 		self.__socket.send(data)
 
-		for febID in activeFEBs: self.sendCommand(febID, 0x03, bytearray([0x04, 0x00, 0x00]))
+		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x00]))
 		return None
 
 	def __getSharedMemorySize(self):
@@ -417,28 +423,24 @@ class ATB:
 
 	
 		
-	def sendCommand(self, febID, commandType, payload, getReply=True, maxTries=10):
-		#getReply = True ## 
+	def sendCommand(self, portID, slaveID, commandType, payload, maxTries=10):
 		nTries = 0;
 		reply = None
 		doOnce = True
-		while doOnce or ((getReply == True and reply == None) and nTries < maxTries):
+		while doOnce or (reply == None and nTries < maxTries):
 			doOnce = False
 
 			if nTries > 4:
-				print "Timeout sending command to FEB/D %d. Retry %d of %d" % (febID, nTries+1, maxTries)
+				print "Timeout sending command to FEB/D %d. Retry %d of %d" % (portID, nTries+1, maxTries)
 			nTries = nTries + 1
 
 			sn = self.__lastSN
 			self.__lastSN = (sn + 1) & 0x7FFF
 
 			# Use even SN if a reply is desired, else use an odd SN
-			if getReply == True:
-				sn = 2 * sn + 0
-			else:
-				sn = 2 * sn + 1
+			sn = 2 * sn + 0
 
-			rawFrame = bytearray([ febID & 0xFF, (sn >> 8) & 0xFF, (sn >> 0) & 0xFF, commandType]) + payload
+			rawFrame = bytearray([ portID & 0xFF, slaveID & 0xFF, (sn >> 8) & 0xFF, (sn >> 0) & 0xFF, commandType]) + payload
 			rawFrame = str(rawFrame)
 
 			#print [ hex(ord(x)) for x in rawFrame ]
@@ -466,22 +468,26 @@ class ATB:
 			reply = bytearray(data)
 			
 
+		if reply == None:
+			print reply
+			raise CommandErrorTimeout(portID, slaveID)
+
 		return reply
 	
 		
 		
 
 	def setSI53xxRegister(self, regNum, regValue):
-		reply = self.sendCommand(0, 0x02, bytearray([0b00000000, regNum]))	
-		reply = self.sendCommand(0, 0x02, bytearray([0b01000000, regValue]))
-		reply = self.sendCommand(0, 0x02, bytearray([0b10000000]))
+		reply = self.sendCommand(0, 0, 0x02, bytearray([0b00000000, regNum]))	
+		reply = self.sendCommand(0, 0, 0x02, bytearray([0b01000000, regValue]))
+		reply = self.sendCommand(0, 0, 0x02, bytearray([0b10000000]))
 		return None
 	
 	
 
 	  
 	
-	def doTOFPETAsicCommand(self, asicID, command, value=None, channel=None, forceReply=False):
+	def doTOFPETAsicCommand(self, asicID, command, value=None, channel=None):
 		commandInfo = {
 		#	commandID 		: (code,   ch,   read, data length)
 			"wrChCfg"		: (0b0000, True, False, 53),
@@ -498,8 +504,6 @@ class ATB:
 		}
 	
 		commandCode, isChannel, isRead, dataLength = commandInfo[command]
-
-		getReply = forceReply or isRead
 
 		byte0 = [ (commandCode << 4) + (asicID & 0x0F) ]
 		if isChannel:
@@ -532,11 +536,17 @@ class ATB:
 		#assert status == 0x00
 
 		febID = asicID / 16
-		reply = self.sendCommand(febID, 0x00, cmd, getReply=getReply)
-		if not getReply:
-			return None
+		reply = self.sendCommand(febID, 0, 0x00, cmd)
+		status = reply[1]
 
-		status = reply[0]		
+		if status == 0xE3:
+			raise tofpet.ConfigurationErrorNoAck(febID, 0, asicID % 16)
+		elif status == 0xE4:
+			raise tofpet.ConfigurationErrorBadCRC(febID, 0, asicID % 16)
+		elif status == 0xE5:
+			raise tofpet.ConfigurationErrorStuckHigh(febID, 0, asicID % 16)
+		elif status != 0x00:
+			raise tofpet.ConfigurationErrorGeneric(febID, 0, asicID % 16, status)
 
 		if isRead:
 			#print [ "%02X" % x for x in reply ]
@@ -557,7 +567,7 @@ class ATB:
 		if not on:
 			for febID in sticFEBID:
 				print "Turning off all LDO on FEB/D %d" % febID
-				self.sendCommand(febID, 0x03, bytearray([0x04, 0x01, 0x00]))
+				self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x01, 0x00]))
 		else:
 			allOff = sticv3.AsicConfig('stic_configurations/ALL_OFF.txt')
 			# Some padding
@@ -574,7 +584,7 @@ class ATB:
 					lsb = memAddr & 0xFF
 					#print "RAM ADDR %4d, nBytes Written = %d, nBytes Left = %d" % (memAddr, len(d), len(data))
 					#print [hex(ord(x)) for x in d]
-					self.sendCommand(febID, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
+					self.sendCommand(febID, 0, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
 					memAddr = memAddr + 1
 		
 			for febID in sticFEBID:
@@ -584,10 +594,10 @@ class ATB:
 					#v = v | 2**i
 					v = v & 0xFF                        
 	                                print "Turning on LDO %d on FEB/D %d %2x" % (i, febID, v)
-	                                self.sendCommand(febID, 0x03, bytearray([0x04, 0x01, v]))
+	                                self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x01, v]))
 					# Apply ALL_OFF config to whatever ASICs have been turned on
 					for asicID in range(16):
-						self.sendCommand(febID, 0x00, bytearray([0x01, asicID]))
+						self.sendCommand(febID, 0, 0x00, bytearray([0x01, asicID]))
 					
 					sleep(0.5)
 	
@@ -610,9 +620,9 @@ class ATB:
 			attempt += 1
 
 			# Reset ASIC & ASIC readout
-			for febID in activeFEBs: self.sendCommand(febID, 0x03, bytearray([0x04, 0x00, 0x00]))
+			for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x00]))
 			self.stop()	
-			for febID in activeFEBs: self.sendCommand(febID, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
+			for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
 			sleep(2*pause)
 			self.setTestPulseNone()
 			self.uploadConfig()
@@ -628,7 +638,7 @@ class ATB:
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
 		febID = min(activeFEBs)
-		reply = self.sendCommand(febID, 0x03, bytearray([0x02]))
+		reply = self.sendCommand(febID, 0, 0x03, bytearray([0x02]))
 		status = reply[0]
 		#print  [hex(x) for x in reply[1:] ]
 		data = reply[2:6]
@@ -691,14 +701,14 @@ class ATB:
 
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
 		dacBytes = bytearray(dacBits.tobytes())
-		return self.sendCommand(whichBoard, 0x01, dacBytes)
+		return self.sendCommand(whichBoard, 0, 0x01, dacBytes)
 	
 	def setTestPulseNone(self):
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
 
 		cmd =  bytearray([0x01] + [0x00 for x in range(8)])
-		for febID in activeFEBs: self.sendCommand(febID, 0x03,cmd)
+		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03,cmd)
 		return None
 
 	def setTestPulseArb(self, invert):
@@ -708,7 +718,7 @@ class ATB:
 			tpMode = 0b11100000
 
 		cmd =  bytearray([0x01] + [tpMode] + [0x00 for x in range(7)])
-		return self.sendCommand(0x03,cmd)
+		return self.sendCommand(0, 0, 0x03,cmd)
 		
 	def setTestPulsePLL(self, length, interval, finePhase, invert):
 		assert self.config is not None
@@ -730,7 +740,7 @@ class ATB:
 		cmd =  bytearray([0x01, tpMode, finePhase2, finePhase1, finePhase0, interval1, interval0, length1, length0])
 		for febID in activeFEBs:
 			print "Setting test pulse on FEB %d" % febID
-			self.sendCommand(febID, 0x03,cmd)
+			self.sendCommand(febID, 0, 0x03,cmd)
 		return None
 
 	def loadArbTestPulse(self, address, isPulse, delay, length):
@@ -747,7 +757,7 @@ class ATB:
 		bits =  isPulseBit + delayBits + lengthBits + addressBits
 		cmd = bytearray([0x03]) + bytearray(bits.tobytes())
 		#print [ hex(x) for x in cmd ]
-		return self.sendCommand(0x03,cmd)
+		return self.sendCommand(0, 0, 0x03,cmd)
 
 	  
 	def openAcquisition(self, fileName, cWindow, writer=None):
@@ -839,7 +849,7 @@ class ATB:
                 for i in range(0, 146):
 			msb = (memAddr >> 8) & 0xFF
 			lsb = memAddr & 0xFF
-			return_data=self.sendCommand(0, 0x00, bytearray([0x02, msb, lsb]))
+			return_data=self.sendCommand(0, 0, 0x00, bytearray([0x02, msb, lsb]))
 			#print [hex(x) for x in return_data[2:6]]
 
 			data = data+return_data[2:6];
@@ -864,11 +874,11 @@ class ATB:
 			lsb = memAddr & 0xFF
 			#print "RAM ADDR %4d, nBytes Written = %d, nBytes Left = %d" % (memAddr, len(d), len(data))
 			#print [hex(ord(x)) for x in d]
-			self.sendCommand(febID, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
+			self.sendCommand(febID, 0, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
 			memAddr = memAddr + 1
 		
 		#print "Configuring"
-		self.sendCommand(febID, 0x00, bytearray([0x01, asicID % 16]))
+		self.sendCommand(febID, 0, 0x00, bytearray([0x01, asicID % 16]))
 			
 		
 
