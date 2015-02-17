@@ -77,15 +77,11 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	// 				     coarseToT*raw.d.tofpet.T/1000.0);
 
 	pulse.energy = 1E-3*(pulse.timeEnd - pulse.time);
-<<<<<<< HEAD
+
 	pulse.tofpet_TQT = lut->getQ(raw.channelID, raw.d.tofpet.tac, true, tfine, tacIdleTime, coarseToT*raw.d.tofpet.T/1000);
 	pulse.tofpet_TQE = lut->getQ(raw.channelID, raw.d.tofpet.tac, false, efine, tacIdleTime, coarseToT*raw.d.tofpet.T/1000);
-=======
-	pulse.tofpet_TQT = lut->getQ(raw.channelID, raw.d.tofpet.tac, true, tfine, tacIdleTime);
-	pulse.tofpet_TQE = lut->getQ(raw.channelID, raw.d.tofpet.tac, false, efine, tacIdleTime);
 	
 	pulse.badEvent = false;
->>>>>>> d5be9054c39e5223d93d0036b2dc52c527d67668
 	if(pulse.tofpet_TQT < (1.0 - tDenormalTolerance) || pulse.tofpet_TQT > (3.0 + tDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;

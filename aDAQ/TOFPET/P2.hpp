@@ -22,9 +22,12 @@ namespace DAQ { namespace TOFPET {
 		void loadFile(int start, int end, const char *fileName);
 	        void loadTQFile(int start, int end, const char *fileName);
 		void storeFile(int start, int end, const char *fileName);
-		void loadFiles(const char *mapFileName);
+		void loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float step1, float step2 );
 		
 		void setAll(float v);
+
+		float *nBins_tqT;   
+		float *nBins_tqE;   
 	private:
 		int  nChannels;
 		int getIndex(int channel, int tac, bool isT);
@@ -60,7 +63,9 @@ namespace DAQ { namespace TOFPET {
 		bool do_TQcorr;
 	        int tableSize;
 	        int TQtableSize;
-	
+		
+     
+		
 	        TAC *table;
 	         TQ *TQtable;
 		

@@ -18,11 +18,19 @@ P2::P2(int nChannels)
 	: nChannels(nChannels)
 {
 	tableSize = nChannels * nTAC;
-	TQtableSize = nChannels * 2 * 6; //tot binning
+	TQtableSize = nChannels * 2 * 6; 
 	
 	do_TQcorr = false;
 	table = new TAC[tableSize];
 	TQtable = new TQ[TQtableSize];
+	
+	nBins_tqT= new float[nChannels];
+	nBins_tqE= new float[nChannels];
+	for(int i = 0; i < nChannels; i++){
+		nBins_tqT[i]=0;
+		nBins_tqE[i]=0;	
+	}
+
 	
 	for(int i = 0; i < tableSize; i++) {
 		table[i].t0 = 0;
@@ -245,19 +253,24 @@ void P2::storeFile(int start, int end, const char *fName)
 void P2::loadFile(int start, int end, const char *fName)
 {
 	FILE *f = fopen(fName, "r");
-	for(int channel = start; channel < end; channel++)
-		for(int isT = 0; isT < 2; isT++)
+	for(int channel = start; channel < end; channel++){
+		for(int isT = 0; isT < 2; isT++){
 			for(int tac = 0; tac < 4; tac++) {
 				int index = getIndex(channel, tac, isT == 0);
 				TAC &te = table[index];
 				fscanf(f, "%*5d\t%*c\t%*d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
-					&te.t0, 
-					&te.shape.tB, &te.shape.m, &te.shape.p2,
-					&te.leakage.tQ, &te.leakage.a0, &te.leakage.a1, &te.leakage.a2
-				);
+				       &te.t0, 
+				       &te.shape.tB, &te.shape.m, &te.shape.p2,
+				       &te.leakage.tQ, &te.leakage.a0, &te.leakage.a1, &te.leakage.a2
+				       );
+				isT == 0 ? nBins_tqT[channel]+=te.shape.m :  nBins_tqE[channel]+=te.shape.m;
 				
 			}
-	
+			
+		}
+		nBins_tqT[channel]/=2.0;
+		nBins_tqE[channel]/=2.0;
+	}
 	fclose(f);
 	
 }
@@ -273,7 +286,7 @@ void P2::loadTQFile(int start, int end, const char *fTQName)
 	while(line_elems > 2){
 		line_elems=fscanf(f, "%5d\t%s\t%d\t%d\t%*f\t%f",&col1, col2, &col3, &col4, &col6);
 	  isT = (col2[0] == 'T') ? true : false;
-	  channel=col1+start;
+	  channel= col1;   ///col1+start;
 	  // printf("channel=%d %d %d\n", channel, start, col1);
 	  int TQindex = getIndexTQ(channel, isT, col3);
 	  TQ &TQe = TQtable[TQindex];
@@ -291,7 +304,7 @@ void P2::loadTQFile(int start, int end, const char *fTQName)
 	
 }
 
-void P2::loadFiles(const char *mapFileName)
+void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float step1, float step2)
 {
 	printf("P2:: loading TDC calibrations...\n");
 	FILE * mapFile = fopen(mapFileName, "r");
@@ -302,35 +315,40 @@ void P2::loadFiles(const char *mapFileName)
 	
 	char tqFileName[1024];
 	char tqFilePath[1024];
-	
+	char suffix[1024];
 	int start, end;
 	while(fscanf(mapFile, "%d %d %s %s\n", &start, &end, lutFileName, tqFileName) == 4) {
-	  if(!(tqFileName[0] == 'n' && tqFileName[1] == 'o' && tqFileName[2] == 'n')){
-	    if(tqFileName[0] != '/') {
-	      sprintf(tqFilePath, "%s/%s", baseName, tqFileName );
+	    if(strcmp(tqFileName, "none")!=0){			
+		    if(multistep==true){
+			    sprintf(suffix,".stp1_%f_stp2_%f",step1, step2);
+			    strcat(tqFileName,suffix); 
+		    }
+			    
+		    if(tqFileName[0] != '/') {
+			    sprintf(tqFilePath, "%s/%s", baseName, tqFileName );
+		    }
+		    else {
+			    sprintf(tqFilePath, "%s", tqFileName);
+		    }
+	    }
+	    if(lutFileName[0] != '/') {
+		    sprintf(lutFilePath, "%s/%s", baseName, lutFileName );
 	    }
 	    else {
-	      sprintf(tqFilePath, "%s", tqFileName);
+		    sprintf(lutFilePath, "%s", lutFileName);
 	    }
-	  }
-	  if(lutFileName[0] != '/') {
-	    sprintf(lutFilePath, "%s/%s", baseName, lutFileName );
-	  }
-	  else {
-	    sprintf(lutFilePath, "%s", lutFileName);
-	  }
+	    
+	    if(strcmp(tqFileName, "none")!=0 and loadTQ==true){
+		    printf("P2:: loading '%s' and '%s' into [%d..%d[\n", lutFilePath, tqFilePath, start, end);
+		    loadTQFile(start, end, tqFilePath);
+		    do_TQcorr = true;
+	    }
+	    else{
+		    printf("P2:: loading '%s' into [%d..%d[\n", lutFilePath, start, end);
+		    do_TQcorr = false;
+	    }
 	  
-	  if(!(tqFileName[0] == 'n' && tqFileName[1] == 'o' && tqFileName[2] == 'n')){
-	    printf("P2:: loading '%s' and '%s' into [%d..%d[\n", lutFilePath, tqFilePath, start, end);
-	    loadTQFile(start, end, tqFilePath);
-	    do_TQcorr = true;
-	  }
-	  else{
-	    printf("P2:: loading '%s' into [%d..%d[\n", lutFilePath, start, end);
-	    do_TQcorr = false;
-	  }
-	  
-	  loadFile(start, end, lutFilePath);	
+	    loadFile(start, end, lutFilePath);	
 		// string lutFile;
 		//printf("P2:: loading '%s'", lutFile);
 		//if (lutFile.find('tdc.cal') != string::npos){

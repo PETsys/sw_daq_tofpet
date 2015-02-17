@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		P2->loadFiles(argv[1]);
+		P2->loadFiles(argv[1], true, false,0,0);
 	}
 	
 	TFile *lmFile = new TFile(argv[3], "RECREATE");
