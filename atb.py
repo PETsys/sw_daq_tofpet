@@ -211,6 +211,13 @@ class CommandErrorTimeout:
 		self.addr = portID, slaveID
 	def __str__(self):
 		return "Time out from FEB/D at port %2d, slave %2d" % self.addr
+
+class ErrorInvalidLinks:
+	def __init__(self, portID, slaveID, value):
+		self.addr = value, portID, slaveID
+	def __str__(self):
+		return "Invalid NLinks value (%d) from FEB/D at port %2d, slave %2d" % self.addr
+
 	
 class ATB:
 	def __init__(self, socketPath, debug=False, F=160E6):
@@ -759,6 +766,24 @@ class ATB:
 		#print [ hex(x) for x in cmd ]
 		return self.sendCommand(0, 0, 0x03,cmd)
 
+	def readFEBDConfig(self, portID, slaveID, addr1, addr2):
+		command = bytearray([\
+			addr1 & 0x7F, \
+			addr2 & 0xFF, \
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 \
+			]);
+
+		reply = self.sendCommand(portID, slaveID, 0x05, command);
+		
+		d = reply[2:]
+		value = 0
+		for n in range(8):		
+			value = value + (d[n] << (8*n))
+		return value
+			
+			
+		
+
 	  
 	def openAcquisition(self, fileName, cWindow, writer=None):
 		if writer not in ["writeRaw", "writeRawE"]:
@@ -931,6 +956,18 @@ class ATB:
 			self.doTOFPETAsicCommand(asic, "wrChTCfg", channel=n, value=cc)
 			#stdout.write("CH %2dT " %n);stdout.flush()
 			
+
+		portID = asic / 16
+		slaveID = 0
+		nLinks = self.readFEBDConfig(portID, slaveID, 0, 1);
+		if nLinks == 1:
+			ac.globalConfig.setValue("tx_mode", 0)
+		elif nLinks == 2:
+			ac.globalConfig.setValue("tx_mode", 1)
+		else:
+			raise ErrorInvalidLinks(portID, slaveID, nLinks)
+
+		ac.globalConfig.setValue("ddr_mode", 1)
 
 		self.doTOFPETAsicCommand(asic, "wrGlobalCfg", value=ac.globalConfig)
 		self.doTOFPETAsicCommand(asic, "wrGlobalTCfg", value=ac.globalTConfig)
