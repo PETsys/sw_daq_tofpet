@@ -48,7 +48,6 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
     
     for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
-       	#print atbConfig.asicConfig[tAsic].globalConfig.getValue("sipm_idac_dcstart"), tAsic
     uut.uploadConfig()
  
     rootFile = ROOT.TFile(root_file, "RECREATE")
@@ -142,7 +141,7 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
 
 post=[]
 n_asics=4
-print np.__version__
+
 if not (len(argv) >=3 and len(argv) <=8):
     print "USAGE: python %s root_file N_iterations [N_ASICS] [postamp0] [postamp1] ... [postampNASICS]" % argv[0]
     exit(1)
@@ -219,7 +218,7 @@ while i<=n_iter:
     print "\n"
 
     check=dump_noise(root_filename,uut, targetAsics, targetChannels)
- #####################################################################3
+ 
     os.system("root -l %s \"draw_threshold_scan.C(true)\"" % root_filename)
     prefix, ext = splitext(root_file)
    
@@ -252,7 +251,7 @@ while i<=n_iter:
             proposal=-1
         elif (average_th>60 or nr_dead>6):
             proposal=-2
-        elif ((average_th<48) or (np.amin(th)<45 and np.amin(th)!=0)):
+        elif ((average_th<47) or (np.amin(th)<45 and np.amin(th)!=0)):
             proposal=1
         elif (average_th<46):
             proposal=2
@@ -310,7 +309,7 @@ while i<=n_iter:
         print "\n\n-------------- OPTIONS -------------------" 
         print "1 - Quit"
         print "2 - Save baseline files and Quit"
-        print "3 - Refine (with user defined postamp value(s))"
+        print "3 - Refine one or more ASICS (with user defined postamp value(s))"
         opt=raw_input("Please choose an option:")
          
         option=int(opt)
@@ -333,8 +332,8 @@ while i<=n_iter:
             print "\nReminder: To complete process, please insert postamp values in update_config.py\n"
             break
         elif(option==3):
-            n_refine=raw_input("Please enter the number of ASICS/Mezzanines you need to refine:")
-            print "Please enter the ID number and postamp value for the ASICS/Mezzanines you want to refine (0 or 1):" 
+            n_refine=raw_input("Please enter the number of ASICS you need to refine:")
+            print "Please enter the ID number and postamp value for the ASICS you want to refine:" 
             for k in range(int(n_refine)):
                 id_number= raw_input("ID:")
                 postamp[int(id_number)]=int(raw_input("Postamp[%d]:" % (int(id_number))))     
@@ -345,4 +344,4 @@ while i<=n_iter:
    
 
 log_f.close()
-#os.system("rm /tmp/*.baseline")
+

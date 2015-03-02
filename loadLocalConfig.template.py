@@ -4,7 +4,7 @@ from atbUtils import loadAsicConfig, dumpAsicConfig, loadHVDACParams, loadBaseli
 
 # Loads configuration for the local setup
 def loadLocalConfig(useBaseline=True):
-	atbConfig = atb.BoardConfig(nASIC=4, nDAC=1))
+	atbConfig = atb.BoardConfig(nASIC=4, nDAC=1)
 	# HV DAC calibration
 	loadHVDACParams(atbConfig, "config/pab1/hvdac.Config")
 
