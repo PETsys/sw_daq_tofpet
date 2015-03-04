@@ -16,10 +16,18 @@
 #include <assert.h>
 #include <math.h>
 #include <boost/lexical_cast.hpp>
+#include <sys/mman.h>
+#include <Common/Constants.hpp>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
-static const int nBoard = 32;
-static const int nASIC = 2 * nBoard;
+
+static const int nASIC = DAQ::Common::SYSTEM_NCHANNELS / 64;
+static const int nAsicPerBoard = 2;
+static const int nBoards = nASIC/nAsicPerBoard;
 static const int nTAC = nASIC*64*2*4;
+
 struct TacInfo {
 	TH2 *hA_Fine;
 	TProfile *pA_Fine;
@@ -151,13 +159,8 @@ static Double_t aperiodicF3 (double x, double x0, double b, double m, double p2)
 
 
 
-bool isCanonical(int coarse, float q)
-{
-	bool isEven = (coarse % 2) == 0;
-	if (isEven && q >= 1.0 && q <= 2.0) return true;
-	else if (!isEven && q >= 2.0 && q <= 3.0) return true;
-	else return false;
-}
+void calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2, float nominalM);
+void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2);
 
 int main(int argc, char *argv[])
 {
@@ -176,18 +179,132 @@ int main(int argc, char *argv[])
 //	TVirtualFitter::SetDefaultFitter("Minuit2");
 	
 	TRandom *random = new TRandom();
-
-	TFile * tDataFile = new TFile(argv[1], "READ");
-	TFile * eDataFile = new TFile(argv[2], "READ");
-	TFile * resumeFile = new TFile("tdcSummary.root", "RECREATE");	
+	
 	float nominalM = boost::lexical_cast<float>(argv[3]);
 	char *tableFileNamePrefix = argv[4];
+
+
+	//TacInfo tacInfo[nTAC];
+	TacInfo *tacInfo = (TacInfo *)mmap(NULL, sizeof(TacInfo)*nTAC, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+	for(int tac = 0; tac < nTAC; tac++)
+		tacInfo[tac] = TacInfo();
 	
-	DAQ::TOFPET::P2 myP2(64*nASIC);
+	int nCPUs = sysconf(_SC_NPROCESSORS_ONLN);
+	for(int startBoard = 0; startBoard < nBoards; startBoard += nCPUs) {
+		int nWorkers = nBoards - startBoard;
+		nWorkers = nWorkers < nCPUs ? nWorkers : nCPUs;
+		
+		pid_t children[nWorkers];
+		for(int worker = 0; worker < nWorkers; worker++) {
+			pid_t pid = fork();
+			if (pid == 0) {
+				int board = startBoard + worker;
+				int startAsic = board * nAsicPerBoard;
+				int endAsic = startAsic + nAsicPerBoard;
 
-
-	TacInfo tacInfo[nTAC];
+				TFile * tDataFile = new TFile(argv[1], "READ");
+				TFile * eDataFile = new TFile(argv[2], "READ");
+				
+				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2(DAQ::Common::SYSTEM_NCHANNELS);
+				
+				char resumeFileName[1024];
+				sprintf(resumeFileName, "%s_%04u.tdc.root", tableFileNamePrefix, board);
+				TFile * resumeFile = new TFile(resumeFileName, "RECREATE");
+				
+				calibrate(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2, nominalM);
+// 				qualityControl(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2);
+				resumeFile->Write();
+				resumeFile->Close();
+				
+				delete myP2;
+				
+				tDataFile->Close();
+				eDataFile->Close();
+				exit(0);
+			} 
+			else {
+				children[worker] = pid;
+				
+			}			
+		}
+		for(int worker = 0; worker < nWorkers; worker++) {
+ 			waitpid(children[worker], NULL, 0);
+		} 	
+	}
+	
+	// Copy parameters from shared memory to global P2 
+	DAQ::TOFPET::P2 myP2(DAQ::Common::SYSTEM_NCHANNELS);
 	for(int asic = 0; asic < nASIC; asic++) {
+		for(int channel = 0; channel < 64; channel++) {
+			for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
+				bool isT = (whichBranch == 0);
+				for(int tac = 0; tac < 4; tac++) {
+					int index2 = 4 * (64 * asic + channel) + tac;				
+					TacInfo &ti = tacInfo[2*index2 + (isT ? 0 : 1)];					
+					if(ti.pA_Fine == NULL)	continue;
+					
+					myP2.setShapeParameters((64*asic+channel), tac, isT, ti.shape.tB, ti.shape.m, ti.shape.p2);
+					myP2.setT0((64*asic+channel), tac, isT, ti.shape.tEdge);
+					myP2.setLeakageParameters((64 * asic + channel), tac, isT, ti.leakage.tQ, ti.leakage.a0, ti.leakage.a1, ti.leakage.a2);
+				}
+			}
+		}
+	}
+	
+	for(int asic = 0; asic < nASIC; asic++) {
+		for(int channel = 0; channel < 64; channel++) {			
+		
+			float t0_adjust_sum = 0;
+			int t0_adjust_N = 0;	
+			for(int tac = 0; tac < 4; tac++) {
+				int index2 = 4 * (64 * asic + channel) + tac;				
+				TacInfo &tiT = tacInfo[2*index2 + 0];				
+				TacInfo &tiE = tacInfo[2*index2 + 1];				
+				
+				if(tiT.pA_Fine == NULL || tiE.pA_Fine == NULL) 
+					continue;
+			
+				float t0_T = myP2.getT0((64 * asic + channel), tac, true);
+				float t0_E = myP2.getT0((64 * asic + channel), tac, false);
+				
+				t0_adjust_sum += (t0_T - t0_E);
+				t0_adjust_N += 1;				
+			}
+			
+			float t0_adjust = t0_adjust_sum / t0_adjust_N;
+			for(int tac = 0; tac < 4; tac++) {
+				int index2 = 4 * (64 * asic + channel) + tac;				
+				TacInfo &tiT = tacInfo[2*index2 + 0];				
+				TacInfo &tiE = tacInfo[2*index2 + 1];				
+				
+				if(tiT.pA_Fine == NULL || tiE.pA_Fine == NULL) 
+					continue;
+			
+				float t0_T = myP2.getT0((64 * asic + channel), tac, true);
+				float t0_T_adjusted = t0_T - t0_adjust;
+				
+				//fprintf(stderr, "%d %2d %d adjusting %f to %f\n", asic, channel, tac, t0_T, t0_T_adjusted);
+				
+				myP2.setT0((64 * asic + channel), tac, true, t0_T_adjusted);
+			}
+			
+		}
+	}
+	
+	
+	
+	
+	for(unsigned board = 0; board < nBoards; board++) {
+		char tableFileName[1024];
+		sprintf(tableFileName, "%s_%04u.tdc.cal", tableFileNamePrefix, board);
+		myP2.storeFile(  64*nAsicPerBoard*board, 64*nAsicPerBoard*(board+1), tableFileName);
+	}
+
+	return 0;
+}
+
+void calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2, float nominalM) {
+	for(int asic = start; asic < end; asic++) {
 		for(int channel = 0; channel < 64; channel++) {
 			for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
 				bool isT = (whichBranch == 0);
@@ -201,7 +318,6 @@ int main(int argc, char *argv[])
 					sprintf(hName, isT ? "htFine_%03d_%02d_%1d" : "heFine_%03d_%02d_%1d" , 
 						asic, channel,	tac);
 						
-
 					TH2 *hA_Fine = isT ? (TH2 *)tDataFile->Get(hName) : (TH2 *)eDataFile->Get(hName);
 					ti.hA_Fine = hA_Fine;
 
@@ -229,7 +345,7 @@ int main(int argc, char *argv[])
 							continue;		
 						
 						float error = pA_Fine->GetBinError(j);
-						if (error > 2.0)
+						if (error > 5.0)
 							continue;
 						
 						if(adc < 1.0 * nominalM)
@@ -252,7 +368,7 @@ int main(int argc, char *argv[])
 							continue;
 						
 						float error = pA_Fine->GetBinError(j);
-						if (error > 2.0)
+						if (error > 5.0)
 							continue;
 				
 						if(adc > (minADCY + 2.5 * nominalM))
@@ -341,6 +457,7 @@ int main(int argc, char *argv[])
 					
 					if(prevChi2 > 1E6) {
 						fprintf(stderr, "WARNING: No or very bad fit. Skipping TAC.\n");
+						delete pf;
 						continue;
 					}
 					
@@ -378,6 +495,8 @@ int main(int argc, char *argv[])
 					
 					if(prevChi2 > 1E6) {
 						fprintf(stderr, "WARNING: No or very bad fit. Skipping TAC.\n");
+						delete pf;
+						delete pf2;
 						continue;
 					}
 					if(prevChi2 > 10) {						
@@ -414,6 +533,9 @@ int main(int argc, char *argv[])
 					sprintf(hName, isT ? "C%03d_%02d_%d_A_T_control_E" : "C%03d_%02d_%d_A_E_control_E", 
 							asic, channel, tac);
 					ti.pA_ControlE = new TH1F(hName, hName, 256, -0.5, 0.5);
+					
+					delete pf;
+					delete pf2;
 				}
 
 				
@@ -505,9 +627,13 @@ int main(int argc, char *argv[])
 				
 			}
 		}
+	
 	}
-	
-	
+
+}
+
+void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2) 
+{
 	// Correct t0 and build shape quality control histograms
 	const int nIterations = 2;
 	// Need two iterations to correct t0, then one more to build final histograms
@@ -624,6 +750,7 @@ int main(int argc, char *argv[])
 	}
 	
 	// Build leakage quality control
+	printf("Quality control: leakage\n");
 	for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
 		bool isT = (whichBranch == 0);
 		
@@ -664,7 +791,7 @@ int main(int argc, char *argv[])
 		for(int i = 0; i < nEvents; i++) {
 			data->GetEntry(i);				
 			int index2 = 4 * (64 * fAsic + fChannel) + fTac;			
-			if(fAsic >= nASIC) continue;
+			if(fAsic < start || fAsic >= end) continue;
 			if(fChannel >= 64) continue;
 			if(fTac >= 4) continue;
 			
@@ -704,61 +831,5 @@ int main(int argc, char *argv[])
 			//ti.pB_ControlQ->Fill(fStep1, qEstimate);
 
 		}
-	}
-	
-	
-	for(int asic = 0; asic < nASIC; asic++) {
-		for(int channel = 0; channel < 64; channel++) {			
-		
-			float t0_adjust_sum = 0;
-			int t0_adjust_N = 0;	
-			for(int tac = 0; tac < 4; tac++) {
-				int index2 = 4 * (64 * asic + channel) + tac;				
-				TacInfo &tiT = tacInfo[2*index2 + 0];				
-				TacInfo &tiE = tacInfo[2*index2 + 1];				
-				
-				if(tiT.pA_Fine == NULL || tiE.pA_Fine == NULL) 
-					continue;
-			
-				float t0_T = myP2.getT0((64 * asic + channel), tac, true);
-				float t0_E = myP2.getT0((64 * asic + channel), tac, false);
-		
-				t0_adjust_sum += (t0_T - t0_E);
-				t0_adjust_N += 1;				
-			}
-			
-			float t0_adjust = t0_adjust_sum / t0_adjust_N;
-			for(int tac = 0; tac < 4; tac++) {
-				int index2 = 4 * (64 * asic + channel) + tac;				
-				TacInfo &tiT = tacInfo[2*index2 + 0];				
-				TacInfo &tiE = tacInfo[2*index2 + 1];				
-				
-				if(tiT.pA_Fine == NULL || tiE.pA_Fine == NULL) 
-					continue;
-			
-				float t0_T = myP2.getT0((64 * asic + channel), tac, true);
-				float t0_T_adjusted = t0_T - t0_adjust;
-				
-				fprintf(stderr, "%d %2d %d adjusting %f to %f\n", asic, channel, tac, t0_T, t0_T_adjusted);
-				
-				myP2.setT0((64 * asic + channel), tac, true, t0_T_adjusted);
-			}
-			
-		}
-	}
-	
-	
-	
-	
-	for(unsigned i = 0; i < nBoard; i++) {
-		char tableFileName[1024];
-		sprintf(tableFileName, "%s_%04u.tdc.cal", tableFileNamePrefix, i);
-		myP2.storeFile(  128*i, 128*(i+1), tableFileName);
-	}
-	
-	resumeFile->Write();
-	resumeFile->Close();
-
-	return 0;
+	}	
 }
-
