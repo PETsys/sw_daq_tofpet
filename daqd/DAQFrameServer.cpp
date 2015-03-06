@@ -67,86 +67,49 @@ void DAQFrameServer::stopAcquisition()
 
 int DAQFrameServer::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
-	boost::posix_time::ptime start = boost::posix_time::microsec_clock::local_time();	
 
 	uint16_t sentSN = (unsigned(buffer[0]) << 8) + unsigned(buffer[1]);	
 
 	boost::posix_time::ptime t1 = boost::posix_time::microsec_clock::local_time();
 	DP->sendCommand(portID, slaveID, buffer,bufferSize, commandLength);
 	
+
 	boost::posix_time::ptime t2 = boost::posix_time::microsec_clock::local_time();
-	
 
-
-	if (sentSN & 0x0001 == 0x0001) {
-		// Commands with odd SN do not require a reply
-		usleep(10000);
-		return 0;
-	}
-	
-	int replyLength = 0;	
+	int replyLength = 0;
 	int nLoops = 0;
+	char replyBuffer[12*4];
 	do {
-		pthread_mutex_lock(&lock);
-		reply_t *reply = NULL;
-	
-/*		if(replyQueue.empty()) {
-			pthread_cond_wait(&condReplyQueue, &lock);
-		}*/
+		boost::posix_time::ptime tl = boost::posix_time::microsec_clock::local_time();
+		if((tl - t2).total_milliseconds() > 10) break;
 
-		if(replyQueue.empty()) {
-			struct timespec ts; 
-			clock_gettime(CLOCK_REALTIME, &ts);
-			ts.tv_nsec += 100000000L; // 100 ms
-			ts.tv_sec += (ts.tv_nsec / 1000000000L);
-			ts.tv_nsec = (ts.tv_nsec % 1000000000L);                        
-			pthread_cond_timedwait(&condReplyQueue, &lock, &ts);
-		}
-
-		if (!replyQueue.empty()) {
-			reply = replyQueue.front();
-			replyQueue.pop();
-			
-		}
-		pthread_mutex_unlock(&lock);
-		
-		if(reply == NULL) {
-			boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-			if ((now - start).total_milliseconds() > 100) 
-				break;
-			else
-				continue;
-			
-		}
-		//printf("Found something on queue with size: %d\n", reply->size);
-	
-		if (reply->size < 2) {
-			fprintf(stderr, "WARNING: Reply only had %d bytes\n", reply->size);
-		}
-		else {
-			uint16_t recvSN = (unsigned(reply->buffer[0]) << 8) + reply->buffer[1];
-			if(sentSN == recvSN) {
-					// Care only about even SN commands
-				memcpy(buffer, reply->buffer, reply->size);
-				replyLength = reply->size;
-// 				printf("reply length set to %d\n", replyLength);
-			}
-			else {
-				fprintf(stderr, "Mismatched SN: sent %6hx, got %6hx\n", sentSN, recvSN);
-			}
+		int status = DP->recvReply(replyBuffer, 12*4);
+		if (status < 0) {
+			continue; // Timed out and did not receive a reply
 		}
 		
-		delete reply;		
-		nLoops++;
-
-	} while(replyLength == 0);
+		if(status < 2) { // Received something weird
+			fprintf(stderr, "Received very short reply: %d bytes\n", status);
+			continue;
+		}
+		
+		uint16_t recvSN = (unsigned(replyBuffer[0]) << 8) + replyBuffer[1];
+		if(sentSN != recvSN) {
+			fprintf(stderr, "Mismatched SN: sent %6hx, got %6hx\n", sentSN, recvSN);
+			continue;
+		}
+	
+		// Got what looks like a valid reply with the correct SN
+		replyLength = status;
+		memcpy(buffer, replyBuffer, replyLength);		
+	} while(replyLength == 0);	
 	
 	boost::posix_time::ptime t3 = boost::posix_time::microsec_clock::local_time();
 	
 	if (replyLength == 0 ) {
-		printf("Command reply timing: (t2 - t1) => %ld, (t3 - t2) => %ld, i = %d, status = %s\n", 
-			(t2 - t1).total_milliseconds(), 
-			(t3 - t2).total_milliseconds(),
+		printf("Command reply timing: (t2 - t1) => %ld us, (t3 - t2) => %ld us, i = %d, status = %s\n", 
+			(t2 - t1).total_microseconds(), 
+			(t3 - t2).total_microseconds(),
 			nLoops,
 			replyLength > 0 ? "OK" : "FAIL"
 		);
@@ -253,41 +216,40 @@ void *DAQFrameServer::doWork()
 		printf("frame .source = %lu, .type = %lu, .size = %lu\n", frameSource, frameType, frameSize);*/
 		
 		
-		if(frameType == 0) {	
-			unsigned replySize = frameBuffer[1];
-			uint8_t * replyPayload = (uint8_t *)(frameBuffer+2);
-	
-			/*		
- 			printf("8 reply received ");
- 			for(int i = 0; i < replySize; i++)
- 				printf("%02x ", unsigned(replyPayload[i]));
- 			printf("\n");
-			*/
-			
-			uint16_t recvSN = (unsigned(replyPayload[0]) << 8) + replyPayload[1];			
-
-			if(frameSize > 32) {
-				lastFrameWasBad = true;
-				continue;
-			}
-			
-			if(replySize > (frameSize - 2) * sizeof(uint64_t)) {
-				lastFrameWasBad = true;
-				continue;
-			}
-			
-			if((recvSN & 0x0001) == 0x0000) {			
-				reply_t *reply = new reply_t;
-				memcpy(reply->buffer,replyPayload, replySize);
-				reply->size=replySize;
-				pthread_mutex_lock(&m->lock);
-				m->replyQueue.push(reply);
-				pthread_mutex_unlock(&m->lock);
-			}
-			pthread_cond_signal(&condReplyQueue);
-		
-		}
-		else if(frameType == 1) {
+// 		if(frameType == 0) {	
+// 			unsigned replySize = frameBuffer[1];
+// 			uint8_t * replyPayload = (uint8_t *)(frameBuffer+2);
+// 	
+// 			/*		
+//  			printf("8 reply received ");
+//  			for(int i = 0; i < replySize; i++)
+//  				printf("%02x ", unsigned(replyPayload[i]));
+//  			printf("\n");
+// 			*/
+// 			
+// 			uint16_t recvSN = (unsigned(replyPayload[0]) << 8) + replyPayload[1];			
+// 
+// 			if(frameSize > 32) {
+// 				lastFrameWasBad = true;
+// 				continue;
+// 			}
+// 			
+// 			if(replySize > (frameSize - 2) * sizeof(uint64_t)) {
+// 				lastFrameWasBad = true;
+// 				continue;
+// 			}
+// 			
+// 			reply_t *reply = new reply_t;
+// 			memcpy(reply->buffer,replyPayload, replySize);
+// 			reply->size=replySize;
+// 			pthread_mutex_lock(&m->lock);
+// 			m->replyQueue.push(reply);
+// 			pthread_mutex_unlock(&m->lock);
+// 			pthread_cond_signal(&condReplyQueue);
+// 		
+// 		}
+// 		else 
+		if(frameType == 1) {
 			uint8_t * framePayload = (uint8_t *)frameBuffer;
 			
 			if (acquisitionMode != 0) {

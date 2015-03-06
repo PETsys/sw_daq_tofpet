@@ -27,6 +27,7 @@ public:
 	  void startWorker();
 	bool cardOK();
 	int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength);
+	int recvReply(char *buffer, int bufferSize);
 	int setAcquistionOnOff(bool enable);
 	  static const int ETIMEOUT = -1;
 	  static const int ENOWORDS = -2;
@@ -35,6 +36,10 @@ public:
 private:
 	int getWords_(uint64_t *buffer, int count);
 	int WriteAndCheck(int reg, uint32_t *data, int count);
+	int ReadAndCheck(int reg, uint32_t *data, int count);
+
+	uint32_t txWrPointer;
+	uint32_t rxRdPointer;
 
 
 	pthread_t worker;

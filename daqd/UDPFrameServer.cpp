@@ -151,12 +151,6 @@ int UDPFrameServer::sendCommand(int portID, int slaveID, char *buffer, int buffe
 	
 	boost::posix_time::ptime t2 = boost::posix_time::microsec_clock::local_time();
 
-	if (sentSN & 0x0001 == 0x0001) {
-		// Commands with odd SN do not require a reply
-		usleep(10000);
-		return 0;
-	}
-	
 	int replyLength = 0;	
 	int nLoops = 0;
 	do {

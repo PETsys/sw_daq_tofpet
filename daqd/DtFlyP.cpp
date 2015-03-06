@@ -35,8 +35,12 @@ extern "C" {
 
 static const unsigned DMA_TRANS_BYTE_SIZE = 262144;
 static const unsigned wordBufferSize = DMA_TRANS_BYTE_SIZE / sizeof(uint64_t);
-
 static const int N_BUFFERS = 1;
+
+static const int txWrPointerReg = 320;
+static const int txRdPointerReg = 384;
+static const int rxWrPointerReg = 448;
+static const int rxRdPointerReg = 512;
 
 static void userIntHandler(SIntInfoData * IntInfoData)
 {
@@ -53,6 +57,13 @@ DtFlyP::DtFlyP()
 	pthread_cond_init(&condDirtyBuffer, NULL);
 
 	pthread_mutex_init(&hwLock, NULL);
+	
+	int status;
+	status = ReadAndCheck(txWrPointerReg * 4 , &txWrPointer, 1);
+	status = ReadAndCheck(rxRdPointerReg * 4 , &rxRdPointer, 1);
+	printf("DtFLYP:: Initial TX WR pointer: %08x\n", txWrPointer);
+	printf("DtFLYP:: Initial RX RD pointer: %08x\n", rxRdPointer);
+	
 	
 
 	// for(int i = 0; i < N_BUFFERS; i++)
@@ -314,51 +325,92 @@ int DtFlyP::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, i
 // 	}
 // 	printf("\n");
 	
-	const int wrPointerReg = 768;
-	const int rdPointerReg = 640;
 	
-	
-	uint32_t wrPointer;
-	uint32_t rdPointer;
+	uint32_t txRdPointer;
 
 	boost::posix_time::ptime startTime = boost::posix_time::microsec_clock::local_time();
 	do {
 		pthread_mutex_lock(&hwLock);
-		// Read the WR and RD pointer
-		status = ReadWriteUserRegs(READ, wrPointerReg * 4 , &wrPointer, 1);
-		//printf("Read WR pointer: status is %d, result is %d\n", status, wrPointer);	
-		status = ReadWriteUserRegs(READ, rdPointerReg * 4 , &rdPointer, 1);
-		//printf("Read RD pointer: status is %d, result is %d\n", status, rdPointer);
+		// Read the RD pointer
+		//printf("TX Read WR pointer: status is %2d, result is %08X\n", status, txWrPointer);	
+		status = ReadAndCheck(txRdPointerReg * 4 , &txRdPointer, 1);
+		//printf("TX Read RD pointer: status is %2d, result is %08X\n", status, txRdPointer);
 		pthread_mutex_unlock(&hwLock);
 
 		boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-		if((now - startTime).total_milliseconds() > 200) {
-			printf("Timeout %04X %04X\n", wrPointer, rdPointer);
+		if((now - startTime).total_milliseconds() > 10) {
+			//printf("REG TX Timeout %04X %04X\n", txWrPointer, txRdPointer);
 			return -1;
 		}		
 
 		// until there is space to write the command
-	} while( ((wrPointer & 32) != (rdPointer & 32)) && ((wrPointer & 31) == (rdPointer & 31)) );
+	} while( ((txWrPointer & 16) != (txRdPointer & 16)) && ((txWrPointer & 15) == (txRdPointer & 15)) );
 	
 	pthread_mutex_lock(&hwLock);
-	uint32_t wrSlot = wrPointer & 31;
+	uint32_t wrSlot = txWrPointer & 15;
 	
 	status = WriteAndCheck(wrSlot * 16 * 4 , (uint32_t *)outBuffer, 16);
 // 	printf("Wrote data to slot %d (status is %d)\n", wrSlot, status);
 		
-	wrPointer += 1;
-	wrPointer = wrPointer & 63;	// There are only 32 slots, but we use another bit for the empty/full condition
+	txWrPointer += 1;
+	txWrPointer = txWrPointer & 31;	// There are only 16 slots, but we use another bit for the empty/full condition
+	txWrPointer |= 0xCAFE1500;
 	
-	status = WriteAndCheck(wrPointerReg * 4 , &wrPointer, 1);
-// 	printf("Wrote WR pointer: status is %d, result is %d\n", status, wrPointer);
+	status = WriteAndCheck(txWrPointerReg * 4 , &txWrPointer, 1);
+// 	printf("Wrote WR pointer: status is %d, result is %d\n", status, txWrPointer);
 	pthread_mutex_unlock(&hwLock);
 	return 0;
 
 }
 
+int DtFlyP::recvReply(char *buffer, int bufferSize)
+{
+
+	int status;
+	uint64_t outBuffer[8];
+	
+	uint32_t rxWrPointer;
+
+	boost::posix_time::ptime startTime = boost::posix_time::microsec_clock::local_time();
+	int nLoops = 0;
+	do {
+		pthread_mutex_lock(&hwLock);
+		// Read the WR pointer
+		status = ReadAndCheck(rxWrPointerReg * 4 , &rxWrPointer, 1);
+		//printf("RX Read WR pointer: status is %d, result is %08X\n", status, rxWrPointer);	
+		//printf("RX Read RD pointer: status is %d, result is %08X\n", status, rxRdPointer);
+		pthread_mutex_unlock(&hwLock);
+
+		boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+		if((now - startTime).total_milliseconds() > 10) {
+			//printf("REG RX Timeout %04X %04X\n", rxWrPointer, rxRdPointer);
+			return -1;
+		}		
+		// until there a reply to read
+	} while((rxWrPointer & 31) == (rxRdPointer & 31));
+	pthread_mutex_lock(&hwLock);
+	uint32_t rdSlot = rxRdPointer & 15;
+	
+	status = ReadAndCheck((768 + rdSlot * 16) * 4 , (uint32_t *)outBuffer, 16);
+		
+	rxRdPointer += 1;
+	rxRdPointer = rxRdPointer & 31;	// There are only 16 slots, but we use another bit for the empty/full condition
+	rxRdPointer |= 0xFACE9100;
+	
+	status = WriteAndCheck(rxRdPointerReg * 4 , &rxRdPointer, 1);
+// 	printf("Wrote WR pointer: status is %d, result is %d\n", status, rxWrPointer);
+	pthread_mutex_unlock(&hwLock);
+	
+	int replyLength = outBuffer[1];
+	replyLength = replyLength < bufferSize ? replyLength : bufferSize;
+	memcpy(buffer, outBuffer+2, replyLength);
+	return replyLength;
+
+}
+
 int DtFlyP::setAcquistionOnOff(bool enable)
 {
-	const int acqStatusPointerReg = 896;
+	const int acqStatusPointerReg = 576;
 	uint32_t data[1];
 	int status;
 	
@@ -380,10 +432,30 @@ int DtFlyP::WriteAndCheck(int reg, uint32_t *data, int count) {
 		ReadWriteUserRegs(READ, reg, readBackBuffer, count);
 		fail = false;
 		for(int i = 0; i < count; i++) fail |= (data[i] != readBackBuffer[i]);		
-		if(fail) 
-			printf("DtFlyP::WriteAndCheck(%3d, %8p, %2d) readback failed, retrying (%d)\n", 
-				reg, data, count,
-				iter);
+// 		if(fail) 
+// 			printf("DtFlyP::WriteAndCheck(%3d, %8p, %2d) readback failed, retrying (%d)\n", 
+// 				reg, data, count,
+// 				iter);
+		iter++;
+	}
+	delete [] readBackBuffer;
+	return status;
+};
+
+int DtFlyP::ReadAndCheck(int reg, uint32_t *data, int count) {
+	uint32_t *readBackBuffer = new uint32_t[count];
+	bool fail = true;
+	int status = -1;
+	int iter = 0;
+	while(fail) {
+		status = ReadWriteUserRegs(READ, reg, data, count);
+		ReadWriteUserRegs(READ, reg, readBackBuffer, count);
+		fail = false;
+		for(int i = 0; i < count; i++) fail |= (data[i] != readBackBuffer[i]);		
+// 		if(fail) 
+// 			printf("DtFlyP::ReadAndCheck(%3d, %8p, %2d) readback failed, retrying (%d)\n", 
+// 				reg, data, count,
+// 				iter);
 		iter++;
 	}
 	delete [] readBackBuffer;
