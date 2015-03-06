@@ -316,27 +316,31 @@ class AsicConfig:
 
 
 
-class ConfigurationErrorNoAck:
-	def __init__(self, portID, slaveID, asicID):
-		self.addr = (portID, slaveID, asicID)
-	def __str__(self):
-		return "No ACK from ASIC at port %2d, slave %2d, asic %2d" % self.addr
+class ConfigurationError:
+	pass
 
-class ConfigurationErrorBadCRC:
+class ConfigurationErrorBadAck(ConfigurationError):
+	def __init__(self, portID, slaveID, asicID, value):
+		self.addr = (value, portID, slaveID, asicID)
+		self.errType = value
+	def __str__(self):
+		return "Bad ACK (%d) when configuring ASIC at port %2d, slave %2d, asic %2d"  % self.addr
+
+class ConfigurationErrorBadCRC(ConfigurationError):
 	def __init__(self, portID, slaveID, asicID):
 		self.addr = (portID, slaveID, asicID)
 	def __str__(self):
 		return "Received configuration datta with bad CRC from ASIC at port %2d, slave %2d, asic %2d" % self.addr
 
-class ConfigurationErrorStuckHigh:
+class ConfigurationErrorStuckHigh(ConfigurationError):
 	def __init__(self, portID, slaveID, asicID):
 		self.addr = (portID, slaveID, asicID)
 	def __str__(self):
 		return "MOSI stuck high from ASIC at port %2d, slave %2d, asic %2d" % self.addr
 
-class ConfigurationErrorGeneric:
+class ConfigurationErrorGeneric(ConfigurationError):
 	def __init__(self, portID, slaveID, asicID, value):
 		self.addr = (value, portID, slaveID, asicID)
 	def __str__(self):
-		return "Unexpected configuration error %02x from ASIC at port %2d, slave %2d, asic %2d" % self.addr
+		return "Unexpected configuration error %02X from ASIC at port %2d, slave %2d, asic %2d" % self.addr
 
