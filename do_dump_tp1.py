@@ -7,6 +7,9 @@ from time import time, sleep
 import ROOT
 from rootdata import DataFile
 import serial
+import DSHM
+
+import tofpet
 
 acquisitionTime = float(argv[1])
 tChannel = int(argv[2])
@@ -36,7 +39,7 @@ for c in range(len(atbConfig.hvBias)):
 		atbConfig.hvBias[c] = 50.0
 
 for ac in atbConfig.asicConfig:
-	if not isistance(ac, tofpet.AsicConfig):
+	if not isinstance(ac, tofpet.AsicConfig):
 		continue
 
 	ac.globalConfig.setValue("test_pulse_en", 1)
@@ -51,7 +54,7 @@ uut.config = atbConfig
 uut.initialize()
 uut.uploadConfig()
 uut.doSync()
-uut.openAcquisition(dataFilePrefix, cWindow)
+uut.openAcquisition(dataFilePrefix, cWindow, writer="writeRaw")
 uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
 
 uut.config.writeParams(dataFilePrefix)
@@ -69,7 +72,7 @@ for step1 in range(0,64,4): # vib
 			#atbConfig.asicConfig[tAsic].channelConfig[c].setValue("vbl", step2)
 
 	for ac in atbConfig.asicConfig:
-		if not isistance(ac, tofpet.AsicConfig):
+		if not isinstance(ac, tofpet.AsicConfig):
 			continue
 
 		ac.globalConfig.setValue("vib1", step1);

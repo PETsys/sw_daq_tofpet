@@ -72,7 +72,7 @@ uut.initialize()
 rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
-activeChannels = [ x for x in range(0,64,2) ]
+activeChannels = [ x for x in range(0,64) ]
 activeAsics =  [ i for i,ac in enumerate(uut.config.asicConfig) if isinstance(ac, tofpet.AsicConfig) ]
 systemAsics = [ i for i in range(len(uut.config.asicConfig)) ]
 
@@ -116,7 +116,7 @@ for tChannel in activeChannels:
 	nBins = int(Nmax * M / K)
 	binWidth = float(K) / M
 
-	print nBins, binWidth
+	print "Phase scan will be done with %d steps with a %f clock binning (%5.1f ps)" % (nBins, binWidth, binWidth * T * 1E12)
 	sumProfile = ROOT.TProfile("pAll_%02d" % tChannel, "ALL", nBins, 0, nBins*binWidth, "s")
 	hTFine = [[ ROOT.TH2F("htFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nBins, 0, nBins*binWidth, 1024, 0, 1024) for tac in range(4) ] for tAsic in systemAsics ]
 	hEFine = [[ ROOT.TH2F("heFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nBins, 0, nBins*binWidth, 1024, 0, 1014) for tac in range(4) ] for tAsic in systemAsics ]

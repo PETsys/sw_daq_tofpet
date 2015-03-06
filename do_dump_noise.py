@@ -17,7 +17,7 @@ prefix, ext = splitext(argv[1])
 
 atbConfig = loadLocalConfig(useBaseline=False)
 
-targetAsics = [ x for x in range(len(atbConfig.asicConfig)) ]
+targetAsics = [ x for x, ac in enumerate(atbConfig.asicConfig) if ac is not None ]
 
 # All channels
 targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
@@ -57,7 +57,7 @@ for step1 in targetHVBias:
 
 		for tAsic, tChannel in [ (x, y) for x in targetAsics for y in range(64) ]:
 			atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", step2)
-			status, _ = uut.doAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
+			status, _ = uut.doTOFPETAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
 				value=atbConfig.asicConfig[tAsic].channelConfig[tChannel])
 
 		
@@ -69,7 +69,7 @@ for step1 in targetHVBias:
 		while darkInterval < 16:
 			for tAsic in targetAsics:
 				atbConfig.asicConfig[tAsic].globalConfig.setValue("count_intv", darkInterval)
-				status, _ = uut.doAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
+				status, _ = uut.doTOFPETAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
 				assert status == 0
 
 			sleep(1024*(2**darkInterval) * T * 2)
@@ -82,7 +82,7 @@ for step1 in targetHVBias:
 			unfinishedChannels = [ ac for ac in targetChannels if maxIntervalFound[ac] == False ]
 			for i in range(N):
 				for tAsic, tChannel in unfinishedChannels:	
-					status, data = uut.doAsicCommand(tAsic, "rdChDark", channel=tChannel)
+					status, data = uut.doTOFPETAsicCommand(tAsic, "rdChDark", channel=tChannel)
 					assert status == 0
 					v = atb.binToInt(data)
 					totalDarkCounts[(tAsic, tChannel)] += v

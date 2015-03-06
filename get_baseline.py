@@ -11,6 +11,8 @@ from sys import argv, stdout, stdin
 from time import time, sleep
 import ROOT
 from os.path import join, dirname, basename, splitext
+import tofpet
+
 
 def readBaselineProposal(fileName):
     v=[]
@@ -62,12 +64,12 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
         for dacChannel in range(8):
             uut.setHVDAC(dacChannel, step1)
 
-        for step2 in range(32,64):
+        for step2 in range(40,64):
             print "Vth_T = ", step2
 
             for tAsic, tChannel in [ (x, y) for x in targetAsics for y in range(64) ]:
                 atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", step2)
-                status, _ = uut.doAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
+                status, _ = uut.doTOFPETAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
                                                       value=atbConfig.asicConfig[tAsic].channelConfig[tChannel])
 
 		
@@ -79,7 +81,7 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
             while darkInterval < 16:
                 for tAsic in targetAsics:
                     atbConfig.asicConfig[tAsic].globalConfig.setValue("count_intv", darkInterval)
-                    status, _ = uut.doAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
+                    status, _ = uut.doTOFPETAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
                     assert status == 0
 
                 sleep(1024*(2**darkInterval) * T * 2)
@@ -92,7 +94,7 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
                 unfinishedChannels = [ ac for ac in targetChannels if maxIntervalFound[ac] == False ]
                 for i in range(N):
                     for tAsic, tChannel in unfinishedChannels:	
-                        status, data = uut.doAsicCommand(tAsic, "rdChDark", channel=tChannel)
+                        status, data = uut.doTOFPETAsicCommand(tAsic, "rdChDark", channel=tChannel)
                         assert status == 0
                         v = atb.binToInt(data)
                         totalDarkCounts[(tAsic, tChannel)] += v
@@ -252,7 +254,7 @@ while i<=n_iter:
             proposal=-1
         elif (average_th>60 or nr_dead>6):
             proposal=-2
-        elif ((average_th<50) or (np.amin(th)<45 and np.amin(th)!=0)):
+        elif ((average_th<47) or (np.amin(th)<45 and np.amin(th)!=0)):
             proposal=1
         elif (average_th<46):
             proposal=2
@@ -309,8 +311,8 @@ while i<=n_iter:
     if finish:
         print "\n\n-------------- OPTIONS -------------------" 
         print "1 - Quit"
-        print "2 - Quit and Save baseline files"
-        print "3 - Refine (with user defined postamp value(s))"
+        print "2 - Save baseline files and Quit"
+        print "3 - Refine one or more ASICS (with user defined postamp value(s))"
         opt=raw_input("Please choose an option:")
          
         option=int(opt)
@@ -328,10 +330,11 @@ while i<=n_iter:
                 prefix, ext = splitext(uut.config.asicConfigFile[j*2])
                 os.system("cat asic%d.baseline >> asic%d.baseline" % (2*j+1,2*j))
                 os.system("cp asic%d.baseline %s.baseline" % (2*j,prefix))
+            print "\nReminder: To complete process, please insert postamp values in update_config.py\n"
             break
         elif(option==3):
-            n_refine=raw_input("Please enter the number of ASICS/Mezzanines you need to refine:")
-            print "Please enter the ID number and postamp value for the ASICS/Mezzanines you want to refine (0 or 1):" 
+            n_refine=raw_input("Please enter the number of ASICS you need to refine:")
+            print "Please enter the ID number and postamp value for the ASICS you want to refine:" 
             for k in range(int(n_refine)):
                 id_number= raw_input("ID:")
                 postamp[int(id_number)]=int(raw_input("Postamp[%d]:" % (int(id_number))))     

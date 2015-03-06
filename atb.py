@@ -44,11 +44,13 @@ class BoardConfig:
 		return None
 
         def writeParams(self, prefix):
+          activeAsicsIDs = [ i for i, ac in enumerate(self.asicConfig) if isinstance(ac, tofpet.AsicConfig) ]
+          minAsicID = min(activeAsicsIDs);
     
           defaultAsicConfig = AsicConfig()
           
-          global_params= self.asicConfig[0].globalConfig.getKeys()
-          channel_params= self.asicConfig[0].channelConfig[0].getKeys()
+          global_params= self.asicConfig[minAsicID].globalConfig.getKeys()
+          channel_params= self.asicConfig[minAsicID].channelConfig[0].getKeys()
           
 
           f = open(prefix+'.params', 'w')
@@ -60,6 +62,7 @@ class BoardConfig:
         
           for i,key in enumerate(global_params):
             for ac in self.asicConfig:
+              if not isinstance(ac, tofpet.AsicConfig): continue
               value= ac.globalConfig.getValue( key)
               value_d= defaultAsicConfig.globalConfig.getValue(key)
               if(value_d==value):
@@ -77,6 +80,7 @@ class BoardConfig:
           check=True
           for i,key in enumerate(channel_params):
             for ac in self.asicConfig:
+              if not isinstance(ac, tofpet.AsicConfig): continue
               if not check:
                 break 
               for ch in range(64):
@@ -96,6 +100,7 @@ class BoardConfig:
           f.write("------------------------\n")
           ac_ind=0
           for ac in self.asicConfig:
+            if not isinstance(ac, tofpet.AsicConfig): continue
         
             f.write("\nASIC%d.Global{\n"%ac_ind)  
             for i,key in enumerate(global_params):
@@ -108,7 +113,7 @@ class BoardConfig:
             f.write("ASIC%d.ChAll{\n"%ac_ind)  
             key_list = []
             for i,key in enumerate(channel_params):
-              prev_value=ac.channelConfig[0].getValue(key)
+              prev_value=ac.channelConfig[minAsicID].getValue(key)
               for ch in range(64):
                 value= ac.channelConfig[ch].getValue(key)   
                 value_d= defaultAsicConfig.channelConfig[ch].getValue(key)
@@ -123,7 +128,7 @@ class BoardConfig:
               if check:
 		f.write('\t"%s" : %d\n' % (key, value))
                 
-            prev_baseline=ac.channelConfig[0].getBaseline()
+            prev_baseline=ac.channelConfig[minAsicID].getBaseline()
             for ch in range(64):
               baseline= ac.channelConfig[ch].getBaseline()  
               if(baseline==prev_baseline):
@@ -164,9 +169,11 @@ class BoardConfig:
           f.write("-------------\n")
           f.write("-- HV BIAS --\n")
           f.write("-------------\n\n")
-          for entry in self.hvBias:
-            f.write("%f"%entry)
-            f.write("\n")
+
+	  for entry in self.hvBias:
+            if entry!= None:
+              f.write("%f"%entry)
+	      f.write("\n")
           f.close()
 
 
@@ -243,9 +250,11 @@ class ATB:
 		return None
 
 	def start(self, mode=2):
+		mode = 2 # Do not send mode 1 to daqd!
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x0F]))
+		#for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x0F]))
+		for febID in activeFEBs: self.writeFEBDConfig(febID, 0, 0, 4, 0xF)
 		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
 		template1 = "@HH"
@@ -266,7 +275,8 @@ class ATB:
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, 0)
 		self.__socket.send(data)
 
-		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x00]))
+		#for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x00]))
+		for febID in activeFEBs: self.writeFEBDConfig(febID, 0, 0, 4, 0x0)
 		return None
 
 	def __getSharedMemorySize(self):
@@ -437,15 +447,10 @@ class ATB:
 		while doOnce or (reply == None and nTries < maxTries):
 			doOnce = False
 
-			if nTries > 4:
-				print "Timeout sending command to FEB/D %d. Retry %d of %d" % (portID, nTries+1, maxTries)
 			nTries = nTries + 1
 
 			sn = self.__lastSN
 			self.__lastSN = (sn + 1) & 0x7FFF
-
-			# Use even SN if a reply is desired, else use an odd SN
-			sn = 2 * sn + 0
 
 			rawFrame = bytearray([ portID & 0xFF, slaveID & 0xFF, (sn >> 8) & 0xFF, (sn >> 0) & 0xFF, commandType]) + payload
 			rawFrame = str(rawFrame)
@@ -493,8 +498,18 @@ class ATB:
 	
 
 	  
-	
 	def doTOFPETAsicCommand(self, asicID, command, value=None, channel=None):
+		nTry = 0
+		while True:
+			try:
+				return self.__doTOFPETAsicCommand(asicID, command, value=value, channel=channel)
+			except tofpet.ConfigurationError as e:
+				nTry = nTry + 1
+				if nTry >= 5:
+					raise e
+
+
+	def __doTOFPETAsicCommand(self, asicID, command, value=None, channel=None):
 		commandInfo = {
 		#	commandID 		: (code,   ch,   read, data length)
 			"wrChCfg"		: (0b0000, True, False, 53),
@@ -547,11 +562,11 @@ class ATB:
 		status = reply[1]
 
 		if status == 0xE3:
-			raise tofpet.ConfigurationErrorNoAck(febID, 0, asicID % 16)
+			raise tofpet.ConfigurationErrorBadAck(febID, 0, asicID % 16, 0)
 		elif status == 0xE4:
 			raise tofpet.ConfigurationErrorBadCRC(febID, 0, asicID % 16)
 		elif status == 0xE5:
-			raise tofpet.ConfigurationErrorStuckHigh(febID, 0, asicID % 16)
+			raise tofpet.ConfigurationErrorBadAck(febID, 0, asicID % 16, 1)
 		elif status != 0x00:
 			raise tofpet.ConfigurationErrorGeneric(febID, 0, asicID % 16, status)
 
@@ -703,7 +718,7 @@ class ATB:
 		whichDAC = 1 - whichDAC # Wrong decoding in ad5535.vhd
 
 		if whichBoard not in activeFEBs: 
-			print "Not setting voltage for FEB/D without configured ASICs"
+			#print "Not setting voltage for FEB/D without configured ASICs"
 			return
 
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
@@ -767,21 +782,30 @@ class ATB:
 		return self.sendCommand(0, 0, 0x03,cmd)
 
 	def readFEBDConfig(self, portID, slaveID, addr1, addr2):
-		command = bytearray([\
-			addr1 & 0x7F, \
-			addr2 & 0xFF, \
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 \
-			]);
+		header = [ addr1 & 0x7F, addr2 & 0xFF ]
+		data = [ 0x00 for n in range(8)]
+		command = bytearray(header + data)
 
 		reply = self.sendCommand(portID, slaveID, 0x05, command);
 		
 		d = reply[2:]
 		value = 0
-		for n in range(8):		
+		for n in range(8):#####  it was 8		
 			value = value + (d[n] << (8*n))
 		return value
+
+	def writeFEBDConfig(self, portID, slaveID, addr1, addr2, value):
+		header = [ 0x80 | (addr1 & 0x7F), addr2 & 0xFF ]
+		data = [ value >> (8*n) & 0xFF for n in range(8) ]
+		command = bytearray(header + data)
 			
-			
+		reply = self.sendCommand(portID, slaveID, 0x05, command);
+		
+		d = reply[2:]
+		value = 0
+		for n in range(8):#####  it was 8		
+			value = value + (d[n] << (8*n))
+		return value
 		
 
 	  

@@ -7,8 +7,9 @@ from time import time, sleep
 import ROOT
 from os.path import join, dirname, basename, splitext
 
+atbConfig = loadLocalConfig(useBaseline=False)
 # Select which ASICs, channels and bias voltages
-targetAsics = [ x for x in range(2) ]
+targetAsics = [ x for x, ac in enumerate(atbConfig.asicConfig) if ac is not None ]
 targetChannels = [ (x, y) for x in targetAsics for y in [0, 1, 2, 3, 61, 62, 63] ]
 targetHVBias = [ 50, 65, 65.5, 66, 66.5 ]
 # Operating clock period
@@ -22,13 +23,12 @@ if (len(argv) != 2):
 
 prefix, ext = splitext(argv[1])
 
-atbConfig = loadLocalConfig(useBaseline=False)
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
-uut.initialize()
 uut.config = atbConfig
+uut.initialize()
 
 rootFile = ROOT.TFile(argv[1], "RECREATE")
 ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")
@@ -51,7 +51,7 @@ for step1 in targetHVBias:
 
 		for tAsic, tChannel in [ (x, y) for x in targetAsics for y in range(64) ]:
 			atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", step2)
-			status, _ = uut.doAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
+			status, _ = uut.doTOFPETAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
 				value=atbConfig.asicConfig[tAsic].channelConfig[tChannel])
 
 		
@@ -63,7 +63,7 @@ for step1 in targetHVBias:
 		while darkInterval < 16:
 			for tAsic in targetAsics:
 				atbConfig.asicConfig[tAsic].globalConfig.setValue("count_intv", darkInterval)
-				status, _ = uut.doAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
+				status, _ = uut.doTOFPETAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
 				assert status == 0
 
 			sleep(1024*(2**darkInterval) * T * 2)
@@ -76,7 +76,7 @@ for step1 in targetHVBias:
 			unfinishedChannels = [ ac for ac in targetChannels if maxIntervalFound[ac] == False ]
 			for i in range(N):
 				for tAsic, tChannel in unfinishedChannels:	
-					status, data = uut.doAsicCommand(tAsic, "rdChDark", channel=tChannel)
+					status, data = uut.doTOFPETAsicCommand(tAsic, "rdChDark", channel=tChannel)
 					assert status == 0
 					v = atb.binToInt(data)
 					totalDarkCounts[(tAsic, tChannel)] += v

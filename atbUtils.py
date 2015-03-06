@@ -17,7 +17,7 @@ def loadSTICv3AsicConfig(boardConfig, asic, fileName):
 	asicConfig = sticv3.AsicConfig(fileName)
 	boardConfig.asicConfig[asic] = asicConfig
 
-def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName):
+def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName, invert=False):
 	print "Loading %s for ASICs [%d .. %d[" % (fileName, asicStart, asicEnd)
 	f = open(fileName, "r")
 	unpickler = pickle.Unpickler(f)
@@ -26,6 +26,8 @@ def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName):
 		# New style configuration data: N ASIC per file
 		assert len(storedConfig) == (asicEnd - asicStart)
 		boardConfig.asicConfig[asicStart:asicEnd] = storedConfig
+		if(invert==True):
+			boardConfig.asicConfig[asicStart:asicEnd].reverse()
 		boardConfig.asicConfigFile[asicStart:asicEnd] = [ fileName for x in range(asicStart,asicEnd) ]
 	else:
 		# Old style configuration data: 1 ASIC per file
