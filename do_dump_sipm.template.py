@@ -6,7 +6,7 @@ from sys import argv
 # ASIC clock period
 T = 6.25E-9
 
-# Coincidence window to use be used for preliminary event selection
+# Coincidence window to be used for preliminary event selection
 cWindow = 0 # 0 causes all events to be accepted
 #cWindow = 25E-9
 
@@ -20,7 +20,7 @@ uut.openAcquisition(dataFilePrefix, cWindow)
 
 # Set all HV DAC channels 
 for c in range(len(uut.config.hvBias)):
-	uut.config.hvBias[c] = 67.250
+	uut.config.hvBias[c] = 67.50
 
 uut.config.writeParams(dataFilePrefix)
 

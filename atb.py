@@ -945,7 +945,7 @@ class ATB:
 
 	##Opens the acquisition pipeline, allowing the data frames read from the shared memory block to be written to disk by aDAQ/writeRaw
         # @param fileName The name of the file containg the data written by aDAQ/writeRaw
-        # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in nanoseconds) will be written to disk.
+        # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk.
 	def openAcquisition(self, fileName, cWindow):
 		from os import environ
 		if not environ.has_key('ADAQ_CRYSTAL_MAP'):

@@ -61,19 +61,26 @@ private:
 
 int main(int argc, char *argv[])
 {
+	if (argc != 4) {
+		fprintf(stderr, "USAGE: %s <setup_file> <rawfiles_prefix> <output_file.root>\n", argv[0]);
+		fprintf(stderr, "setup_file - File containing paths to tdc calibration files and tq correction files (optional)\n");
+		fprintf(stderr, "rawfiles_prefix - Path to raw data files prefix\n");
+		fprintf(stderr, "output_file.root - ROOT output file containing binary single events\n");
+		return 1;
+	}
 	assert(argc == 4);
 	char *inputFilePrefix = argv[2];
 
 	char dataFileName[512];
 	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx", inputFilePrefix);
+	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
+	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
 	FILE *inputDataFile = fopen(dataFileName, "r");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
 	
-	TOFPET::P2 *lut = new TOFPET::P2(128);
+	TOFPET::P2 *lut = new TOFPET::P2(4096);
 	if (strcmp(argv[1], "none") == 0) {
 		lut->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
