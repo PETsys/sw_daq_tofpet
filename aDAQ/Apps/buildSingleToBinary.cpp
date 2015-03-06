@@ -1,5 +1,6 @@
 #include <TFile.h>
 #include <TNtuple.h>
+#include <Common/Constants.hpp>
 #include <TOFPET/RawV2.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <Core/SingleReadoutGrouper.hpp>
@@ -68,14 +69,14 @@ int main(int argc, char *argv[])
 
 	char dataFileName[512];
 	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx", inputFilePrefix);
+	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
+	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
 	FILE *inputDataFile = fopen(dataFileName, "r");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
 	
-	TOFPET::P2 *lut = new TOFPET::P2(128);
+	TOFPET::P2 *lut = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(argv[1], "none") == 0) {
 		lut->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
@@ -95,7 +96,6 @@ int main(int argc, char *argv[])
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
 
-		const unsigned nChannels = 2*128; 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
 				new P2Extract(lut, false, true, true,
 				new SingleReadoutGrouper(

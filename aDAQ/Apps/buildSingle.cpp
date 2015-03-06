@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
 	
-	TOFPET::P2 *lut = new TOFPET::P2(4096);
+	TOFPET::P2 *lut = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(argv[1], "none") == 0) {
 		lut->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
@@ -159,7 +159,6 @@ int main(int argc, char *argv[])
 		
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 
-		const unsigned nChannels = 2*128; 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 
 				new Sanity(100E-9, 		      
