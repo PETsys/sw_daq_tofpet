@@ -29,6 +29,7 @@ public:
 	int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength);
 	int recvReply(char *buffer, int bufferSize);
 	int setAcquistionOnOff(bool enable);
+	uint64_t getChannelUp();
 	  static const int ETIMEOUT = -1;
 	  static const int ENOWORDS = -2;
 	  static const int ENOCARD = -10000;

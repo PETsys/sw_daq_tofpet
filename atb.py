@@ -300,6 +300,19 @@ class ATB:
 		name = self.__socket.recv(length - n);
 		return (name, s0, p1, s1)
 
+	def __getActiveFEB(self):
+		template = "@HH"
+		n = struct.calcsize(template)
+		data = struct.pack(template, 0x06, n)
+		self.__socket.send(data);
+
+		template = "@HQ"
+		n = struct.calcsize(template)
+		data = self.__socket.recv(n);
+		length, mask = struct.unpack(template, data)
+		reply = [ n for n in range(64) if (mask & (1<<n)) != 0 ]
+		return reply
+
 	def getDataFrame(self, nonEmpty=False):
 		#frameValid = 0
 		#w = True

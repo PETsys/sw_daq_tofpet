@@ -55,9 +55,8 @@ int Client::handleRequest()
 		actionStatus = doReturnEventFrameBuffers();
 	else if(cmdHeader.type == commandToFrontEnd)
 		actionStatus = doCommandToFrontEnd(nBytesNext);
-	if(cmdHeader.type == commandGetTOFPETDataFRame)
-		actionStatus = doGetTOFPETDataFrame();
-	
+	if(cmdHeader.type == commandGetChannelUp) 
+		actionStatus = doGetChannelUp();
 	
 	if(actionStatus == -1) {
 		fprintf(stderr, "Error handling client %d, command was %u\n", socket, unsigned(cmdHeader.type));
@@ -142,52 +141,6 @@ int Client::doGetEventFrameBuffers()
 	return 0;
 }
 
-int Client::doGetTOFPETDataFrame()
-{
-	struct { uint64_t id; uint16_t valid; uint16_t nEvents; uint16_t lost; uint16_t vetoed; } header =  { 0, 0, 0, 0, 0 };	
-	FrameServer::DataFramePtr *dataFramePtr = frameServer->getDataFrameByPtr(false);
-	if (dataFramePtr == NULL) {
-		int status = send(socket,  &header, sizeof(header), MSG_NOSIGNAL);
-		return status;
-	}
-	DataFrame &df = *(dataFramePtr->p);
-	
-	header.valid = 1;
-	header.id = df.frameID;
-	header.lost = df.frameLost ? 1 : 0;
-	header.vetoed = 0;
-	unsigned tofpetEvents = 0;
-	for(unsigned i = 0; i  < df.nEvents; i++)
-		if(df.events[i].type == 0) tofpetEvents ++;
-	header.nEvents = tofpetEvents;
-	int status = send(socket,  &header, sizeof(header), MSG_NOSIGNAL);
-	if(status < sizeof(header)) return -1;
-	
-	for(unsigned i = 0; i  < df.nEvents; i++) {
-		Event &e = df.events[i];
-		if(e.type != 0) continue;
-		
-		struct {uint64_t tacIdleTime; 
-			uint64_t channelIdleTime; 
-			uint16_t asicID; uint16_t channelID; uint16_t tacID;
-			uint16_t tCoarse; uint16_t eCoarse;
-			uint16_t tFine; uint16_t eFine;
-		} event = {
-			e.d.tofpet.tacIdleTime,
-			e.d.tofpet.channelIdleTime,
-			e.asicID, e.channelID, e.d.tofpet.tacID,
-			e.tCoarse, e.d.tofpet.eCoarse,
-			e.d.tofpet.tFine, e.d.tofpet.eFine
-		};
-		
-		status = status = send(socket,  &event, sizeof(event), MSG_NOSIGNAL);
-		if(status < 0) break;	
-	}
-	frameServer->returnDataFramePtr(dataFramePtr);
-	
-	return status;
-}
-
 int Client::doReturnEventFrameBuffers()
 {
 	uint16_t nFramesRequested;
@@ -228,6 +181,18 @@ int Client::doGetDataFrameSharedMemoryName()
 	
 	status = send(socket, name, strlen(name), MSG_NOSIGNAL);
 	if(status < strlen(name)) return -1;
+	
+	return 0;
+}
+
+int Client::doGetChannelUp()
+{
+	struct { uint16_t length; uint64_t channelUp; } reply;
+	reply.length = sizeof(reply);
+	reply.channelUp = frameServer->getChannelUp();
+	int status = 0;
+	status = send(socket, &reply, sizeof(reply), MSG_NOSIGNAL);
+	if (status < sizeof(reply)) return -1;
 	
 	return 0;
 }

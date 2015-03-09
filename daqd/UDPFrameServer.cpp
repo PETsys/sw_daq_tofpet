@@ -219,3 +219,8 @@ int UDPFrameServer::sendCommand(int portID, int slaveID, char *buffer, int buffe
 	
 	return replyLength;
 }
+
+uint64_t UDPFrameServer::getChannelUp()
+{
+	return 1;
+};

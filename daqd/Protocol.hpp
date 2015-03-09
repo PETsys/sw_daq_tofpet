@@ -9,7 +9,7 @@ static const uint16_t commandGetDataFrameSharedMemoryName = 0x02;
 static const uint16_t commandGetDataFrameBuffers = 0x03;
 static const uint16_t commandReturnDataFrameBuffers = 0x04;
 static const uint16_t commandToFrontEnd = 0x05;
-static const uint16_t commandGetTOFPETDataFRame = 0x06;
+static const uint16_t commandGetChannelUp = 0x06;
 
 
 static const int MaxEventsPerFrame = 512;

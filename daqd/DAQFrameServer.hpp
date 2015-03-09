@@ -23,6 +23,7 @@ public:
 	
 	virtual void startAcquisition(int mode);
 	virtual void stopAcquisition();
+	virtual uint64_t getChannelUp();
 	
 private:
 	DtFlyP *DP;

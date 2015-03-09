@@ -281,3 +281,8 @@ void *DAQFrameServer::doWork()
 	// 	printf("\t%10ld frames pushed\n", nFramesPushed);
 	printf("DAQFrameServer::runWorker exiting...\n");
 }
+
+uint64_t DAQFrameServer::getChannelUp()
+{
+	return DP->getChannelUp();
+}

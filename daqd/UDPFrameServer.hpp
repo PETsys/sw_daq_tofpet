@@ -15,7 +15,7 @@ public:
 	virtual ~UDPFrameServer();	
 
 	int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength);
-	
+	uint64_t getChannelUp();
 
 private:
 	
