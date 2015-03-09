@@ -37,7 +37,8 @@ public:
 	virtual void startAcquisition(int mode);
 	virtual void stopAcquisition();
 	
-	virtual uint64_t getChannelUp() = 0;
+	virtual uint64_t getPortUp() = 0;
+	virtual uint64_t getPortCounts(int port, int whichCount) = 0;
 	
 	
 protected:	

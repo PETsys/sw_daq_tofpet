@@ -15,8 +15,9 @@ public:
 	virtual ~UDPFrameServer();	
 
 	int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength);
-	uint64_t getChannelUp();
-
+	uint64_t getPortUp();
+	virtual uint64_t getPortCounts(int port, int whichCount);
+	
 private:
 	
 	int udpSocket;

@@ -23,8 +23,8 @@ public:
 	
 	virtual void startAcquisition(int mode);
 	virtual void stopAcquisition();
-	virtual uint64_t getChannelUp();
-	
+	virtual uint64_t getPortUp();
+	virtual uint64_t getPortCounts(int port, int whichCount);
 private:
 	DtFlyP *DP;
 	//	DtFlyP *P;

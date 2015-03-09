@@ -55,8 +55,10 @@ int Client::handleRequest()
 		actionStatus = doReturnEventFrameBuffers();
 	else if(cmdHeader.type == commandToFrontEnd)
 		actionStatus = doCommandToFrontEnd(nBytesNext);
-	if(cmdHeader.type == commandGetChannelUp) 
-		actionStatus = doGetChannelUp();
+	else if(cmdHeader.type == commandGetPortUp) 
+		actionStatus = doGetPortUp();
+	else if(cmdHeader.type == commandGetPortCounts) 
+		actionStatus = doGetPortCounts();
 	
 	if(actionStatus == -1) {
 		fprintf(stderr, "Error handling client %d, command was %u\n", socket, unsigned(cmdHeader.type));
@@ -185,14 +187,34 @@ int Client::doGetDataFrameSharedMemoryName()
 	return 0;
 }
 
-int Client::doGetChannelUp()
+int Client::doGetPortUp()
 {
 	struct { uint16_t length; uint64_t channelUp; } reply;
 	reply.length = sizeof(reply);
-	reply.channelUp = frameServer->getChannelUp();
+	reply.channelUp = frameServer->getPortUp();
 	int status = 0;
 	status = send(socket, &reply, sizeof(reply), MSG_NOSIGNAL);
 	if (status < sizeof(reply)) return -1;
 	
 	return 0;
 }
+
+int Client::doGetPortCounts()
+{
+	uint16_t portID = 0;
+	memcpy(&portID, socketBuffer + sizeof(CmdHeader_t), sizeof(uint16_t));
+	
+	
+	struct { uint16_t length; uint64_t tx; uint64_t rx; uint64_t rxBad; } reply;
+	reply.length = sizeof(reply);
+	reply.tx = frameServer->getPortCounts(portID, 0);
+	reply.rx = frameServer->getPortCounts(portID, 1);
+	reply.rxBad = frameServer->getPortCounts(portID, 2);
+	
+	int status = 0;
+	status = send(socket, &reply, sizeof(reply), MSG_NOSIGNAL);
+	if (status < sizeof(reply)) return -1;
+	
+	return 0;
+}
+

@@ -21,7 +21,8 @@ private:
 	int doGetEventFrameBuffers();
 	int doReturnEventFrameBuffers();
 	int doCommandToFrontEnd(int commandLength);
-	int doGetChannelUp();
+	int doGetPortUp();
+	int doGetPortCounts();
 	
 	std::map<int, FrameServer::DataFramePtr *> ownedDataFramePtrs;
 	

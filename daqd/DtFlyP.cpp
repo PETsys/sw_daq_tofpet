@@ -41,7 +41,7 @@ static const int txWrPointerReg = 320;
 static const int txRdPointerReg = 384;
 static const int rxWrPointerReg = 448;
 static const int rxRdPointerReg = 512;
-static const int channelUpReg	= 640;
+static const int statusReg	= 640;
 
 static void userIntHandler(SIntInfoData * IntInfoData)
 {
@@ -64,6 +64,10 @@ DtFlyP::DtFlyP()
 	status = ReadAndCheck(rxRdPointerReg * 4 , &rxRdPointer, 1);
 	printf("DtFLYP:: Initial TX WR pointer: %08x\n", txWrPointer);
 	printf("DtFLYP:: Initial RX RD pointer: %08x\n", rxRdPointer);
+	
+	for(int i = 0; i < 4; i++) 
+		for(int j = 0; j < 3; j++)
+			printf("%d %d %016llx\n", i, j, getPortCounts(i, j));
 
 	// for(int i = 0; i < N_BUFFERS; i++)
 	// {
@@ -461,11 +465,18 @@ int DtFlyP::ReadAndCheck(int reg, uint32_t *data, int count) {
 	return status;
 };
 
-uint64_t DtFlyP::getChannelUp()
+uint64_t DtFlyP::getPortUp()
 {
 	uint64_t reply = 0;
 	uint32_t channelUp = 0;
-	ReadAndCheck(channelUpReg * 4, &channelUp, 1);
+	ReadAndCheck(statusReg * 4, &channelUp, 1);
 	reply = channelUp;
+	return reply;
+}
+
+uint64_t DtFlyP::getPortCounts(int channel, int whichCount)
+{
+	uint64_t reply;
+	ReadAndCheck((statusReg + 1 + 6*channel + 2*whichCount)* 4, (uint32_t *)&reply, 2);
 	return reply;
 }

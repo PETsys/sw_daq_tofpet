@@ -282,7 +282,12 @@ void *DAQFrameServer::doWork()
 	printf("DAQFrameServer::runWorker exiting...\n");
 }
 
-uint64_t DAQFrameServer::getChannelUp()
+uint64_t DAQFrameServer::getPortUp()
 {
-	return DP->getChannelUp();
+	return DP->getPortUp();
+}
+
+uint64_t DAQFrameServer::getPortCounts(int port, int whichCount)
+{
+	return DP->getPortCounts(port, whichCount);
 }

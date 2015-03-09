@@ -300,7 +300,7 @@ class ATB:
 		name = self.__socket.recv(length - n);
 		return (name, s0, p1, s1)
 
-	def __getActiveFEB(self):
+	def getActivePorts(self):
 		template = "@HH"
 		n = struct.calcsize(template)
 		data = struct.pack(template, 0x06, n)
@@ -312,6 +312,23 @@ class ATB:
 		length, mask = struct.unpack(template, data)
 		reply = [ n for n in range(64) if (mask & (1<<n)) != 0 ]
 		return reply
+
+	def getPortCounts(self, port):
+		template = "@HHH"
+		n = struct.calcsize(template)
+		data = struct.pack(template, 0x07, n, port)
+		self.__socket.send(data);
+
+		template = "@HQQQ"
+		n = struct.calcsize(template)
+		data = self.__socket.recv(n);
+		length, tx, rx, rxBad = struct.unpack(template, data)		
+		tx = binToInt(grayToBin(intToBin(tx, 48)))
+		rx = binToInt(grayToBin(intToBin(rx, 48)))
+		rxBad = binToInt(grayToBin(intToBin(rxBad, 48)))
+		return (tx, rx, rxBad)
+
+		
 
 	def getDataFrame(self, nonEmpty=False):
 		#frameValid = 0

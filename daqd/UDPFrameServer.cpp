@@ -220,7 +220,12 @@ int UDPFrameServer::sendCommand(int portID, int slaveID, char *buffer, int buffe
 	return replyLength;
 }
 
-uint64_t UDPFrameServer::getChannelUp()
+uint64_t UDPFrameServer::getPortUp()
 {
 	return 1;
 };
+
+uint64_t UDPFrameServer::getPortCounts(int port, int whichCount)
+{
+	return 0;
+}
