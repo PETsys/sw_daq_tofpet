@@ -13,19 +13,26 @@ namespace DAQ { namespace TOFPET {
 		void setShapeParameters(int channel, int tac, bool isT, float tB, float m, float p2);
 		void setLeakageParameters(int channel, int tac, bool isT, float tQ, float a0, float a1, float a2);
 
-		float getQ(int channel, int tac, bool isT, int adc, long long tacIdleTime);
-		bool isNormal(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime);
-		float getT(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime);
+		float getQ(int channel, int tac, bool isT, int adc, long long tacIdleTime, float coarseToT);
+		float getQtac(int channel, int tac, bool isT, int adc, long long tacIdleTime);
+		float getQmodulationCorrected(float tQ, int channel, bool isT, float coarseToT);
+		bool isNormal(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT);
+		float getT(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT);
 
 		void loadFile(int start, int end, const char *fileName);
+	        void loadTQFile(int start, int end, const char *fileName);
 		void storeFile(int start, int end, const char *fileName);
-		void loadFiles(const char *mapFileName);
+		void loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float step1, float step2 );
 		
 		void setAll(float v);
+
+		float *nBins_tqT;   
+		float *nBins_tqE;   
 	private:
 		int  nChannels;
 		int getIndex(int channel, int tac, bool isT);
-		
+		int getIndexTQ(int channel, bool isT, int totbin);
+
 		struct TAC {			
 			float t0;
 			struct {
@@ -42,10 +49,25 @@ namespace DAQ { namespace TOFPET {
 			} leakage;
 			
 		};
+	  	struct TQ {
+			
+			int nbins;
+		        int channel;
+		        bool isT;   
+			float tcorr[320];
+			
+		};
+	  
+	 	  
 		float defaultQ;
+		bool do_TQcorr;
+	        int tableSize;
+	        int TQtableSize;
 		
-		int tableSize;
-		TAC *table;
+     
+		
+	        TAC *table;
+	         TQ *TQtable;
 		
 	};
 }}

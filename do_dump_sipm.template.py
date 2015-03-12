@@ -6,12 +6,13 @@ from sys import argv
 # ASIC clock period
 T = 6.25E-9
 
-# Coincidence window to use be used for preliminary event selection
+# Coincidence window to be used for preliminary event selection
 cWindow = 0 # 0 causes all events to be accepted
 #cWindow = 25E-9
 
 acquisitionTime = float(argv[1])
 dataFilePrefix = argv[2]
+
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig()
@@ -20,7 +21,7 @@ uut.openAcquisition(dataFilePrefix, cWindow, writer="writeRaw")
 
 # Set all HV DAC channels 
 for c in range(len(uut.config.hvBias)):
-	uut.config.hvBias[c] = 67.250
+	uut.config.hvBias[c] = 67.50
 
 
 for step1 in [0]:

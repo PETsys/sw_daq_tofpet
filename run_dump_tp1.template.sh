@@ -1,4 +1,4 @@
-PREFIX=data/YYYY/MM/DD/M001M002/R001_fetp1
+PREFIX=data/YYYY/MM/DD/M1M2/R001_fetp1
 
 mkdir -p $(dirname $PREFIX)
 for ((CHANNEL=0; $CHANNEL < 64; CHANNEL=$[CHANNEL+6])); do

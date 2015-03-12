@@ -46,8 +46,8 @@ atbConfig.asicConfig[2].globalConfig.setValue("postamp", 50)
 atbConfig.asicConfig[3].globalConfig.setValue("postamp", 50)
 
 # Save the configuration into mezzanine specific configuration files
-dumpAsicConfig(atbConfig, 0, 2, "config/myBoard1/asic.config")
-dumpAsicConfig(atbConfig, 2, 4, "config/myBoard2/asic.config")
+dumpAsicConfig(atbConfig, 0, 2, "config/M1/asic.config")
+dumpAsicConfig(atbConfig, 2, 4, "config/M2/asic.config")
 
 # Upload configuration into ATBConfig
 uut = atb.ATB("/tmp/d.sock")

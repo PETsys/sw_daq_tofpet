@@ -90,6 +90,7 @@ FrameServer::FrameServer(int nFEB, int *feTypeMap, int debugLevel)
 	assert ( lfsr == 0x0000 ); // after 2^15-1 steps we're back at 0
 // 	assert ( m_lut[ 0x7FFF ] == -1 ); // check that we didn't touch it	
 	
+
 }
 
 FrameServer::~FrameServer()

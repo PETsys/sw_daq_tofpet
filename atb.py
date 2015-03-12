@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+
+## @package atb
+# This module defines all the classes, variables and methods to operate the TOFPET ASIC via a UNIX socket  
+
 import crcmod
 import serial
 from math import log, ceil
@@ -32,7 +36,11 @@ AsicChannelConfig = tofpet.AsicChannelConfig
 intToBin = tofpet.intToBin
 ###
 
+## A class that instances the classes related to one ASIC configuration and adds additional variables required to configure every ASIC in the system  
 class BoardConfig:
+        ## Constructor
+        # @param nASIC Number of ASICs present in the system (can be for several boards)
+        # @param nDAC Number of HV DAC configuration files required for this system
 	def __init__(self, nASIC=4, nDAC=1):
 		
                 self.asicConfigFile = [ "Default Configuration" for x in range(nASIC) ]
@@ -42,7 +50,9 @@ class BoardConfig:
 		self.hvBias = [ None for x in range(32*nDAC) ]
 		self.hvParam = [ (1.0, 0.0) for x in range(32*nDAC) ]
 		return None
-
+        
+        ## Writes formatted text file with all parameters and additional information regarding the state of the system  
+        # @param prefix Prefix of the file name to be written (it will have the suffix .params)
         def writeParams(self, prefix):
           activeAsicsIDs = [ i for i, ac in enumerate(self.asicConfig) if isinstance(ac, tofpet.AsicConfig) ]
           minAsicID = min(activeAsicsIDs);
@@ -213,6 +223,7 @@ def grayToInt(v):
 	return binToInt(grayToBin(v))
 	
 
+
 class CommandErrorTimeout:
 	def __init__(self, portID, slaveID):
 		self.addr = portID, slaveID
@@ -226,7 +237,12 @@ class ErrorInvalidLinks:
 		return "Invalid NLinks value (%d) from FEB/D at port %2d, slave %2d" % self.addr
 
 	
+## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
 class ATB:
+        ## Constructor, sets the UNIX socket parameters and other data transmission properties
+        # @param socketPath Should match the socket name in daqd, which is by default "/tmp/d.sock"
+        # @param debug When set to true, enables the printing of debug messages
+        # @param F Frequency of the clock, default is 160 MHz
 	def __init__(self, socketPath, debug=False, F=160E6):
 		self.__socketPath = socketPath
 		self.__socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -249,6 +265,9 @@ class ATB:
 		self.config = None
 		return None
 
+
+        ## Starts the data acquisition
+	# @param mode If set to 1, only data frames  with at least one event are transmitted. If set to 2, all data frames are transmitted. If set to 0, the data transmission is stopped
 	def start(self, mode=2):
 		mode = 2 # Do not send mode 1 to daqd!
 		assert self.config is not None
@@ -256,7 +275,6 @@ class ATB:
 		#for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x0F]))
 		for febID in activeFEBs: self.writeFEBDConfig(febID, 0, 0, 4, 0xF)
 		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
-
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
@@ -264,7 +282,8 @@ class ATB:
 		self.__socket.send(data)
 		sleep(0.1)
 		return None
-
+       
+        ## Stops the data acquisition, the same as calling start(mode=0)
 	def stop(self):
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
@@ -279,14 +298,17 @@ class ATB:
 		for febID in activeFEBs: self.writeFEBDConfig(febID, 0, 0, 4, 0x0)
 		return None
 
+        ## Returns the size of the allocated memory block 
 	def __getSharedMemorySize(self):
 		return self.__dshm.getSize()
 		#return self.__shm.size
 
+        ## Returns the name of the shared memory block
 	def __getSharedMemoryName(self):
 		name, s0, p1, s1 =  self.__getSharedMemoryInfo()
 		return name
 
+        ## Returns array info 
 	def __getSharedMemoryInfo(self):
 		template = "@HH"
 		n = struct.calcsize(template)
@@ -299,6 +321,7 @@ class ATB:
 		length, s0, p1, s1 = struct.unpack(template, data)
 		name = self.__socket.recv(length - n);
 		return (name, s0, p1, s1)
+
 
 	def getActivePorts(self):
 		template = "@HH"
@@ -329,7 +352,7 @@ class ATB:
 		return (tx, rx, rxBad)
 
 		
-
+        ## Returns a data frame read form the shared memory block by order ??
 	def getDataFrame(self, nonEmpty=False):
 		#frameValid = 0
 		#w = True
@@ -469,8 +492,14 @@ class ATB:
 	
 
 	
-		
+       	## Sends a command to the FPGA
+        # @param portID
+        # @param slaveID
+        # @param commandType Information for the FPGA firmware regarding the type of command being transmitted
+	# @param payload The actual command to be transmitted
+        # @param maxTries The maximum number of attempts to send the command without obtaining a valid reply   	
 	def sendCommand(self, portID, slaveID, commandType, payload, maxTries=10):
+
 		nTries = 0;
 		reply = None
 		doOnce = True
@@ -478,6 +507,7 @@ class ATB:
 			doOnce = False
 
 			nTries = nTries + 1
+			if nTries > 5: print "Timeout sending command. Retry %d of %d" % (nTries, maxTries)
 
 			sn = self.__lastSN
 			self.__lastSN = (sn + 1) & 0x7FFF
@@ -518,7 +548,9 @@ class ATB:
 	
 		
 		
-
+        ## Writes in the FPGA register (Clock frequency, etc...)
+        # @param regNum Identification of the register to be written
+        # @param regValue The value to be written
 	def setSI53xxRegister(self, regNum, regValue):
 		reply = self.sendCommand(0, 0, 0x02, bytearray([0b00000000, regNum]))	
 		reply = self.sendCommand(0, 0, 0x02, bytearray([0b01000000, regValue]))
@@ -526,8 +558,11 @@ class ATB:
 		return None
 	
 	
-
-	  
+	## Defines all possible commands structure that can be sent to the ASIC and calls for sendCommand to actually transmit the command
+        # @param asicID Identification of the ASIC that will receive the command
+	# @param command Command type to be sent. The list of possible keys for this parameter is hardcoded in this function
+        # @param value The actual value to be transmitted to the ASIC if it applies to the command type   
+        # @param If the command is destined to a specific channel, this parameter sets its ID. 	  
 	def doTOFPETAsicCommand(self, asicID, command, value=None, channel=None):
 		nTry = 0
 		while True:
@@ -539,6 +574,11 @@ class ATB:
 					raise e
 
 
+	## Defines all possible commands structure that can be sent to the ASIC and calls for sendCommand to actually transmit the command
+        # @param asicID Identification of the ASIC that will receive the command
+	# @param command Command type to be sent. The list of possible keys for this parameter is hardcoded in this function
+        # @param value The actual value to be transmitted to the ASIC if it applies to the command type   
+        # @param If the command is destined to a specific channel, this parameter sets its ID. 
 	def __doTOFPETAsicCommand(self, asicID, command, value=None, channel=None):
 		commandInfo = {
 		#	commandID 		: (code,   ch,   read, data length)
@@ -610,6 +650,7 @@ class ATB:
 		else:
 			return (status, None)
 
+
 	def febAOnOff(self, on = False):
 		sticAsicID = [ i for i, ac in enumerate(self.config.asicConfig) if isinstance(ac, sticv3.AsicConfig) ]
 		sticFEBID = [ i / 16 for i in sticAsicID ]
@@ -653,8 +694,8 @@ class ATB:
 					
 					sleep(0.5)
 	
-
-
+	## Sends the entire configuration (needs to be assigned to the abstract ATB.config data structure) to the ASIC and starts to write data to the shared memory block
+        # @param maxTries The maximum number of attempts to read a valid dataframe after uploading configuration  
 	def initialize(self, maxTries = 1):
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
@@ -698,6 +739,7 @@ class ATB:
 		data = sum([ data[i] * 2**(24 - 8*i) for i in range(len(data)) ])
 		return status, data
 
+        ## Discards all data frames which may have been generated before the function is called. Used to synchronize data reading with the effect of previous configuration commands.
 	def doSync(self, clearFrames=True):
 		_, targetFrameID = self.getCurrentFrameID()
 		#print "Waiting for frame %d" % targetFrameID
@@ -718,6 +760,10 @@ class ATB:
 		return
 	  
 		
+
+        ## Sets the HVDAC voltage using calibration data 
+        # @param channel The HVDAC channel to be set
+        # @param voltageRequested The voltage to be set in units of Volts, considering the calibration
 	def setHVDAC(self, channel, voltageRequested):
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
@@ -727,7 +773,10 @@ class ATB:
 		voltage = voltageRequested* m + b
 		#print "%4d %f => %f, %f => %f" % (channel, voltageRequested, m, b, voltage)
 		self.setHVDAC_(channel, voltage)
-
+        
+        ## Sets the HVDAC voltage 
+        # @param channel The HVDAC channel to be set
+        # @param voltageRequested The voltage to be set in units of Volts
 	def setHVDAC_(self, channel, voltage):
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
 
@@ -755,6 +804,7 @@ class ATB:
 		dacBytes = bytearray(dacBits.tobytes())
 		return self.sendCommand(whichBoard, 0, 0x01, dacBytes)
 	
+        ## Disables test pulse 
 	def setTestPulseNone(self):
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
@@ -762,8 +812,8 @@ class ATB:
 		cmd =  bytearray([0x01] + [0x00 for x in range(8)])
 		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03,cmd)
 		return None
-
-	def setTestPulseArb(self, invert):
+	
+        def setTestPulseArb(self, invert):
 		if not invert:
 			tpMode = 0b11000000
 		else:
@@ -771,7 +821,12 @@ class ATB:
 
 		cmd =  bytearray([0x01] + [tpMode] + [0x00 for x in range(7)])
 		return self.sendCommand(0, 0, 0x03,cmd)
-		
+	
+        ## Sets the properties of the internal FPGA pulse generator
+        # @param length Sets the length of the test pulse, from 1 to 1023 clock periods. 0 disables the test pulse.
+        # @param interval Sets the interval between test pulses. The actual interval will be (interval+1)*1024 clock cycles.
+        # @param finePhase Defines the delay of the test pulse regarding the start of the frame, in units of 1/392 of the clock.
+        # @param invert Sets the polarity of the test pulse: active low when ``True'' and active high when ``False'
 	def setTestPulsePLL(self, length, interval, finePhase, invert):
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
@@ -811,6 +866,7 @@ class ATB:
 		#print [ hex(x) for x in cmd ]
 		return self.sendCommand(0, 0, 0x03,cmd)
 
+
 	def readFEBDConfig(self, portID, slaveID, addr1, addr2):
 		header = [ addr1 & 0x7F, addr2 & 0xFF ]
 		data = [ 0x00 for n in range(8)]
@@ -838,10 +894,13 @@ class ATB:
 		return value
 		
 
-	  
+        ##Opens the acquisition pipeline, allowing the data frames read from the shared memory block to be written to disk by a writting applicationa
+        # @param fileName The name of the file containg the data written by aDAQ/writeRaw
+        # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
+        # @param writer The name of the application to be used to save data to disk (Typically writeRaw). 
 	def openAcquisition(self, fileName, cWindow, writer=None):
 		if writer not in ["writeRaw", "writeRawE"]:
-			print "ERROR: when calling ATB::openAcquisition(), writer must be set of either of"
+			print "ERROR: when calling ATB::openAcquisition(), writer must be set with either:"
 			print " writeRaw	-- standard TOFPET RAW data format"
 			print " writeRawE	-- EndTOFPET-US RAW data format"
 
@@ -856,6 +915,10 @@ class ATB:
 				fileName ]
 		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
 
+        ## Acquires data and decodes it, while writting through the acquisition pipeline 
+        # @param step1 Tag to a given variable specific to this acquisition 
+        # @param step2 Tag to a given variable specific to this acquisition
+        # @param acquisitionTime Acquisition time in seconds 
 	def acquire(self, step1, step2, acquisitionTime):
 		#print "Python:: acquiring %f %f"  % (step1, step2)
 		(pin, pout) = (self.__acquisitionPipe.stdin, self.__acquisitionPipe.stdout)
@@ -978,7 +1041,7 @@ class ATB:
 			sleep(1)
 
 
-
+        ## Uploads the entire configuration (needs to be assigned to the abstract ATB.config data structure)
         def uploadConfig(self):
 		for i, ac in enumerate(self.config.asicConfig):
 			if ac is None:

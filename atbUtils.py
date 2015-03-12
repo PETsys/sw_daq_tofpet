@@ -4,6 +4,16 @@ import re
 import json
 import sticv3
 
+
+## @package atbUtils
+#  This module contains auxiliary functions to load/write configurations from/to files  
+
+
+## Writes the configuration of a Mezzanine/FEBA with asics in range [asicStart, asicEnd[ into a file in binary format
+# @param boardConfig the configuration to be saved. It should be of type atb.BoardConfig
+# @param asicStart The minimum ASIC ID of the configuration to be written
+# @param asicEnd  The maximium ASIC ID (excluded) of the configuration to be written 
+# @param filename The name of the file in which to save the configuration
 def dumpAsicConfig(boardConfig, asicStart, asicEnd, fileName):
 	f = open(fileName, "w")
 	pickler = pickle.Pickler(f, pickle.HIGHEST_PROTOCOL)
@@ -11,12 +21,19 @@ def dumpAsicConfig(boardConfig, asicStart, asicEnd, fileName):
 	f.close() 
 	
 
+
 def loadSTICv3AsicConfig(boardConfig, asic, fileName):
 	#deprecated, used with old sticv3 AsicConfig
 	#sticv3_config reads plain text configuration file and generates the correct bit pattern
 	asicConfig = sticv3.AsicConfig(fileName)
 	boardConfig.asicConfig[asic] = asicConfig
 
+
+## Loads the configuration of a Mezzanine/FEBA with asics in range [asicStart, asicEnd[ from a file in binary format
+# @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
+# @param asicStart The minimum ASIC ID of the configuration to be loaded
+# @param asicEnd  The maximium ASIC ID (excluded) of the configuration to be loaded 
+# @param filename The name of the file from which to load the configuration
 def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName, invert=False):
 	print "Loading %s for ASICs [%d .. %d[" % (fileName, asicStart, asicEnd)
 	f = open(fileName, "r")
@@ -35,7 +52,11 @@ def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName, invert=False):
 		boardConfig.asicConfigFile[asicStart] = fileName
 	f.close()
 
-
+# Loads the parameters for calibration of the HV DACs from a text file
+# @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
+# @param start The minimum HV DAC channel ID of the configuration to be loaded
+# @param end  The maximium HV DAC channel ID (excluded) of the configuration to be loaded 
+# @param filename The name of the file from which to load the calibration
 def loadHVDACParams(boardConfig, start, end, fileName):
 	print "Loading %s for DAC" % fileName
 	boardConfig.HVDACParamsFile=fileName
@@ -43,23 +64,35 @@ def loadHVDACParams(boardConfig, start, end, fileName):
 	r = re.compile('[ \t\n\r:]+')
 	for i in range(start, end):
 		l = f.readline()
-		m, b, x = r.split(l)
+		ch, m, b, x = r.split(l)
 		m = float(m)
 		b = float(b)
-		boardConfig.hvParam[i] = (m,b)
+		ch=int(ch)
+		boardConfig.hvParam[start+ch] = (m,b)
 		
 	f.close()
-
+# Loads the HV DAC voltages desired for a given system form a text file
+# @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
+# @param start The minimum HV DAC channel ID of the configuration to be loaded
+# @param end  The maximium HV DAC channel ID (excluded) for the configuration to be loaded 
+# @param filename The name of the file from which to load the HV DAC voltages
 def loadHVBias(boardConfig, start, end, fileName, offset = 0.0):
 	print "Loading %s for DAC" % fileName
 	f = open(fileName, "r")
 	r = re.compile('[ \t\n\r:]+')
 	for i in range(start, end):
 		l = f.readline()
-		v, x = r.split(l)
+		ch,v, x = r.split(l)
 		v = float(v)
-		boardConfig.hvBias[i] = v + offset
+		ch=int(ch)
+		boardConfig.hvBias[start+ch] = v + offset
 
+
+## Loads baseline values of a Mezzanine/FEBA with asics in range [asicStart, asicEnd[ from a text file
+# @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
+# @param asicStart The minimum ASIC ID for the configuration to be loaded
+# @param asicEnd  he maximium ASIC ID (excluded) for the configuration to be loaded 
+# @param filename The name of the file from which to load the baseline values
 def loadBaseline(boardConfig, asicStart, asicEnd, fileName):
 	print "Loading %s for ASICs [%d .. %d[" % (fileName, asicStart, asicEnd)
 	f = open(fileName, "r")

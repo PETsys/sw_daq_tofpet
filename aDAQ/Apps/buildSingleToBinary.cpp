@@ -23,10 +23,11 @@ struct EventOut {
 	unsigned short	channel;		// Channel ID
 	float		tot;			// Time-over-Threshold, in ns
 	unsigned char	tac;			// TAC ID
+	unsigned char 	badEvent;		// 0 if OK, 1 if bad
 } __attribute__((packed));
 
 
-class EventWriter : public EventSink<Hit> {
+class EventWriter : public EventSink<Pulse> {
 public:
 	EventWriter(FILE *dataFile, float step1, float step2) 
 	: dataFile(dataFile), step1(step1), step2(step2) {
@@ -37,16 +38,13 @@ public:
 		
 	};
 
-	void pushEvents(EventBuffer<Hit> *buffer) {
+	void pushEvents(EventBuffer<Pulse> *buffer) {
 		if(buffer == NULL) return;	
 		
 		unsigned nEvents = buffer->getSize();
 		for(unsigned i = 0; i < nEvents; i++) {
-			Hit &hit = buffer->get(i);
-			
-			RawHit &raw= hit.raw;
-		
-			EventOut e = { step1, step2, raw.time, raw.crystalID, raw.energy, raw.top.raw.d.tofpet.tac };
+			Pulse & p = buffer->get(i);
+			EventOut e = { step1, step2, p.time, p.channelID, p.energy, p.raw.d.tofpet.tac, p.badEvent ? 1 : 0 };
 			fwrite(&e, sizeof(e), 1, dataFile);
 		}
 		
@@ -64,6 +62,13 @@ private:
 
 int main(int argc, char *argv[])
 {
+	if (argc != 4) {
+		fprintf(stderr, "USAGE: %s <setup_file> <rawfiles_prefix> <output_file.root>\n", argv[0]);
+		fprintf(stderr, "setup_file - File containing paths to tdc calibration files and tq correction files (optional)\n");
+		fprintf(stderr, "rawfiles_prefix - Path to raw data files prefix\n");
+		fprintf(stderr, "output_file.root - ROOT output file containing binary single events\n");
+		return 1;
+	}
 	assert(argc == 4);
 	char *inputFilePrefix = argv[2];
 
@@ -76,13 +81,15 @@ int main(int argc, char *argv[])
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
 	
+
 	TOFPET::P2 *lut = new TOFPET::P2(SYSTEM_NCRYSTALS);
+
 	if (strcmp(argv[1], "none") == 0) {
 		lut->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		lut->loadFiles(argv[1]);
+		lut->loadFiles(argv[1], true, false, 0,0);
 	}
 	
 	FILE *lmFile = fopen(argv[3], "w");
@@ -95,14 +102,21 @@ int main(int argc, char *argv[])
 		unsigned long long eventsEnd;
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
+		if(N!=1){
+			if (strcmp(argv[1], "none") == 0) {
+				lut->setAll(2.0);
+				printf("BIG FAT WARNING: no calibration file\n");
+			} 
+			else{
+				lut->loadFiles(argv[1], true, true,step1,step2);
+			}
+		}
 
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
-				new P2Extract(lut, false, true, true,
-				new SingleReadoutGrouper(
-				new FakeCrystalPositions(
+				new P2Extract(lut, false, 0.0, 0.20,
 				new EventWriter(lmFile, step1, step2
 
-		)))));
+		)));
 		
 		reader->wait();
 		delete reader;

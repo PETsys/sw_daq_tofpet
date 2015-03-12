@@ -655,6 +655,7 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 			Int_t fChannel;
 			Int_t fTac;
 			Int_t fCoarse;
+			Float_t fCoarseToT;
 			Int_t fFine;
 			Long64_t fTacIdleTime;
 
@@ -711,9 +712,9 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 				}
 				
 				
-				float tEstimate = myP2.getT((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime);
-				float qEstimate = myP2.getQ((64 * fAsic + fChannel), fTac, isT, fFine, fTacIdleTime);
-				bool isNormal = myP2.isNormal((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime);				
+				float tEstimate = myP2.getT((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime, 0);
+				float qEstimate = myP2.getQ((64 * fAsic + fChannel), fTac, isT, fFine, fTacIdleTime,0);
+				bool isNormal = myP2.isNormal((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime, 0);				
 				float tError = tEstimate - fStep2;
 	
 				
@@ -813,9 +814,9 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 				//ti.hB_ControlADC_E->Fill(adcError);
 			}
 			
-			float tEstimate = myP2.getT((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime);
-			float qEstimate = myP2.getQ((64 * fAsic + fChannel), fTac, isT, fFine, fTacIdleTime);
-			bool isNormal = myP2.isNormal((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime);			
+			float tEstimate = myP2.getT((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime, 0);
+			float qEstimate = myP2.getQ((64 * fAsic + fChannel), fTac, isT, fFine, fTacIdleTime,0);
+			bool isNormal = myP2.isNormal((64 * fAsic + fChannel), fTac, isT, fFine, fCoarse, fTacIdleTime,0);			
 			float tError = tEstimate - fStep2;
 			
 // 			if(fAsic == 0 && fChannel == 0 && fTac == 0 && isT) 

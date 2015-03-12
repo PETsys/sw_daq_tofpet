@@ -50,7 +50,6 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
     
     for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
-   
     uut.uploadConfig()
  
     rootFile = ROOT.TFile(root_file, "RECREATE")
@@ -221,7 +220,7 @@ while i<=n_iter:
     print "\n"
 
     check=dump_noise(root_filename,uut, targetAsics, targetChannels)
- #####################################################################3
+ 
     os.system("root -l %s \"draw_threshold_scan.C(true)\"" % root_filename)
     prefix, ext = splitext(root_file)
    
@@ -327,7 +326,9 @@ while i<=n_iter:
             i=n_iter+1
             n_boards=n_asics/2;
             for j in range(n_boards):
+            
                 prefix, ext = splitext(uut.config.asicConfigFile[j*2])
+            
                 os.system("cat asic%d.baseline >> asic%d.baseline" % (2*j+1,2*j))
                 os.system("cp asic%d.baseline %s.baseline" % (2*j,prefix))
             print "\nReminder: To complete process, please insert postamp values in update_config.py\n"
@@ -345,4 +346,4 @@ while i<=n_iter:
    
 
 log_f.close()
-#os.system("rm /tmp/*.baseline")
+

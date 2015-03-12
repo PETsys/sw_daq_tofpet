@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
 
 	if (argc != 4) {
 		fprintf(stderr, "USAGE: %s <setup_file> <rawfiles_prefix> <output_file.root>\n", argv[0]);
-		fprintf(stderr, "setup_file - File containing setup layout and path to tdc calibration files (mezzanines.cal or similar)\n");
+		fprintf(stderr, "setup_file - File containing setup layout and path to tdc calibration files (mezzanines.cal or similar)");
 		fprintf(stderr, "rawfiles_prefix - Path to raw data files prefix\n");
 		fprintf(stderr, "output_file.root - ROOT output file containing coincidence events TTree\n");
 		return 1;
@@ -176,13 +176,13 @@ int main(int argc, char *argv[])
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
 	
-	TOFPET::P2 *P2 = new TOFPET::P2(4096);
+	TOFPET::P2 *P2 = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(argv[1], "none") == 0) {
 		P2->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		P2->loadFiles(argv[1]);
+		P2->loadFiles(argv[1], true, false,0,0);
 	}
 	
 	TFile *lmFile = new TFile(argv[3], "RECREATE");
@@ -240,18 +240,22 @@ int main(int argc, char *argv[])
 		unsigned long long eventsEnd;
 		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
-		//		eventsEnd=1000000000+eventsBegin;
-// 		printf("BIG FAT WARNING: limiting event number\n");
-// 		if(eventsEnd > eventsBegin + 10E6) eventsEnd = eventsBegin + 10E6;
-
-		const unsigned nChannels = 2*128; 
+		if(N!=1){
+			if (strcmp(argv[1], "none") == 0) {
+				P2->setAll(2.0);
+				printf("BIG FAT WARNING: no calibration file\n");
+			} 
+			else{
+				P2->loadFiles(argv[1], true, true,eventStep1,eventStep2);
+			}
+		}
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 				new P2Extract(P2, false, 1.0, 1.0,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(20, 100E-9,
 				new CoincidenceGrouper(20E-9,
-				new EventWriter(lmData, 100E-9, 1
+				new EventWriter(lmData, 50E-9, 1
 
 		)))))));
 		

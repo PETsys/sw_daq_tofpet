@@ -35,7 +35,11 @@ def grayToBin(g):
 def grayToInt(v):
 	return binToInt(grayToBin(v))
 
+## Contains parameters and methods related to the global operation of one ASIC. 
 class AsicGlobalConfig(bitarray):
+  ## Constructor. 
+  # Defines and sets all fields to default values. Most important fields are:
+  # 
   def __init__(self, initial=None, endian="big"):
 	super(AsicGlobalConfig, self).__init__()
 
@@ -155,41 +159,55 @@ class AsicGlobalConfig(bitarray):
 	self.setValue("vib1", 24)
 	self.setValue("sipm_idac_dcstart", 48)
 
-	
-
+  ## Set the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be set
+  # @param value  Integer corresponding to the value to be set	
   def setValue(self, key, value):
 	b = intToBin(value, len(self.__fields[key]))
 	self.setBits(key, b)
-	
+ 
+  ## Set the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be set
+  # @param value  Bitarray corresponding to the value to be set		
   def setBits(self, key, value):
 	index = self.__fields[key]
 	assert len(value) == len(index)
 	for a,b in enumerate(index):
 	  self[109 - b] = value[a]
-	
+
+  ## Returns the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be returned	
   def getBits(self, key):
 	index = self.__fields[key]
 	value = bitarray(len(index))
 	for a,b in enumerate(index):
 	  value[a] = self[109 - b]
 	return value
-	
+  
+  ## Returns the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be returned	
   def getValue(self, key):
 	return binToInt(self.getBits(key))
-	
+ 
+  ## Prints the content of all parameters as a bitarray	
   def printAllBits(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getBits(key)
-
+  
+  ## Prints the content of all parameters as integers
   def printAllValues(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getValue(key)
 
+  ## Returns all the keys (variables) in this class
   def getKeys(self):
 	return self.__fields.keys()
 
-
+## Contains parameters and methods related to the operation of one channel of the ASIC. 
 class AsicChannelConfig(bitarray):
+  ## Constructor
+  # Defines and sets all fields to default values. Most important fields are:
+  # 
   def __init__(self, initial=None, endian="big"):
 	super(AsicChannelConfig, self).__init__()
 
@@ -268,44 +286,60 @@ class AsicChannelConfig(bitarray):
 	# Introduced after oscillation problems were found
 	self.setValue("vbl", 44)
 
-	
+  ## Set the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be set
+  # @param value  Integer corresponding to the value to be set		
   def setValue(self, key, value):
 	b = intToBin(value, len(self.__fields[key]))
 	self.setBits(key, b)
-	
+
+  ## Set the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be set
+  # @param value  Bitarray corresponding to the value to be set		
   def setBits(self, key, value):
 	index = self.__fields[key]
 	assert len(value) == len(index)
 	for a,b in enumerate(index):
 	  self[52 - b] = value[a]
-	
+  
+  ## Returns the value of a given parameter as a bitarray
+  # @param key  String with the name of the parameter to be returned	
   def getBits(self, key):
 	index = self.__fields[key]
 	value = bitarray(len(index))
 	for a,b in enumerate(index):
 	  value[a] = self[52 - b]
 	return value
-	
+  
+  ## Returns the value of a given parameter as an integer
+  # @param key  String with the name of the parameter to be returned	
   def getValue(self, key):
 	return binToInt(self.getBits(key))
-	
+  
+  # Prints the content of all parameters as a bitarray		
   def printAllBits(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getBits(key)
-
+	  
+  ## Prints the content of all parameters as integers
   def printAllValues(self):
 	for key in self.__fields.keys():
 	  print key, " : ", self.getValue(key)
-
+ 
+  ## Set the baseline value in units of ADC (63 to 0)
   def setBaseline(self, v):
 	self.__baseline = v
 
+  ## Returns the baseline value for this channel
   def getBaseline(self):
 	return self.__baseline
-
+ 
+  ## Returns all the keys (variables) in this class
   def getKeys(self):
 	return self.__fields.keys()
 
+## A class containing instances of AsicGlobalConfig and AsicChannelConfig
+#, as well as 2 other bitarrays related to test pulse configuration. Is related to one given ASIC.
 class AsicConfig:
 	def __init__(self):
 		self.channelConfig = [ AsicChannelConfig() for x in range(64) ]
