@@ -41,14 +41,15 @@ class BoardConfig:
         ## Constructor
         # @param nASIC Number of ASICs present in the system (can be for several boards)
         # @param nDAC Number of HV DAC configuration files required for this system
-	def __init__(self, nASIC=4, nDAC=1):
-		
-                self.asicConfigFile = [ "Default Configuration" for x in range(nASIC) ]
-                self.asicBaselineFile = [ "None" for x in range(nASIC) ]
+	def __init__(self):
+		maxASIC = 64
+		maxDAC = 8
+                self.asicConfigFile = [ "Default Configuration" for x in range(maxASIC) ]
+                self.asicBaselineFile = [ "None" for x in range(maxASIC) ]
                 self.HVDACParamsFile = "None"
-                self.asicConfig = [ None for x in range(nASIC) ]
-		self.hvBias = [ None for x in range(32*nDAC) ]
-		self.hvParam = [ (1.0, 0.0) for x in range(32*nDAC) ]
+                self.asicConfig = [ None for x in range(maxASIC) ]
+		self.hvBias = [ None for x in range(32*maxDAC) ]
+		self.hvParam = [ (1.0, 0.0) for x in range(32*maxDAC) ]
 		return None
         
         ## Writes formatted text file with all parameters and additional information regarding the state of the system  
@@ -112,7 +113,7 @@ class BoardConfig:
           for ac in self.asicConfig:
             if not isinstance(ac, tofpet.AsicConfig): continue
         
-            f.write("\nASIC%d.Global{\n"%ac_ind)  
+            f.write("\maxASIC%d.Global{\n"%ac_ind)  
             for i,key in enumerate(global_params):
               value= ac.globalConfig.getValue(key)
               value_d= defaultAsicConfig.globalConfig.getValue(key)
@@ -236,6 +237,13 @@ class ErrorInvalidLinks:
 	def __str__(self):
 		return "Invalid NLinks value (%d) from FEB/D at port %2d, slave %2d" % self.addr
 
+class ErrorInvalidAsicType: 
+	def __init__(self, portID, slaveID, value):
+		self.addr = portID, slaveID, value
+	def __str__(self):
+		return "Invalid ASIC type FEB/D at port %2d, slave %2d: %016llx" % self.addr
+
+
 	
 ## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
 class ATB:
@@ -263,6 +271,8 @@ class ATB:
 		#self.__shmmap = mmap.mmap(self.__shm.fd, self.__shm.size)
 		#os.close(self.__shm.fd)
 		self.config = None
+		self.__activeAsics = [ False for x in range(64) ]
+		self.__asicType = [ None for x in range(64) ]
 		return None
 
 
@@ -270,11 +280,13 @@ class ATB:
 	# @param mode If set to 1, only data frames  with at least one event are transmitted. If set to 2, all data frames are transmitted. If set to 0, the data transmission is stopped
 	def start(self, mode=2):
 		mode = 2 # Do not send mode 1 to daqd!
+
 		assert self.config is not None
 		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
 		#for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x0F]))
 		for febID in activeFEBs: self.writeFEBDConfig(febID, 0, 0, 4, 0xF)
 		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
@@ -285,17 +297,11 @@ class ATB:
        
         ## Stops the data acquisition, the same as calling start(mode=0)
 	def stop(self):
-		assert self.config is not None
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, 0)
 		self.__socket.send(data)
-
-		#for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x00]))
-		for febID in activeFEBs: self.writeFEBDConfig(febID, 0, 0, 4, 0x0)
 		return None
 
         ## Returns the size of the allocated memory block 
@@ -336,6 +342,18 @@ class ATB:
 		reply = [ n for n in range(64) if (mask & (1<<n)) != 0 ]
 		return reply
 
+	def getActiveFEBDs(self):
+		return [ (x, 0) for x in self.getActivePorts() ]
+
+	def getPossibleFEBDs(self):
+		return [ (x, 0) for x in range(4) ]
+
+	def getActiveAsics(self):
+		return [ i for i, active in enumerate(self.__activeAsics) if active ]
+
+	def getActiveTOFPETAsics(self):
+		return [ i for i, active in enumerate(self.__activeAsics) if active and self.__asicType[i] == 0x00010001 ]
+
 	def getPortCounts(self, port):
 		template = "@HHH"
 		n = struct.calcsize(template)
@@ -354,41 +372,6 @@ class ATB:
 		
         ## Returns a data frame read form the shared memory block by order ??
 	def getDataFrame(self, nonEmpty=False):
-		#frameValid = 0
-		#w = True
-		#while frameValid == 0 and w:
-			#w = waitForDataFrame
-			#template = "@HH"
-			#n = struct.calcsize(template)
-			#data = struct.pack(template, 0x06, n)
-			#self.__socket.send(data);
-
-			#template = "@qHHHH"
-			#n = struct.calcsize(template)
-			#data = self.__socket.recv(n)
-			#frameID, frameValid, nEvents, frameLost, frameVetoed = struct.unpack(template, data)
-			
-		#if frameValid == 0:
-			#return None
-
-		#events = []
-		#for i in range(nEvents):
-			#template = "@qqHHHHHHH"
-			#n = struct.calcsize(template)
-			#data = data = self.__socket.recv(n)
-			#channelIdleTime, tacIdleTime, asicID, channelID, tacID, tCoarse, eCoarse, tFine, eFine = struct.unpack(template, data)
-			#events.append((asicID, channelID, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime))
-
-		#reply = reply = { "id" : frameID, "lost" : frameLost, "frameVetoed" : frameVetoed, "events" : events }
-		#return reply
-		
-		#index = None
-		#w = True
-		#while index is None and w:
-			#index = self.getDataFrameByIndex()
-			#w = waitForDataFrame
-
-
 		index = self.getDataFrameByIndex(nonEmpty = nonEmpty)
 		if index is None:
 			return None
@@ -415,26 +398,6 @@ class ATB:
 		reply = { "id" : frameID, "lost" : frameLost, "events" : events }
 		self.returnDataFrameByIndex(index)
 		return reply
-
-		#s0, p1, s1 = self.__shmParams
-		#p0 = index*s0
-		#template = "@Q?H"
-		#n = struct.calcsize(template)
-		#frameID, frameLost, nEvents = struct.unpack(template, self.__shmmap[p0:p0+n])
-		#reply = { "id" : frameID, "lost" : frameLost }
-
-		#events = []
-		#template = "@HHHHHHHqq"
-		#n = struct.calcsize(template)
-		#for i in range(nEvents):
-			#p = p0 + p1 + s1*i
-			#event = struct.unpack(template, self.__shmmap[p:p+n])
-			#events.append(event)
-
-		#reply['events'] = events
-
-		#self.returnDataFrameByIndex(index)
-		#return reply
 
 	def getDataFrameByIndex(self, nonEmpty = False):
 		rawIndexes = self.getDataFramesByRawIndex(1, nonEmpty=nonEmpty);
@@ -615,17 +578,6 @@ class ATB:
 			byteX = []
 		
 		cmd = bytearray(byte0 + byte1 + byteX)
-		#print asicID, channel, command, value
-		#print "ASIC COMMAND ", (", ").join(['x"%02X"' % x for x in cmd])
-		
-		# TODO: detect ASIC is present
-		#nTries = 0
-		#status = 0xEF
-		#while status != 0x00 and nTries < 10:
-			#nTries += 1
-			#reply = self.sendCommand(0x00, cmd)
-			#status = reply[0]		
-		#assert status == 0x00
 
 		febID = asicID / 16
 		reply = self.sendCommand(febID, 0, 0x00, cmd)
@@ -651,86 +603,173 @@ class ATB:
 			return (status, None)
 
 
+	## Turns on LDO for STICv3 FEB/A boards
+	# @param on Turn ON (True) or OFF (False). Turning ON is deprecated
 	def febAOnOff(self, on = False):
-		sticAsicID = [ i for i, ac in enumerate(self.config.asicConfig) if isinstance(ac, sticv3.AsicConfig) ]
-		sticFEBID = [ i / 16 for i in sticAsicID ]
-		sticFEBID = set(sticFEBID)
-		print "WARNING: attempting to set LDOs for STiCv3 FEB/D on DAQ ports ", sticFEBID
-
-		if not on:
-			for febID in sticFEBID:
-				print "Turning off all LDO on FEB/D %d" % febID
-				self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x01, 0x00]))
+		if on == True:
+			print "WARNING: Ignoring request to turn ON LDO for FEB/A boards. They will be turned on during initialize()"
 		else:
-			allOff = sticv3.AsicConfig('stic_configurations/ALL_OFF.txt')
-			# Some padding
+			print "INFO: Turning OFF LDO for FEB/A boards"
+			for portID, slaveID in self.getActiveFEBDs():
+				self.writeFEBDConfig(portID, slaveID, 0, 5, 0x00);
 	
-			for febID in sticFEBID:	
-				data = allOff.data
-				data = data + "\x00\x00\x00"
-				memAddr = 1
+
+	## Returns list globalAsicIDs belonging to this FEB/D
+	# @param portID  DAQ port number where the FEB/D is connected
+	# @param slaveID Slave number on the FEB/D chain
+	def getGlobalAsicIDsForFEBD(self, portID, slaveID):
+		return [x for x in range(16*portID, 16*portID + 16)]
 	
-				while len(data) > 3:
-					d = data[0:4]
-					data = data[4:]
-					msb = (memAddr >> 8) & 0xFF
-					lsb = memAddr & 0xFF
-					#print "RAM ADDR %4d, nBytes Written = %d, nBytes Left = %d" % (memAddr, len(d), len(data))
-					#print [hex(ord(x)) for x in d]
-					self.sendCommand(febID, 0, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
-					memAddr = memAddr + 1
+	## Returns a tuple with the (portID, slaveID, localAsicID) for which an globalAsicID belongs
+	# @param globalAsicID Global ASIC ID
+	def asicIDGlobalToTuple(self, asicID):
+		return (asicID / 16, 0, asicID % 16)
+
+	
+	def initializeFEBD_TOFPET(self, portID, slaveID):
+		print "INFO: FEB/D at port %d, slave %d is of type TOFPET" % (portID, slaveID)
+		# Read the number of ASIC data links expected by this FEB/D
+		# and generate a suitable default global configuration
+		nLinks = self.readFEBDConfig(portID, slaveID, 0, 1)
+		defaultGlobalConfig = tofpet.AsicGlobalConfig()
+		defaultGlobalConfig.setValue("ddr_mode", 1)
+		if nLinks == 1:
+			defaultGlobalConfig.setValue("tx_mode", 0)
+		elif nLinks == 2:
+			defaultGlobalConfig.setValue("tx_mode", 1)
+		else:
+			raise ErrorInvalidLinks(portID, slaveID, nLinks)
 		
-			for febID in sticFEBID:
-				v = 0
-				for i in [0, 1, 2, 3, 4, 5, 6, 7]:
-					v = 2**(i+1)  - 1 
-					#v = v | 2**i
-					v = v & 0xFF                        
-	                                print "Turning on LDO %d on FEB/D %d %2x" % (i, febID, v)
-	                                self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x01, v]))
-					# Apply ALL_OFF config to whatever ASICs have been turned on
-					for asicID in range(16):
-						self.sendCommand(febID, 0, 0x00, bytearray([0x01, asicID]))
-					
-					sleep(0.5)
-	
+		# Try to configure each of the possible ASICs
+		localAsicIDList = self.getGlobalAsicIDsForFEBD(portID, slaveID)
+		localAsicConfigOK = [ False for x in localAsicIDList ]
+		for i, asicID in enumerate(localAsicIDList):
+			try:
+				self.doTOFPETAsicCommand(asicID, "wrGlobalCfg", value=defaultGlobalConfig)
+				localAsicConfigOK[i] = True
+			except tofpet.ConfigurationError as e:
+				pass
+
+		# Enable the reception logic	
+		self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
+		#self.sendCommand(portID, slaveID, 0x03, bytearray([0x04, 0x00, 0x00]))
+		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+		sleep(0.120)	# We need to wait for at least 100 ms after generating a reset
+
+		deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
+		decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
+
+		deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
+		decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
+		
+		localAsicActive = [ False for x in localAsicIDList ]
+		for i, asicID in enumerate(localAsicIDList):
+			triplet = (localAsicConfigOK[i], deserializerStatus[i], decoderStatus[i])
+			self.__asicType[asicID] = 0x00010001
+			if triplet == (True, True, True):
+				# All OK, ASIC is present and OK
+				self.__activeAsics[asicID] = True
+			elif triplet == (False, False, False):
+				# All failed, ASIC is not present
+				self.__activeAsics[asicID] = False
+			else:
+				# Something failed!!
+				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent:" % (asicID, portID, slaveID, i, str(triplet))
+				self.__activeAsics[asicID] = False
+
+		return None
+
+	def initializeFEBD_STICv3(self, portID, slaveID):
+		print "INFO: FEB/D at port %d, slave %d is of type TOFPET" % (portID, slaveID)
+		# Disable data reception logic
+		self.writeFEBDConfig(portID, slaveID, 0, 4, 0x0)
+		# Send a 64K frame long reset
+		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
+		sleep(0.120 + 64* self.__frameLength)	# Need to wait for at least 100 ms, plus the reset time
+		# Disable test pulse
+		self.setTestPulseNone()
+
+		# Load a minimum power configuration into the FEB/D
+		allOff = sticv3.AsicConfig('stic_configurations/ALL_OFF.txt')
+		data = allOff.data
+		data = data + "\x00\x00\x00"
+		memAddr = 1
+		while len(data) > 3:
+			d = data[0:4]
+			data = data[4:]
+			msb = (memAddr >> 8) & 0xFF
+			lsb = memAddr & 0xFF
+			#print "RAM ADDR %4d, nBytes Written = %d, nBytes Left = %d" % (memAddr, len(d), len(data))
+			#print [hex(ord(x)) for x in d]
+			self.sendCommand(febID, 0, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
+			memAddr = memAddr + 1	
+
+		for n in range(8):
+			ldoVector = self.readFEBDConfig(portID, slaveID, 0, 5)
+			if ldoVector & (1<<n) == 0: # This LDO is OFF, let's turn it on	
+				print "INFO: LDO %d was OFF, turning ON"
+				ldoVector = ldoVector | (1<<n)
+				self.writeFEBDConfig(portID, slaveID, 0, 5, ldoVector)
+				for i in range(16): # Apply the ALL_OFF configuration to all chips in FEB/D
+					self.sendCommand(portID, slaveID, 0x00, bytearray([0x01, i]))
+
+		localAsicConfigOK = [ True for x in localAsicIDList ] # For STICv3, we don't check the configuration status
+
+		# Enable the reception logic	
+		self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
+		#self.sendCommand(portID, slaveID, 0x03, bytearray([0x04, 0x00, 0x00]))
+		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+		sleep(0.120)	# We need to wait for at least 100 ms after generating a reset
+
+		deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
+		decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
+
+		deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
+		decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
+		
+		localAsicActive = [ False for x in localAsicIDList ]
+		for i, asicID in enumerate(localAsicIDList):
+			self.__asicType[asicID] = 0x00020003
+			triplet = (localAsicConfigOK[i], deserializerStatus[i], decoderStatus[i])
+			if triplet == (True, True, True):
+				# All OK, ASIC is present and OK
+				self.__activeAsics[asicID] = True
+			elif triplet == (False, False, False):
+				# All failed, ASIC is not present
+				self.__activeAsics[asicID] = False
+			else:
+				# Something failed!!
+				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent:" % (asicID, portID, slaveID, i, str(triplet))
+				self.__activeAsics[asicID] = False		
+
+		return None
+
 	## Sends the entire configuration (needs to be assigned to the abstract ATB.config data structure) to the ASIC and starts to write data to the shared memory block
-        # @param maxTries The maximum number of attempts to read a valid dataframe after uploading configuration  
+        # @param maxTries The maximum number of attempts to read a valid dataframe after uploading configuration 
 	def initialize(self, maxTries = 1):
 		assert self.config is not None
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-		print "WARNING: trying to use FEB/D on DAQ ports ", activeFEBs
-
+		activePorts = self.getActivePorts()
+		print "INFO: active FEB/D on ports: ", (", ").join([str(x) for x in activePorts])
 		# Stop acquisition (makes it easier to send commands)
 		self.stop()		
 		sleep(0.5)
 
-		receivedFrame = None
-		attempt = 1
-		pause = 0.2
-		while receivedFrame is None and attempt <= maxTries:
-			print "Reseting and configuring board (attempt %d)" % attempt
-			attempt += 1
+		for portID, slaveID in self.getActiveFEBDs():
+			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
+			if asicType == 0x00010001:
+				self.initializeFEBD_TOFPET(portID, slaveID)
+			elif asicType == 0x00020003:
+				self.initializeFEBD_STICv3(portID, slaveID)
+			else:
+				raise ErrorInvalidAsicType(portID, slaveID, asicType)
 
-			# Reset ASIC & ASIC readout
-			for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x00]))
-			self.stop()	
-			for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
-			sleep(2*pause)
-			self.setTestPulseNone()
-			self.uploadConfig()
-			# Set normal RX mode and sync to start
-			self.start()
-			sleep(pause)
-			receivedFrame = self.getDataFrame()
-			if pause < 1.5: pause += 0.1
-
+		self.uploadConfig()
+		self.start()
+		sleep(0.120)
 		self.doSync()
 
 	def getCurrentFrameID(self):
-		assert self.config is not None
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-		febID = min(activeFEBs)
+		febID = min(self.getActivePorts())
 		reply = self.sendCommand(febID, 0, 0x03, bytearray([0x02]))
 		status = reply[0]
 		#print  [hex(x) for x in reply[1:] ]
@@ -759,16 +798,30 @@ class ATB:
 
 		return
 	  
-		
+
+	## Returns a (portID, slaveID), localID tuple for a globalHVChannel
+	# @param globalHVChannelID Global HV channel ID
+	def hvChannelGlobalToTulple(self, globalHVChannelID):
+		return (globalHVChannelID / 64, 0, globalHVChannelID % 64)
+
+	def getGlobalHVChannelIDForFEBD(self, portID, slaveID):
+		return [ x for x in range(portID * 64, portID * 64 + 64) ]
+
+	## Sets all HV channels
+	# @param voltageRequested Voltage to be set
+	def setAllHVDAC(self, voltageRequested):
+		for portID, slaveID in self.getActiveFEBDs():
+			for globalHVChannelID in self.getGlobalHVChannelIDForFEBD(portID, slaveID):
+				if self.config != None:
+					self.config.hvBias[globalHVChannelID] = voltageRequested
+				self.setHVDAC(globalHVChannelID, voltageRequested)
+				
+	
 
         ## Sets the HVDAC voltage using calibration data 
         # @param channel The HVDAC channel to be set
         # @param voltageRequested The voltage to be set in units of Volts, considering the calibration
 	def setHVDAC(self, channel, voltageRequested):
-		assert self.config is not None
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-
-
 		m, b = self.config.hvParam[channel]
 		voltage = voltageRequested* m + b
 		#print "%4d %f => %f, %f => %f" % (channel, voltageRequested, m, b, voltage)
@@ -778,7 +831,10 @@ class ATB:
         # @param channel The HVDAC channel to be set
         # @param voltageRequested The voltage to be set in units of Volts
 	def setHVDAC_(self, channel, voltage):
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
+		portID, slaveID, localChannel = self.hvChannelGlobalToTulple(channel)
+		if (portID, slaveID) not in self.getActiveFEBDs():			
+			print "WARNING: Configuration specified for HV channel %d but FEB/D (P%02d S%02d) is not active. Skipping" % (channel, portID, slaveID)
+			return
 
 		voltage = int(voltage * 2**14 / (50 * 2.048))
 		if voltage > 2**14-1:
@@ -788,30 +844,22 @@ class ATB:
 			voltage = 0
 
 
-		whichDAC = channel / 32
-		channel = channel % 32
-
-		whichBoard = whichDAC / 2
-		whichDAC = whichDAC % 2
+		whichDAC = localChannel / 32
+		channel = localChannel % 32
 
 		whichDAC = 1 - whichDAC # Wrong decoding in ad5535.vhd
 
-		if whichBoard not in activeFEBs: 
-			#print "Not setting voltage for FEB/D without configured ASICs"
-			return
-
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
 		dacBytes = bytearray(dacBits.tobytes())
-		return self.sendCommand(whichBoard, 0, 0x01, dacBytes)
+		return self.sendCommand(portID, slaveID, 0x01, dacBytes)
 	
         ## Disables test pulse 
 	def setTestPulseNone(self):
-		assert self.config is not None
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-
 		cmd =  bytearray([0x01] + [0x00 for x in range(8)])
-		for febID in activeFEBs: self.sendCommand(febID, 0, 0x03,cmd)
+		for portID, slaveID in self.getActiveFEBDs():
+			self.sendCommand(portID, slaveID, 0x03,cmd)
 		return None
+
 	
         def setTestPulseArb(self, invert):
 		if not invert:
@@ -826,11 +874,8 @@ class ATB:
         # @param length Sets the length of the test pulse, from 1 to 1023 clock periods. 0 disables the test pulse.
         # @param interval Sets the interval between test pulses. The actual interval will be (interval+1)*1024 clock cycles.
         # @param finePhase Defines the delay of the test pulse regarding the start of the frame, in units of 1/392 of the clock.
-        # @param invert Sets the polarity of the test pulse: active low when ``True'' and active high when ``False'
+        # @param invert Sets the polarity of the test pulse: active low when ``True'' and active high when ``False''
 	def setTestPulsePLL(self, length, interval, finePhase, invert):
-		assert self.config is not None
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-
 		if not invert:
 			tpMode = 0b10000000
 		else:
@@ -845,10 +890,10 @@ class ATB:
 		length1 = (length >> 8) & 255
 		
 		cmd =  bytearray([0x01, tpMode, finePhase2, finePhase1, finePhase0, interval1, interval0, length1, length0])
-		for febID in activeFEBs:
-			print "Setting test pulse on FEB %d" % febID
-			self.sendCommand(febID, 0, 0x03,cmd)
+		for portID, slaveID in self.getActiveFEBDs():
+			self.sendCommand(portID, slaveID, 0x03,cmd)
 		return None
+
 
 	def loadArbTestPulse(self, address, isPulse, delay, length):
 		if isPulse:
@@ -865,7 +910,6 @@ class ATB:
 		cmd = bytearray([0x03]) + bytearray(bits.tobytes())
 		#print [ hex(x) for x in cmd ]
 		return self.sendCommand(0, 0, 0x03,cmd)
-
 
 	def readFEBDConfig(self, portID, slaveID, addr1, addr2):
 		header = [ addr1 & 0x7F, addr2 & 0xFF ]
@@ -894,7 +938,7 @@ class ATB:
 		return value
 		
 
-        ##Opens the acquisition pipeline, allowing the data frames read from the shared memory block to be written to disk by a writting applicationa
+        ##Opens the acquisition pipeline, allowing the data frames read from the shared memory block to be written to disk by a writing applications
         # @param fileName The name of the file containg the data written by aDAQ/writeRaw
         # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
         # @param writer The name of the application to be used to save data to disk (Typically writeRaw). 
@@ -1001,9 +1045,9 @@ class ATB:
 		return data
 
 
-        def uploadConfigSTICv3(self, asicID, asicConfig):
+        def uploadConfigSTICv3(self, globalAsicID, asicConfig):
 		data = asicConfig.data
-		febID = asicID / 16
+		porID, slaveID, localAsicID = self.asicIDGlobalToTuple(globalAsicID);
 
 		# Some padding
 		data = data + "\x00\x00\x00"
@@ -1016,15 +1060,16 @@ class ATB:
 			lsb = memAddr & 0xFF
 			#print "RAM ADDR %4d, nBytes Written = %d, nBytes Left = %d" % (memAddr, len(d), len(data))
 			#print [hex(ord(x)) for x in d]
-			self.sendCommand(febID, 0, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
+			self.sendCommand(portID, slaveID, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
 			memAddr = memAddr + 1
 		
 		#print "Configuring"
-		self.sendCommand(febID, 0, 0x00, bytearray([0x01, asicID % 16]))
+		self.sendCommand(portID, slaveID, 0, 0x00, bytearray([0x01,localAsicID]))
 			
 		
 
 		return None
+
 
 	def uploadConfigOnFeb(self,febID):
 		print "Conguring ASIC on FEBD %d" % febID
@@ -1041,25 +1086,43 @@ class ATB:
 			sleep(1)
 
 
-        ## Uploads the entire configuration (needs to be assigned to the abstract ATB.config data structure)
+        ## Uploads the entire configuration (needs to be assigned to the abstract ATB.config data structure). It prints warning messages if active ASICs are not being properly configured.
         def uploadConfig(self):
-		for i, ac in enumerate(self.config.asicConfig):
-			if ac is None:
-				continue
-			print "Configuring ASIC %d" % i
-			if isinstance(ac, sticv3.AsicConfig):				
-				self.uploadConfigSTICv3(i, ac)
-			elif isinstance(ac, tofpet.AsicConfig):
-				self.uploadConfigTOFPET(i, ac)
-			else:
+		for portID, slaveID in self.getPossibleFEBDs(): # Iterate on all possible FEB/D
+			if (portID, slaveID) not in self.getActiveFEBDs():
 				continue
 
+			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
+			for localAsicID, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)): # Iterate on all possible ASIC in a FEB/D
+				ac = self.config.asicConfig[globalAsicID]
+				asicOK = self.__activeAsics[globalAsicID]
+				if ac == None and asicOK == False:
+					continue
+				elif ac == None and asicOK == True:
+					print "WARNING: ASIC %d (P%02d S%02d A%02d) active but no config specified. Skipping" % (globalAsicID, portID, slaveID, localAsicID)
+					continue
+				elif ac != None and asicOK == False:
+					print "WARNING: Configuration specified for non-active ASIC %d (P%02d S%02d A%02d). Skipping" % (globalAsicID, portID, slaveID, localAsicID)
+					continue
 
-		print "Configuring HV"
-		for dacChannel, hvValue in enumerate(self.config.hvBias):
-			if hvValue is None:
-				continue
-			self.setHVDAC(dacChannel, hvValue)
+				if asicType == 0x00010001:
+					if not isinstance(ac, tofpet.AsicConfig):
+						print "WARNING: Configuration type mismatch for ASIC %d (P%02d S%02d A%02d). Skipping" % (globalAsicID, portID, slaveID, localAsicID)
+						continue
+					self.uploadConfigTOFPET(globalAsicID, ac)
+				elif asicType == 0x00020003:
+					if not isinstance(ac, sticv3.AsicConfig):
+						print "WARNING: Configuration type mismatch for ASIC %d (P%02d S%02d A%02d). Skipping" % (globalAsicID, portID, slaveID, localAsicID)
+						continue
+					self.uploadConfigSTICv3(globalAsicID, ac)
+				else:
+					raise ErrorInvalidAsicType(portID, slaveID, asicType)	
+			
+			for globalHVChannelID in self.getGlobalHVChannelIDForFEBD(portID, slaveID):
+				hvValue = self.config.hvBias[globalHVChannelID]
+				if hvValue is None:
+					continue
+				self.setHVDAC(globalHVChannelID, hvValue)
           
 	def uploadConfigTOFPET(self, asic, ac):
 		#stdout.write("Configuring ASIC %3d " % asic); stdout.flush()

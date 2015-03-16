@@ -35,9 +35,6 @@ tpLength = 512
 
 
 atbConfig = loadLocalConfig(useBaseline=False)
-for c in range(len(atbConfig.hvBias)):
-		atbConfig.hvBias[c] = 50.0
-
 for ac in atbConfig.asicConfig:
 	if not isinstance(ac, tofpet.AsicConfig):
 		continue
@@ -58,6 +55,7 @@ uut.openAcquisition(dataFilePrefix, cWindow, writer="writeRaw")
 uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
 
 uut.config.writeParams(dataFilePrefix)
+uut.setAllHVDAC(5.0)
 
 uut.doSync()
 for step1 in range(0,64,4): # vib
@@ -85,6 +83,4 @@ for step1 in range(0,64,4): # vib
 	uut.acquire(step1, step2, acquisitionTime)
   
 
-# Set SiPM bias to zero when finished!
-for c in range(len(atbConfig.hvBias)):
-	uut.setHVDAC(c, 0)
+uut.setAllHVDAC(5.0)

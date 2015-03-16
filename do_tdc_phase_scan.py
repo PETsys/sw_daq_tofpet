@@ -75,8 +75,8 @@ rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
 activeChannels = [ x for x in range(0,64) ]
-activeAsics =  [ i for i,ac in enumerate(uut.config.asicConfig) if isinstance(ac, tofpet.AsicConfig) ]
-systemAsics = [ i for i in range(len(uut.config.asicConfig)) ]
+activeAsics =  uut.getActiveTOFPETAsics()
+systemAsics = [ i for i in range(max(activeAsics) + 1) ]
 
 minEventsA *= len(activeAsics)
 minEventsB *= len(activeAsics)

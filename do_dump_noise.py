@@ -6,6 +6,7 @@ from sys import argv, stdout, stdin
 from time import time, sleep
 import ROOT
 from os.path import join, dirname, basename, splitext
+import tofpet
 
 if (len(argv) != 2):
 	print "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
@@ -17,12 +18,9 @@ prefix, ext = splitext(argv[1])
 
 atbConfig = loadLocalConfig(useBaseline=False)
 
-targetAsics = [ x for x, ac in enumerate(atbConfig.asicConfig) if ac is not None ]
 
 # All channels
-targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
-# Only some channels
-#targetChannels = [ (x, y) for x in targetAsics for y in [0, 2, 4, 6, 7, 9, 17, 23, 38, 49, 54, 63] ]
+targetChannels = [ x for x in range(64) ]
 
 # SiPM Vbias
 targetHVBias = [ 50 ]
@@ -31,12 +29,18 @@ targetHVBias = [ 50 ]
 # Operating clock period
 T = 6.25E-9
 
-for tAsic, tChannel in targetChannels:
-	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = atbConfig
 uut.initialize()
+
+targetAsics = uut.getActiveTOFPETAsics()
+targetChannels = [ (x, y) for x in targetAsics for y in targetChannels ]
+for tAsic, tChannel in targetChannels:
+	if not isinstance(atbConfig.asicConfig[tAsic], tofpet.AsicConfig):
+		continue
+	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
+
 uut.uploadConfig()
 uut.doSync(False)
 
@@ -45,12 +49,12 @@ ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")
 
 uut.config.writeParams(prefix)
 
+
 N = 30
 for step1 in targetHVBias:
 	print "SiPM Vbias = ", step1
 
-	for dacChannel in range(8):
-		uut.setHVDAC(dacChannel, step1)
+	uut.setAllHVDAC(step1)
 
 	for step2 in range(32,64):
 		print "Vth_T = ", step2
@@ -124,5 +128,4 @@ for step1 in targetHVBias:
 rootFile.Close()
 
 
-for dacChannel in range(8):
-	uut.setHVDAC(dacChannel, 0)
+uut.setAllHVDAC(5.0)
