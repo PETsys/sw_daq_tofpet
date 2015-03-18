@@ -36,7 +36,7 @@ static float		eventToT;
 static float		eventTQT;
 static float		eventTQE;
 
-class TQCorrWriter : public EventSink<Hit> {
+class TQCorrWriter : public EventSink<Pulse> {
 
 
 
@@ -79,20 +79,22 @@ public:
 		fclose(tQcalFile);
 	};
 
-	void pushEvents(EventBuffer<Hit> *buffer) {
+	void pushEvents(EventBuffer<Pulse> *buffer) {
 		if(buffer == NULL) return;	
 		
 		unsigned nEvents = buffer->getSize();
 		for(unsigned i = 0; i < nEvents; i++) {
-			Hit &hit = buffer->get(i);
+			Pulse &e = buffer->get(i);
 			
-			RawHit &raw= hit.raw;
-			long long T = raw.top.raw.d.tofpet.T;
-			eventTime = raw.time;
-			eventChannel = raw.top.channelID;
-			eventToT = 1E-3*(raw.top.timeEnd - raw.top.time);
-			eventTQT = raw.top.tofpet_TQT;
-			eventTQE = raw.top.tofpet_TQE;
+			
+			
+
+			long long T = e.raw.d.tofpet.T;
+			eventTime = e.time;
+			eventChannel = e.channelID;
+			eventToT = 1E-3*(e.timeEnd - e.time);
+			eventTQT = e.tofpet_TQT;
+			eventTQE = e.tofpet_TQE;
 			htqT2D[eventChannel]->Fill(eventTQT, eventToT);
 			htqE2D[eventChannel]->Fill(eventTQE, eventToT);
 		
@@ -209,11 +211,9 @@ int main(int argc, char *argv[])
 
 				new Sanity(100E-9, 		      
 				new P2Extract(lut, false, 0.0, 0.20,
-				new SingleReadoutGrouper(
-				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new TQCorrWriter(f, lut
 
-		))))));
+		))));
 	
 		reader->wait();
 		delete reader;
