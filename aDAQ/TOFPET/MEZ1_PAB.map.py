@@ -23,7 +23,7 @@ def main(argv):
 			z = float(z);
 			hv = int(hv)
 
-			channel = 64 * board + channel
+			channel = 128 * board + channel
 			region = board
 
 			# Mirror board
