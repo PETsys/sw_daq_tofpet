@@ -232,6 +232,10 @@ class ErrorInvalidAsicType:
 	def __str__(self):
 		return "Invalid ASIC type FEB/D at port %2d, slave %2d: %016llx" % self.addr
 
+class ErrorNoFEB:
+	def __str__(self):
+		return "No active FEB/D on any port"
+
 
 	
 class ATB:
@@ -718,7 +722,11 @@ class ATB:
 		self.doSync()
 
 	def getCurrentFrameID(self):
-		febID = min(self.getActivePorts())
+		activePorts = self.getActivePorts()
+		if activePorts == []:
+			raise ErrorNoFEB()
+
+		febID = min(activePorts)
 		reply = self.sendCommand(febID, 0, 0x03, bytearray([0x02]))
 		status = reply[0]
 		#print  [hex(x) for x in reply[1:] ]
