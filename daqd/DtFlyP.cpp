@@ -62,12 +62,12 @@ DtFlyP::DtFlyP()
 	int status;
 	status = ReadAndCheck(txWrPointerReg * 4 , &txWrPointer, 1);
 	status = ReadAndCheck(rxRdPointerReg * 4 , &rxRdPointer, 1);
-	printf("DtFLYP:: Initial TX WR pointer: %08x\n", txWrPointer);
-	printf("DtFLYP:: Initial RX RD pointer: %08x\n", rxRdPointer);
-	
-	for(int i = 0; i < 4; i++) 
-		for(int j = 0; j < 3; j++)
-			printf("%d %d %016llx\n", i, j, getPortCounts(i, j));
+// 	printf("DtFLYP:: Initial TX WR pointer: %08x\n", txWrPointer);
+// 	printf("DtFLYP:: Initial RX RD pointer: %08x\n", rxRdPointer);
+// 	
+// 	for(int i = 0; i < 4; i++) 
+// 		for(int j = 0; j < 3; j++)
+// 			printf("%d %d %016llx\n", i, j, getPortCounts(i, j));
 
 	// for(int i = 0; i < N_BUFFERS; i++)
 	// {
