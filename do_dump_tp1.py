@@ -10,10 +10,25 @@ import serial
 import DSHM
 
 import tofpet
+import argparse
 
-acquisitionTime = float(argv[1])
-tChannel = int(argv[2])
-dataFilePrefix = argv[3]
+
+parser = argparse.ArgumentParser(description='Scan vbl and ib1 ASIC parameters while acquiring fetp data')
+parser.add_argument('acqTime', type=float,
+                   help='acquisition time for each channel')
+
+parser.add_argument('OutputFilePrefix',
+                   help='output file prefix (files with .raw2 and .idx suffixes will be create)')
+
+parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
+
+parser.add_argument('--channel_step', type=int, default=6, help='If set, the scan will be performed for one in every channel_step (default = 6)')
+
+args = parser.parse_args()
+
+
+acquisitionTime = args.acqTime
+dataFilePrefix = args.OutputFilePrefix
 
 
 # ASIC clock period
@@ -32,55 +47,55 @@ tpFinePhase = 1
 tpLength = 512
 
 
-
-
-atbConfig = loadLocalConfig(useBaseline=False)
-for ac in atbConfig.asicConfig:
-	if not isinstance(ac, tofpet.AsicConfig):
-		continue
-
-	ac.globalConfig.setValue("test_pulse_en", 1)
-	ac.channelTConfig[tChannel] = bitarray('1')
-	ac.globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
-	#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", 32);
-	#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("fe_test_mode", 1);
-	#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0);
-
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
-uut.config = atbConfig
+
+baseConfig = loadLocalConfig(useBaseline=False)
+
+uut.config = baseConfig
 uut.initialize()
-uut.uploadConfig()
-uut.doSync()
 uut.openAcquisition(dataFilePrefix, cWindow, writer="writeRaw")
-uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
-
 uut.config.writeParams(dataFilePrefix)
-uut.setAllHVDAC(5.0)
 
-uut.doSync()
-for step1 in range(0,64,4): # vib
-  for step2 in range(0,64,4): #vbl
-	t0 = time()
-	lastWriteTime = t0
-	#atbConfig.asicConfig[tAsic].globalConfig.setValue("postamp", step1)
-	#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", step2)
-	#for tAsic in range(2):
-		#atbConfig.asicConfig[tAsic].globalConfig.setValue("sipm_idac_dcstart", step1)
-		#for c in range(64):
-			#atbConfig.asicConfig[tAsic].channelConfig[c].setValue("vbl", step2)
 
-	for ac in atbConfig.asicConfig:
-		if not isinstance(ac, tofpet.AsicConfig):
-			continue
+if args.asics == None:
+	activeAsics =  uut.getActiveTOFPETAsics()
+else:
+	activeAsics= args.asics
 
-		ac.globalConfig.setValue("vib1", step1);
-		for cc in ac.channelConfig:
-			cc.setValue("vbl", step2);
+print activeAsics
 
+for tChannel in range(0,64,args.channel_step):
+	atbConfig=loadLocalConfig(useBaseline=False)
+
+	for asic in activeAsics:
+		atbConfig.asicConfig[asic].globalConfig.setValue("test_pulse_en", 1)
+		atbConfig.asicConfig[asic].channelTConfig[tChannel] = bitarray('1')
+		atbConfig.asicConfig[asic].globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
+	
+	uut.config=atbConfig
 	uut.uploadConfig()
-	uut.doSync()
-	print "Acquiring step %d %d..." % (step1, step2)
-	uut.acquire(step1, step2, acquisitionTime)
+	uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
+	uut.setAllHVDAC(5.0)
+
+	for step1 in range(0,64,4): # vib
+		for step2 in range(0,64,4): #vbl
+			t0 = time()
+			lastWriteTime = t0
+
+
+		
+			for ac in atbConfig.asicConfig:
+				if ac==None:
+					continue
+				ac.globalConfig.setValue("vib1", step1);
+				for cc in ac.channelConfig:
+					cc.setValue("vbl", step2);
+			uut.config=atbConfig
+			uut.uploadConfig()
+			uut.doSync()
+			print "Acquiring for channel %d, step %d %d..." % (tChannel,step1, step2)
+			uut.acquire(step1, step2, acquisitionTime)
+
   
 
 uut.setAllHVDAC(5.0)

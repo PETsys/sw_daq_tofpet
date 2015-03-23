@@ -12,7 +12,7 @@ from time import time, sleep
 import ROOT
 from os.path import join, dirname, basename, splitext
 import tofpet
-
+import argparse
 
 def readBaselineProposal(fileName):
     v=[]
@@ -34,7 +34,7 @@ def readBaselineProposal(fileName):
     data.append(sig)
     return data
 
-def dump_noise(root_file, uut, targetAsics, targetChannels):
+def dump_noise(root_file, uut, activeAsics, targetChannels):
   
     prefix, ext = splitext(root_file)
  
@@ -63,10 +63,10 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
         for dacChannel in range(8):
             uut.setHVDAC(dacChannel, step1)
 
-        for step2 in range(40,64):
+        for step2 in range(40,64): 
             print "Vth_T = ", step2
 
-            for tAsic, tChannel in [ (x, y) for x in targetAsics for y in range(64) ]:
+            for tAsic, tChannel in targetChannels:
                 atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", step2)
                 status, _ = uut.doTOFPETAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
                                                       value=atbConfig.asicConfig[tAsic].channelConfig[tChannel])
@@ -78,7 +78,7 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
             darkRate = dict([(ac, 0.0) for ac in targetChannels])
 
             while darkInterval < 16:
-                for tAsic in targetAsics:
+                for tAsic in activeAsics:
                     atbConfig.asicConfig[tAsic].globalConfig.setValue("count_intv", darkInterval)
                     status, _ = uut.doTOFPETAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
                     assert status == 0
@@ -141,25 +141,27 @@ def dump_noise(root_file, uut, targetAsics, targetChannels):
 ####################################################################################
 #####################################################################################
 
-post=[]
-n_asics=4
 
-if not (len(argv) >=3 and len(argv) <=8):
-    print "USAGE: python %s root_file N_iterations [N_ASICS] [postamp0] [postamp1] ... [postampNASICS]" % argv[0]
-    exit(1)
 
-if (len(argv)  >= 4):
-    n_asics= int(argv[3])
+parser = argparse.ArgumentParser(description='Performs a number of threshold dark counts scan and computes the effective baseline for each, while ajusting the postamp parameter until the obtained baseline for all channels is in a good ADC range for the all the selected ASICS')
 
-for i in range(n_asics):
-    post.append(50)
-    if (len(argv) >= 5+i):
-        post[i] = int(argv[4+i]) 
+parser.add_argument('OutputFilePrefix',
+                   help='output file prefix (ROOT file). Auxiliary file containing the data obtained in all scans and used to compute the baselines')
+
+
+parser.add_argument('nIter', type=int,
+                   help='Maximum number of iterations to determine baseline')
+
+parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
+
+parser.add_argument('--postamp', nargs='*', type=int, default=6, help='If --asics is set, this ')
+
+args = parser.parse_args()
 
         
 T = 6.25E-9
-root_file = argv[1]
-n_iter=int(argv[2])
+root_file = args.OutputFilePrefix
+n_iter=args.nIter
 
 dir_path=os.path.dirname(root_file)
 basename=os.path.basename(root_file)
@@ -171,18 +173,30 @@ prefix, ext = splitext(root_file)
 log_filename= "%s.log" % prefix
 log_f = open(log_filename, 'w+')
 
-postamp=[0 for i in range(n_asics)]
-success=[0 for i in range(n_asics)]
+atbConfig = loadLocalConfig(useBaseline=False)  
+uut = atb.ATB("/tmp/d.sock", False, F=1/T) 
+uut.config = atbConfig
+uut.initialize()
 
 
-for i in range(n_asics):
-    postamp[i]=post[i]
-    success[i]=False
+activeAsics =  uut.getActiveTOFPETAsics()
+maxAsics=max(activeAsics) + 1
+systemAsics = [ i for i in range(maxAsics) ]
 
-targetAsics = [ x for x in range(n_asics) ]
-targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
+targetChannels = [ (x, y) for x in activeAsics for y in range(64) ]
+
+postamp=[0 for i in range(maxAsics)]
+success=[0 for i in range(maxAsics)]
 
 
+
+for i,asic in enumerate(activeAsics):
+    postamp[asic]=50
+    if (len(argv)>= 4+i):
+        print i, asic
+        postamp[asic] = int(argv[3+i]) 
+    success[asic]=False
+ 
 i=1
 finish=False
 
@@ -192,14 +206,7 @@ while i<=n_iter:
     log_f.write( "\n#################### RUN %d ##########################\n" % i)
 
     atbConfig = loadLocalConfig(useBaseline=False)
-
-    # Amplifier output DC level
-    # Default is 50
-    for asic in range(n_asics):
-        atbConfig.asicConfig[asic].globalConfig.setValue("postamp", postamp[asic])
-    
-
-    # Upload configuration into ATBConfig
+   
 
     uut = atb.ATB("/tmp/d.sock", False, F=1/T)
   
@@ -207,6 +214,10 @@ while i<=n_iter:
   
     uut.initialize()
   
+    for asic in activeAsics:
+        atbConfig.asicConfig[asic].globalConfig.setValue("postamp", postamp[asic])
+    
+
     uut.uploadConfig()
  
     uut.doSync(False)
@@ -215,19 +226,19 @@ while i<=n_iter:
 
 
     print "\nPerforming threshold scan with:"
-    for l in range(n_asics):
-        print "postamp[%d]=%d" % (l,postamp[l])
+    for  asic in activeAsics:
+        print "postamp[%d]=%d" % (asic,postamp[asic])
     print "\n"
 
-    check=dump_noise(root_filename,uut, targetAsics, targetChannels)
+    check=dump_noise(root_filename,uut, activeAsics, targetChannels)
  
-    os.system("root -l %s \"draw_threshold_scan.C(true)\"" % root_filename)
+    os.system("root -l %s \"draw_threshold_scan.C(%s,true)\"" % (root_filename,maxAsics))
     prefix, ext = splitext(root_file)
    
     pdf_filename= "%s/pdf/%s_%d.pdf" % (dir_path,base_prefix, i)
     os.system("cp /tmp/baseline_dummy.pdf %s" % pdf_filename)
 
-    for j in range(n_asics):
+    for j in activeAsics:
         
         
         os.system("cp asic%d.baseline /tmp/asic%d_%d.baseline" % (j,j,i))
@@ -294,14 +305,14 @@ while i<=n_iter:
             os.system("evince %s &" % pdf_filename)
             print "\n\n Successfully converged for all asics after %d runs!!" % i
             print "Displaying baseline plots for: "
-            for k in range (n_asics):
+            for k in activeAsics:
                 print "postamp[%d]=%d" % (k,postamp[k])
             finish=True
             break
     
          
     if (i==n_iter):
-        for j in range(n_asics):
+        for j in activeAsics:
             if success[j] is False: 
                 print "Could not find a suitable baseline for ASIC/Mezzanine %d!" % j 
                 print "Check log and plots in:"
@@ -324,13 +335,12 @@ while i<=n_iter:
             break
         elif(option==2):
             i=n_iter+1
-            n_boards=n_asics/2;
-            for j in range(n_boards):
+            for asic in activeAsics:
             
-                prefix, ext = splitext(uut.config.asicConfigFile[j*2])
-            
-                os.system("cat asic%d.baseline >> asic%d.baseline" % (2*j+1,2*j))
-                os.system("cp asic%d.baseline %s.baseline" % (2*j,prefix))
+                prefix, ext = splitext(uut.config.asicConfigFile[asic])
+                if asic%2==0:
+                    os.system("cat asic%d.baseline >> asic%d.baseline" % (asic+1,asic))
+                    os.system("cp asic%d.baseline %s.baseline" % (asic,prefix))
             print "\nReminder: To complete process, please insert postamp values in update_config.py\n"
             break
         elif(option==3):
@@ -344,6 +354,6 @@ while i<=n_iter:
 
     i+=1
    
-
+os.system("rm *.baseline")
 log_f.close()
 
