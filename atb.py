@@ -629,7 +629,7 @@ class ATB:
 				self.__activeAsics[asicID] = False
 			else:
 				# Something failed!!
-				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent:" % (asicID, portID, slaveID, i, str(triplet))
+				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent: %s" % (asicID, portID, slaveID, i, str(triplet))
 				self.__activeAsics[asicID] = False
 
 		return None
@@ -694,7 +694,7 @@ class ATB:
 				self.__activeAsics[asicID] = False
 			else:
 				# Something failed!!
-				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent:" % (asicID, portID, slaveID, i, str(triplet))
+				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent: %s" % (asicID, portID, slaveID, i, str(triplet))
 				self.__activeAsics[asicID] = False		
 
 		return None
