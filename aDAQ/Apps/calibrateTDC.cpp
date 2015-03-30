@@ -188,6 +188,7 @@ int main(int argc, char *argv[])
 	TacInfo *tacInfo = (TacInfo *)mmap(NULL, sizeof(TacInfo)*nTAC, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
 	for(int tac = 0; tac < nTAC; tac++)
 		tacInfo[tac] = TacInfo();
+
 	
 	int nCPUs = sysconf(_SC_NPROCESSORS_ONLN);
 	for(int startBoard = 0; startBoard < nBoards; startBoard += nCPUs) {
@@ -212,7 +213,8 @@ int main(int argc, char *argv[])
 				TFile * resumeFile = new TFile(resumeFileName, "RECREATE");
 				
 				calibrate(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2, nominalM);
-// 				qualityControl(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2);
+				qualityControl(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2);
+				
 				resumeFile->Write();
 				resumeFile->Close();
 				
@@ -250,6 +252,8 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
+	
+	
 	
 	for(int asic = 0; asic < nASIC; asic++) {
 		for(int channel = 0; channel < 64; channel++) {			
@@ -290,10 +294,7 @@ int main(int argc, char *argv[])
 			
 		}
 	}
-	
-	
-	
-	
+
 	for(unsigned board = 0; board < nBoards; board++) {
 		char tableFileName[1024];
 		sprintf(tableFileName, "%s_%04u.tdc.cal", tableFileNamePrefix, board);
@@ -638,7 +639,7 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 	const int nIterations = 2;
 	// Need two iterations to correct t0, then one more to build final histograms
 	for(int iter = 0; iter <= nIterations; iter++) {
-		for(int n = 0; n < nTAC; n++) {
+		for(int n = 64*4*2*start; n < 64*4*2*end; n++) {
 			if(tacInfo[n].pA_ControlT == NULL) continue;
 			tacInfo[n].pA_ControlT->Reset();
 			tacInfo[n].pA_ControlE->Reset();
@@ -684,7 +685,7 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 			for(int i = 0; i < nEvents; i++) {
 				data->GetEntry(i);				
 				int index2 = 4 * (64 * fAsic + fChannel) + fTac;			
-				if(fAsic >= nASIC) continue;
+				if(fAsic < start || fAsic >= end) continue;
 				if(fChannel >= 64) continue;
 				if(fTac >= 4) continue;
 				
@@ -725,7 +726,7 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 		}
 		
 		if(iter >= nIterations) continue;
-		for(int n = 0; n < nTAC; n++) {
+		for(int n = 64*4*2*start; n < 64*4*2*end; n++) {
 			Int_t channel = (n/2) / 4;
 			Int_t tac = (n/2) % 4;
 			Bool_t isT = (n % 2 == 0);
