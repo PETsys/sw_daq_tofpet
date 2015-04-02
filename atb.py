@@ -1021,8 +1021,15 @@ class ATB:
 		# Force parameters!
 		for n, cc in enumerate(ac.channelConfig):
 			cc.setValue("deadtime", 3);
+			 # Clamp thresholds to ensure we're in the valid range
+
+			thresholdClamp = 15
+			if cc.getValue("vth_T") < thresholdClamp:
+				cc.setValue("vth_T", thresholdClamp)
+			if cc.getValue("vth_E") < thresholdClamp:
+				cc.setValue("vth_E", thresholdClamp) 
+
 			self.doTOFPETAsicCommand(asic, "wrChCfg", channel=n, value=cc)
-			#stdout.write("CH %2dM  " %n);stdout.flush()
 
 		for n, cc in enumerate(ac.channelTConfig):
 			self.doTOFPETAsicCommand(asic, "wrChTCfg", channel=n, value=cc)
