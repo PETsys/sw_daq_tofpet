@@ -41,10 +41,6 @@ uut.setAllHVDAC(67.50)
 for step1 in [0]:
 	for step2 in [0]:
 		# Actually upload config into hardware
-		baseline=uut.config.asicConfig[0].channelConfig[0].getBaseline()		
-		print baseline-uut.config.asicConfig[0].channelConfig[0].getValue("vth_E")
-		print uut.config.asicConfig[0].channelConfig[0].getValue("vth_E")
-		print baseline-uut.config.asicConfig[0].channelConfig[0].getValue("vth_T")
 		uut.uploadConfig()
 		uut.doSync()
 		print "Acquiring step %d %d..." % (step1, step2)
