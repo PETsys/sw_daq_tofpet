@@ -243,6 +243,10 @@ class ErrorInvalidAsicType:
 	def __str__(self):
 		return "Invalid ASIC type FEB/D at port %2d, slave %2d: %016llx" % self.addr
 
+class ErrorNoFEB:
+	def __str__(self):
+		return "No active FEB/D on any port"
+
 
 	
 ## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
@@ -674,7 +678,7 @@ class ATB:
 				self.__activeAsics[asicID] = False
 			else:
 				# Something failed!!
-				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent:" % (asicID, portID, slaveID, i, str(triplet))
+				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent: %s" % (asicID, portID, slaveID, i, str(triplet))
 				self.__activeAsics[asicID] = False
 
 		return None
@@ -739,7 +743,7 @@ class ATB:
 				self.__activeAsics[asicID] = False
 			else:
 				# Something failed!!
-				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent:" % (asicID, portID, slaveID, i, str(triplet))
+				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent: %s" % (asicID, portID, slaveID, i, str(triplet))
 				self.__activeAsics[asicID] = False		
 
 		return None
@@ -769,7 +773,11 @@ class ATB:
 		self.doSync()
 
 	def getCurrentFrameID(self):
-		febID = min(self.getActivePorts())
+		activePorts = self.getActivePorts()
+		if activePorts == []:
+			raise ErrorNoFEB()
+
+		febID = min(activePorts)
 		reply = self.sendCommand(febID, 0, 0x03, bytearray([0x02]))
 		status = reply[0]
 		#print  [hex(x) for x in reply[1:] ]
@@ -1129,8 +1137,15 @@ class ATB:
 		# Force parameters!
 		for n, cc in enumerate(ac.channelConfig):
 			cc.setValue("deadtime", 3);
+			 # Clamp thresholds to ensure we're in the valid range
+
+			thresholdClamp = 15
+			if cc.getValue("vth_T") < thresholdClamp:
+				cc.setValue("vth_T", thresholdClamp)
+			if cc.getValue("vth_E") < thresholdClamp:
+				cc.setValue("vth_E", thresholdClamp) 
+
 			self.doTOFPETAsicCommand(asic, "wrChCfg", channel=n, value=cc)
-			#stdout.write("CH %2dM  " %n);stdout.flush()
 
 		for n, cc in enumerate(ac.channelTConfig):
 			self.doTOFPETAsicCommand(asic, "wrChTCfg", channel=n, value=cc)

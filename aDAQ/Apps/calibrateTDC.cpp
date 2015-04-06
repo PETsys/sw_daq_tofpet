@@ -271,6 +271,7 @@ int main(int argc, char *argv[])
 	TacInfo *tacInfo = (TacInfo *)mmap(NULL, sizeof(TacInfo)*nTAC, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
 	for(int tac = 0; tac < nTAC; tac++)
 		tacInfo[tac] = TacInfo();
+
 	
 	
 
@@ -392,9 +393,9 @@ int main(int argc, char *argv[])
 			
 		}
 	}
-	
 
 	for(unsigned file = 0; file <  nASIC/nAsicsPerFile; file++) {
+
 		char tableFileName[1024];
 		int startAsic = file * nAsicsPerFile;
 		int endAsic = startAsic + nAsicsPerFile;
@@ -833,9 +834,8 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 		}
 		
 		if(iter >= nIterations) continue;
-	
-		for(int n = 0; n < nTAC; n++) {
-			if (n < start*64*8 || n>=end*64*8)continue;
+
+		for(int n = 64*4*2*start; n < 64*4*2*end; n++) {
 			Int_t channel = (n/2) / 4;
 			Int_t tac = (n/2) % 4;
 			Bool_t isT = (n % 2 == 0);

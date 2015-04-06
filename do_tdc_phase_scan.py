@@ -192,10 +192,10 @@ for tChannel in activeChannels:
 			nReceivedFrames += 1			
 			for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:
 				nReceivedEvents += 1
-				#print decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime
+				#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 				if asic not in activeAsics or channel != tChannel:
+					print "WARNING: spurious event Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 					continue;
-				#print ".. accepting ", nAcceptedEvents
 				
 				nAcceptedEvents += 1				
 			
@@ -304,8 +304,9 @@ for tChannel in activeChannels:
 
 				for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:
 						nReceivedEvents += 1
-						#print decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime
+						#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 						if asic not in activeAsics or channel != tChannel:
+							print "WARNING: spurious event Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 							continue;
 						
 						nAcceptedEvents += 1				
