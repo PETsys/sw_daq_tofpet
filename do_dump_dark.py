@@ -2,33 +2,53 @@
 import atb
 from loadLocalConfig import loadLocalConfig
 from bitarray import bitarray
-from sys import argv, stdout, stdin
+from sys import stdout, stdin
 from time import time, sleep
 import ROOT
 from os.path import join, dirname, basename, splitext
+import argparse
+
+
+parser = argparse.ArgumentParser(description='Performs a scan on dark count rates for selected channels and HV bias voltages')
+
+parser.add_argument('OutputFile',
+                   help='output file (ROOT file)')
+
+parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
+
+parser.add_argument('--channels',  nargs='*', type=int, help='If set, only the selected channels will acquire data in each ASIC')
+
+parser.add_argument('--hvbias', required=True,  nargs='*', type=int, help='HV bias voltages for which to determine dark count rates (in Volts)')
+
+args = parser.parse_args()
 
 atbConfig = loadLocalConfig(useBaseline=False)
-# Select which ASICs, channels and bias voltages
-targetAsics = [ x for x, ac in enumerate(atbConfig.asicConfig) if ac is not None ]
-targetChannels = [ (x, y) for x in targetAsics for y in [0, 1, 2, 3, 61, 62, 63] ]
-targetHVBias = [ 50, 65, 65.5, 66, 66.5 ]
+uut = atb.ATB("/tmp/d.sock", False, F=1/T)
+uut.config = atbConfig
+uut.initialize()
+
+if args.asics == None:
+	targetAsics =  uut.getActiveTOFPETAsics()
+else:
+	targetAsics= args.asics
+
+if args.channels == None:
+	targetChannels = [ (x, y) for x in targetAsics for y in range(0,64)]
+else:
+	targetChannels = [ (x, y) for x in targetAsics for y in args.channels]
+
+targetHVBias = args.hvbias
+
+
 # Operating clock period
 T = 6.25E-9
 
-if (len(argv) != 2):
-	print "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-	print "USAGE: python %s.py outputfile.root \n" % argv[0]
-	print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-	exit(1)
-
-prefix, ext = splitext(argv[1])
+prefix, ext = splitext(args.Outputfile)
 
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 
-uut = atb.ATB("/tmp/d.sock", False, F=1/T)
-uut.config = atbConfig
-uut.initialize()
+
 
 rootFile = ROOT.TFile(argv[1], "RECREATE")
 ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")

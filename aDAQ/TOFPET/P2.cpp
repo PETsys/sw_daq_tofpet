@@ -232,12 +232,14 @@ bool P2::isNormal(int channel, int tac, bool isT, int adc, int coarse, long long
 
 void P2::storeFile(int start, int end, const char *fName)
 {
-	FILE *f = fopen(fName, "w");
+	FILE *f=NULL;
 	for(int channel = start; channel < end; channel++)
 		for(int isT = 0; isT < 2; isT++)
 			for(int tac = 0; tac < 4; tac++) {
 				int index = getIndex(channel, tac, isT == 0);
 				TAC &te = table[index];
+				if(te.shape.m==0) continue;
+				else if(f==NULL) f = fopen(fName, "w");
 				fprintf(f, "%5d\t%c\t%d\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\n", 
 					channel - start, isT == 0 ? 'T' : 'E', tac,
 					te.t0, 
@@ -246,7 +248,7 @@ void P2::storeFile(int start, int end, const char *fName)
 				);
 				
 			}
-	fclose(f);
+	if(f!=NULL)fclose(f);
 	
 }
 

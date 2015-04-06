@@ -14,7 +14,7 @@
 #include <assert.h>
 #include <math.h>
 #include <string.h>
-
+#include <getopt.h>
 
 static float		eventStep1;
 static float		eventStep2;
@@ -110,9 +110,54 @@ private:
 	int maxN;
 };
 
+void displayHelp(char * program)
+{
+	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
+	fprintf(stderr, "\noptional arguments:\n");
+	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
+	fprintf(stderr, "\npositional arguments:\n");
+	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration files (required) and tq correction files (optional)\n");
+	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
+	fprintf(stderr, "  output_file \t\t\t ROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
+};
+
+void displayUsage( char * program)
+{
+	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file.root\n", program);
+};
+
 int main(int argc, char *argv[])
 {
-	assert(argc == 4);
+
+
+	static struct option longOptions[] = {
+		{ "help", no_argument, 0, 0 }
+	};
+	int optionIndex = -1;
+	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
+		if(optionIndex==0){
+			displayHelp(argv[0]);
+			return(1);
+		}
+		else{
+			displayUsage(argv[0]);
+			fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
+			return(1);
+		}
+	}
+   
+	if(argc < 4){
+		displayUsage(argv[0]);
+		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		return(1);
+	}
+	else if(argc > 4){
+		displayUsage(argv[0]);
+		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		return(1);
+	}
+
+
 	char *inputFilePrefix = argv[2];
 
 	char dataFileName[512];

@@ -34,16 +34,9 @@ def readBaselineProposal(fileName):
     data.append(sig)
     return data
 
-def dump_noise(root_file, uut, activeAsics, targetChannels):
+def dump_noise(root_file, uut, activeAsics, targetChannels, targetHVBias):
   
     prefix, ext = splitext(root_file)
- 
-    # Only some channels
-#targetChannels = [ (x, y) for x in targetAsics for y in [0, 2, 4, 6, 7, 9, 17, 23, 38, 49, 54, 63] ]
-
-    # SiPM Vbias
-    targetHVBias = [ 50 ]
-
 
     # Operating clock period
     T = 6.25E-9
@@ -57,80 +50,83 @@ def dump_noise(root_file, uut, activeAsics, targetChannels):
 
     uut.config.writeParams(root_file)
     N = 30
-    for step1 in targetHVBias:
-        print "SiPM Vbias = ", step1
+    
+    step1=targetHVBias
 
-        for dacChannel in range(8):
-            uut.setHVDAC(dacChannel, step1)
+ 
+    
 
-        for step2 in range(40,64): 
-            print "Vth_T = ", step2
+    uut.setAllHVDAC(step1)
+     
+  
+    for step2 in range(40,64): 
+        print "Vth_T = ", step2
 
-            for tAsic, tChannel in targetChannels:
-                atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", step2)
-                status, _ = uut.doTOFPETAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
+        for tAsic, tChannel in targetChannels:
+            atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("vth_T", step2)
+            status, _ = uut.doTOFPETAsicCommand(tAsic, "wrChCfg", channel=tChannel, \
                                                       value=atbConfig.asicConfig[tAsic].channelConfig[tChannel])
 
 		
 
-            darkInterval = 0
-            maxIntervalFound = dict([(ac, False) for ac in targetChannels])
-            darkRate = dict([(ac, 0.0) for ac in targetChannels])
+        darkInterval = 0
+        maxIntervalFound = dict([(ac, False) for ac in targetChannels])
+        darkRate = dict([(ac, 0.0) for ac in targetChannels])
 
-            while darkInterval < 16:
-                for tAsic in activeAsics:
-                    atbConfig.asicConfig[tAsic].globalConfig.setValue("count_intv", darkInterval)
-                    status, _ = uut.doTOFPETAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
+        while darkInterval < 16:
+            for tAsic in activeAsics:
+                atbConfig.asicConfig[tAsic].globalConfig.setValue("count_intv", darkInterval)
+                status, _ = uut.doTOFPETAsicCommand(tAsic, "wrGlobalCfg", value=atbConfig.asicConfig[tAsic].globalConfig)
+                assert status == 0
+
+            sleep(1024*(2**darkInterval) * T * 2)
+
+           #print "Counting interval: %f ms" % (1024*(2**darkInterval) * T * 1E3)
+
+            totalDarkCounts = dict([ (ac, 0) for ac in targetChannels ])
+            maxDarkCounts = dict([ (ac, 0) for ac in targetChannels ])
+
+            unfinishedChannels = [ ac for ac in targetChannels if maxIntervalFound[ac] == False ]
+            for i in range(N):
+                for tAsic, tChannel in unfinishedChannels:	
+                    status, data = uut.doTOFPETAsicCommand(tAsic, "rdChDark", channel=tChannel)
                     assert status == 0
+                    v = atb.binToInt(data)
+                    totalDarkCounts[(tAsic, tChannel)] += v
+                    maxDarkCounts[(tAsic, tChannel)] = max([v, maxDarkCounts[(tAsic, tChannel)]])
+                        
+                        
+                sleep(1024*(2**darkInterval) * T)
 
-                sleep(1024*(2**darkInterval) * T * 2)
-
-                #print "Counting interval: %f ms" % (1024*(2**darkInterval) * T * 1E3)
-
-                totalDarkCounts = dict([ (ac, 0) for ac in targetChannels ])
-                maxDarkCounts = dict([ (ac, 0) for ac in targetChannels ])
-
-                unfinishedChannels = [ ac for ac in targetChannels if maxIntervalFound[ac] == False ]
-                for i in range(N):
-                    for tAsic, tChannel in unfinishedChannels:	
-                        status, data = uut.doTOFPETAsicCommand(tAsic, "rdChDark", channel=tChannel)
-                        assert status == 0
-                        v = atb.binToInt(data)
-                        totalDarkCounts[(tAsic, tChannel)] += v
-                        maxDarkCounts[(tAsic, tChannel)] = max([v, maxDarkCounts[(tAsic, tChannel)]])
-					
-				
-                    sleep(1024*(2**darkInterval) * T)
-
-                for ac in unfinishedChannels:
-                    if maxDarkCounts[ac] > 512:
-                        maxIntervalFound[ac] = True
-                    else:
-                        darkRate[ac] = float(totalDarkCounts[ac]) / (N * 1024*(2**darkInterval) * T)
-
-
-                if False not in maxIntervalFound.values():
-                    break;
-
-                maxCount = max(maxDarkCounts.values())
-
-                if maxCount == 0:
-                    darkInterval += 4
-                elif maxCount <= 32 and darkInterval < 11:
-                    darkInterval += 4
-                elif maxCount <= 64 and darkInterval < 12:
-                    darkInterval += 3
-                elif maxCount <= 128 and darkInterval < 13:
-                    darkInterval += 3
-                elif maxCount <= 256 and darkInterval < 14:
-                    darkInterval += 2
+            for ac in unfinishedChannels:
+                if maxDarkCounts[ac] > 512:
+                    maxIntervalFound[ac] = True
                 else:
-                    darkInterval += 1
-            if not any(x == 0 for x in darkRate.values()):
-                print "Dark rate = ", darkRate.values()
-            for tAsic, tChannel in targetChannels:
-                ntuple.Fill(step1, step2, tAsic, tChannel, darkRate[(tAsic, tChannel)])
-            rootFile.Write()
+                    darkRate[ac] = float(totalDarkCounts[ac]) / (N * 1024*(2**darkInterval) * T)
+
+
+            if False not in maxIntervalFound.values():
+                break;
+
+            maxCount = max(maxDarkCounts.values())
+
+            if maxCount == 0:
+                darkInterval += 4
+            elif maxCount <= 32 and darkInterval < 11:
+                darkInterval += 4
+            elif maxCount <= 64 and darkInterval < 12:
+                darkInterval += 3
+            elif maxCount <= 128 and darkInterval < 13:
+                darkInterval += 3
+            elif maxCount <= 256 and darkInterval < 14:
+                darkInterval += 2
+            else:
+                darkInterval += 1
+   
+        print "Dark rate = ", darkRate.values()
+        for tAsic, tChannel in targetChannels:
+            ntuple.Fill(step1, step2, tAsic, tChannel, darkRate[(tAsic, tChannel)])
+        rootFile.Write()
 
     rootFile.Close()
 
@@ -145,22 +141,25 @@ def dump_noise(root_file, uut, activeAsics, targetChannels):
 
 parser = argparse.ArgumentParser(description='Performs a number of threshold dark counts scan and computes the effective baseline for each, while ajusting the postamp parameter until the obtained baseline for all channels is in a good ADC range for the all the selected ASICS')
 
-parser.add_argument('OutputFilePrefix',
-                   help='output file prefix (ROOT file). Auxiliary file containing the data obtained in all scans and used to compute the baselines')
+parser.add_argument('OutputFile',
+                   help='output file (ROOT file). Auxiliary file containing the data obtained in all scans and used to compute the baselines')
 
 
 parser.add_argument('nIter', type=int,
                    help='Maximum number of iterations to determine baseline')
 
+parser.add_argument('hvBias', type=float,
+                   help='The voltage to be set for the HV DACs')
+
 parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
 
-parser.add_argument('--postamp', nargs='*', type=int, default=6, help='If --asics is set, this ')
+parser.add_argument('--postamp', nargs='*', type=int, help='If set, this argument takes the postamp values from which to start the initial scan (the values should be ordered per asic ID)')
 
 args = parser.parse_args()
 
         
 T = 6.25E-9
-root_file = args.OutputFilePrefix
+root_file = args.OutputFile
 n_iter=args.nIter
 
 dir_path=os.path.dirname(root_file)
@@ -178,8 +177,11 @@ uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = atbConfig
 uut.initialize()
 
+if args.asics == None:
+	activeAsics =  uut.getActiveTOFPETAsics()
+else:
+	activeAsics= args.asics
 
-activeAsics =  uut.getActiveTOFPETAsics()
 maxAsics=max(activeAsics) + 1
 systemAsics = [ i for i in range(maxAsics) ]
 
@@ -192,9 +194,8 @@ success=[0 for i in range(maxAsics)]
 
 for i,asic in enumerate(activeAsics):
     postamp[asic]=50
-    if (len(argv)>= 4+i):
-        print i, asic
-        postamp[asic] = int(argv[3+i]) 
+    if (args.postamp!= None):
+        postamp[asic] = args.postamp[i]
     success[asic]=False
  
 i=1
@@ -230,7 +231,7 @@ while i<=n_iter:
         print "postamp[%d]=%d" % (asic,postamp[asic])
     print "\n"
 
-    check=dump_noise(root_filename,uut, activeAsics, targetChannels)
+    check=dump_noise(root_filename,uut, activeAsics, targetChannels, args.hvBias)
  
     os.system("root -l %s \"draw_threshold_scan.C(%s,true)\"" % (root_filename,maxAsics))
     prefix, ext = splitext(root_file)
@@ -299,25 +300,33 @@ while i<=n_iter:
 
         postamp[j]+=proposal
            
-
-
-        if all(success): 
+        
+        for j in activeAsics:
+            if success[j] is True:
+                Converged=True
+            else:
+                Converged=False
+                break
+        if(i==n_iter):
+            for j in activeAsics:
+                if success[j] is False:
+                    print "Could not find a suitable baseline for ASIC/Mezzanine %d!" % j 
+                    print "Check log and plots in:"
+                    print "%s and %s/pdf" % (dir_path, log_filename)
+                    Converged=False
+                    finish=True
+            print "Check log and plots in:"
+            print "%s and %s/pdf" % (dir_path, log_filename)   
+                
+        if Converged: 
             os.system("evince %s &" % pdf_filename)
-            print "\n\n Successfully converged for all asics after %d runs!!" % i
+            print "\n\nSuccessfully converged for all asics after %d run(s)!!" % i
             print "Displaying baseline plots for: "
             for k in activeAsics:
                 print "postamp[%d]=%d" % (k,postamp[k])
             finish=True
             break
-    
-         
-    if (i==n_iter):
-        for j in activeAsics:
-            if success[j] is False: 
-                print "Could not find a suitable baseline for ASIC/Mezzanine %d!" % j 
-                print "Check log and plots in:"
-                print "%s and %s/pdf" % (dir_path, log_filename)
-                finish=True
+                
     if finish:
         print "\n\n-------------- OPTIONS -------------------" 
         print "1 - Quit"

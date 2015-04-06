@@ -1,8 +1,6 @@
-void draw_threshold_scan(bool Save = false)
+void draw_threshold_scan(Int_t maxAsics, bool Save = false)
 {
     
- 
-  
 	TFile *hFile = new TFile("draw_threshold_scan.root", "RECREATE");
 
 	gStyle->SetPalette(1);
@@ -17,9 +15,9 @@ void draw_threshold_scan(bool Save = false)
 	Float_t channel; nTuple->SetBranchAddress("channel", &channel);
 	
 	
-	TH2F * hRate = new TH2F("hRate", "Rate", 256, 0, 256, 64, 0, 64);
-	TH1F * hMax = new TH1F("hMax", "Max rate", 256, 0, 256);
-	TGraphErrors *gBaseline = new TGraphErrors(256);
+	TH2F * hRate = new TH2F("hRate", "Rate", maxAsics*64, 0, maxAsics*64, 64, 0, 64);
+	TH1F * hMax = new TH1F("hMax", "Max rate", maxAsics*64, 0, maxAsics*64);
+	TGraphErrors *gBaseline = new TGraphErrors(maxAsics*64);
 	gBaseline->SetTitle("Baseline");
 	TH1F * hBaseline = new TH1F("Baseline", "Baseline", 64, 0, 64);
 	TH1F * hSigma = new TH1F("Sigma", "Sigma", 20, 0, 2);
@@ -27,8 +25,6 @@ void draw_threshold_scan(bool Save = false)
 	Int_t N = nTuple->GetEntries();
 	for(Int_t n = 0; n < N; n++) {
 		nTuple->GetEntry(n);
-		
-		if(fabs(step1 - 50.0) > 0.01) continue;
 		Int_t C = 64*asic + channel;
 		hRate->Fill(C, step2, rate);
 	}
@@ -40,13 +36,20 @@ void draw_threshold_scan(bool Save = false)
 	f->SetParName(1, "x0");
 	f->SetParName(2, "Sigma");
 
-	FILE *thFile1 = fopen("asic0.baseline", "w");
-	FILE *thFile2 = fopen("asic1.baseline", "w");
-	FILE *thFile3 = fopen("asic2.baseline", "w");
-	FILE *thFile4 = fopen("asic3.baseline", "w");
+
+
 
 	for(Int_t i = 1; i < hRate->GetNbinsX() + 1; i++) {
+		
+		
+		
 		Int_t C = i-1;
+		char filename[256];
+		
+		if(C%64==0){
+			sprintf(filename, "asic%d.baseline",C/64);
+			FILE * thFile=fopen(filename, "w");
+		}
 		char hName[256];
 		char hTitle[256];
 		sprintf(hName, "hRate_%05d", C);
@@ -55,10 +58,7 @@ void draw_threshold_scan(bool Save = false)
 		h->SetTitle(hTitle);
 		
 	       
-		if(C/64==0){FILE *thFile=thFile1;}
-		if(C/64==1){FILE *thFile=thFile2;}
-		if(C/64==2){FILE *thFile=thFile3;}
-		if(C/64==3){FILE *thFile=thFile4;}
+
 
 		//	FILE *thFile = C/64 == 0 ? thFile1 : thFile2;
 		
@@ -105,8 +105,8 @@ void draw_threshold_scan(bool Save = false)
 		gBaseline->SetPoint(i-1, i-1, x0);
 		gBaseline->SetPointError(i-1, 0.1, sigma);
 	}
-	fclose(thFile1);
-	fclose(thFile2);
+	fclose(thFile);
+	
 	
 	
 	delete c1;

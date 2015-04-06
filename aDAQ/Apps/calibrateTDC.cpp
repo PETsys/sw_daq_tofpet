@@ -21,11 +21,14 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
+#include <getopt.h>
+#include <string.h>
+#include <stdio.h>
 
 static const int nASIC = DAQ::Common::SYSTEM_NCHANNELS / 64;
+static const int nAsicPerCPU = 2;
 static const int nAsicPerBoard = 2;
-static const int nBoards = nASIC/nAsicPerBoard;
+static const int nBoards = nASIC/nAsicPerCPU;
 static const int nTAC = nASIC*64*2*4;
 
 struct TacInfo {
@@ -159,29 +162,109 @@ static Double_t aperiodicF3 (double x, double x0, double b, double m, double p2)
 
 
 
-void calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2, float nominalM);
+int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2, float nominalM);
 void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2);
+
+void displayHelp(char * program)
+{
+	fprintf(stderr, "usage: %s [--int-factor=INT_FACTOR] [--asics_per_file=ASICS_PER_FILE] t_branch_data_file e_branch_data_file"
+			" tdc_calibration_prefix"
+			"\n", program);
+	fprintf(stderr, "\noptional arguments:\n");
+	fprintf(stderr, "  --help \t\t\t\t Show this help message and exit \n");
+	fprintf(stderr, "  --int-factor [=INT_FACTOR] \t\t Nominal TDC interpolation factor (Default is 128)\n");
+	fprintf(stderr, "  --asics_per_file [=ASICS_PER_FILE] \t\t Number of asics to be stored per calibration file (Default is 2). If set to ALL, only one file will be created with calibration for all ASICS with valid data.\n");
+	fprintf(stderr, "\npositional arguments:\n");
+	fprintf(stderr, "  t_branch_data_file \t\t\t Data to be used for T branch calibration\n");
+	fprintf(stderr, "  E_branch_data_file \t\t\t Data to be used for E branch calibration\n");
+	fprintf(stderr, "  tdc_calibration_prefix \t\t Prefix for output calibration files\n");
+};
+
+void displayUsage( char * program)
+{
+	fprintf(stderr, "usage: %s [--int-factor=INT_FACTOR] [--asics_per_file=ASICS_PER_FILE] t_branch_data_file e_branch_data_file"
+			" tdc_calibration_prefix"
+			"\n", program);
+};
 
 int main(int argc, char *argv[])
 {
-	if (argc != 5) {
-		fprintf(stderr, "USAGE: %s t_branch_data.root e_branch_data.root"
-				" 128"
-				" mezzanine1.tdc.cal mezzanine2.tdc.cal"
-				"\n",  argv[0]);
-		fprintf(stderr, "t_branch_data.root -- Data to be used for T branch calibration");
-		fprintf(stderr, "E_branch_data.root -- Data to be used for E branch calibration");
-		fprintf(stderr, "128 -- Nominal TDC interpolation factor");
-		fprintf(stderr, "tdc_calibration_prefix -- Prefix for output calibration files; 2 ASICs per file");
-		return 1;
-	}	
-	assert(argc == 5);
+
+
+	float nominalM = 128;
+	int nAsicsPerFile=2;
+	int readInd=0;
+	int posInd=0;
+	
+	char *tDataFileName;
+	char *eDataFileName;
+	char *tableFileNamePrefix;
+	
+	static struct option longOptions[] = {
+		{ "asics_per_file", optional_argument, 0, 0 },
+		{ "int-factor", optional_argument, 0, 0 },
+		{ "help", no_argument, 0, 0 }
+	};
+
+	
+	while (posInd+optind<=argc) {
+		int optionIndex = 0;
+		
+		if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
+		
+			// Option argument
+			if(optionIndex==0 && strcmp (optarg,"ALL") != 0)nAsicsPerFile = atoi(optarg);
+			else if(optionIndex==0 && strcmp (optarg,"ALL") == 0)nAsicsPerFile = nASIC;
+			else if(optionIndex==1)nominalM = atof(optarg);
+			else if(optionIndex==2){
+				displayHelp(argv[0]);
+				return(1);
+			}
+			else if((optionIndex==0 || optionIndex==1) and optarg==NULL){
+				displayUsage(argv[0]);
+				fprintf(stderr, "\n%s: error: must assign a proper value to optional argument!\n", argv[0]);
+				return(1);	
+			}	
+			else{
+				displayUsage(argv[0]);
+				fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
+				return(1);
+			}
+			continue;
+		}
+		else if(argv[readInd][0]!='-' && argv[readInd][1]!='-'){
+			if(posInd==1)tDataFileName = argv[readInd];
+			else if(posInd==2)eDataFileName  = argv[readInd];
+			else if(posInd==3)tableFileNamePrefix = argv[readInd];	
+			posInd++;
+		}
+		readInd++;
+	}
+	
+	if(posInd < 4){
+		displayUsage(argv[0]);
+		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		return(1);
+	}
+	else if(posInd > 4){
+		displayUsage(argv[0]);
+		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		return(1);
+	}
+
+	
+	// printf("tdata =%s\n", tDataFileName);
+	// printf("edata= %s\n", eDataFileName);
+	// printf("table= %s\n", tableFileNamePrefix);
+	// printf("nominalM= %f\n", nominalM);
+	// printf("nAsicsperFile= %d\n", nAsicsPerFile);
+   
+
 //	TVirtualFitter::SetDefaultFitter("Minuit2");
 	
 	TRandom *random = new TRandom();
 	
-	float nominalM = boost::lexical_cast<float>(argv[3]);
-	char *tableFileNamePrefix = argv[4];
+
 
 
 	//TacInfo tacInfo[nTAC];
@@ -189,33 +272,50 @@ int main(int argc, char *argv[])
 	for(int tac = 0; tac < nTAC; tac++)
 		tacInfo[tac] = TacInfo();
 	
+	
+
 	int nCPUs = sysconf(_SC_NPROCESSORS_ONLN);
-	for(int startBoard = 0; startBoard < nBoards; startBoard += nCPUs) {
-		int nWorkers = nBoards - startBoard;
+	for(int startFile = 0; startFile < nASIC/nAsicsPerFile; startFile += nCPUs) {
+		int nWorkers = nASIC/nAsicsPerFile - startFile;
 		nWorkers = nWorkers < nCPUs ? nWorkers : nCPUs;
 		
 		pid_t children[nWorkers];
 		for(int worker = 0; worker < nWorkers; worker++) {
 			pid_t pid = fork();
 			if (pid == 0) {
-				int board = startBoard + worker;
-				int startAsic = board * nAsicPerBoard;
-				int endAsic = startAsic + nAsicPerBoard;
+				int file = startFile + worker;
+				int startAsic = file * nAsicsPerFile;
+				int endAsic = startAsic + nAsicsPerFile;
 
-				TFile * tDataFile = new TFile(argv[1], "READ");
-				TFile * eDataFile = new TFile(argv[2], "READ");
-				
+				TFile * tDataFile = new TFile(tDataFileName, "READ");
+				TFile * eDataFile = new TFile(eDataFileName, "READ");
+
+
+				printf("worker %d, dile %d, startAsic %d, endAsic %d\n", worker, file, startAsic, endAsic);
+
 				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2(DAQ::Common::SYSTEM_NCHANNELS);
 				
 				char resumeFileName[1024];
-				sprintf(resumeFileName, "%s_%04u.tdc.root", tableFileNamePrefix, board);
+				resumeFileName[0]=0;
+				sprintf(resumeFileName,"%s_asics%02d-%02d.tdc.root", tableFileNamePrefix, startAsic, endAsic-1);
+				
 				TFile * resumeFile = new TFile(resumeFileName, "RECREATE");
 				
-				calibrate(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2, nominalM);
-// 				qualityControl(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2);
-				resumeFile->Write();
-				resumeFile->Close();
+				int hasData=calibrate(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2, nominalM);
+ 				if(hasData==0){
+					printf(" exiting worker %d, dile %d, startAsic %d, endAsic %d\n", worker, startAsic, endAsic);
+					resumeFile->Close();
+					remove(resumeFileName);
+					exit(0);
+				}
+				else{	
+					qualityControl(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2);
 				
+					resumeFile->Write();
+				
+					resumeFile->Close();
+					
+				}
 				delete myP2;
 				
 				tDataFile->Close();
@@ -232,6 +332,8 @@ int main(int argc, char *argv[])
 		} 	
 	}
 	
+
+
 	// Copy parameters from shared memory to global P2 
 	DAQ::TOFPET::P2 myP2(DAQ::Common::SYSTEM_NCHANNELS);
 	for(int asic = 0; asic < nASIC; asic++) {
@@ -250,7 +352,7 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	
+
 	for(int asic = 0; asic < nASIC; asic++) {
 		for(int channel = 0; channel < 64; channel++) {			
 		
@@ -291,19 +393,20 @@ int main(int argc, char *argv[])
 		}
 	}
 	
-	
-	
-	
-	for(unsigned board = 0; board < nBoards; board++) {
+
+	for(unsigned file = 0; file <  nASIC/nAsicsPerFile; file++) {
 		char tableFileName[1024];
-		sprintf(tableFileName, "%s_%04u.tdc.cal", tableFileNamePrefix, board);
-		myP2.storeFile(  64*nAsicPerBoard*board, 64*nAsicPerBoard*(board+1), tableFileName);
+		int startAsic = file * nAsicsPerFile;
+		int endAsic = startAsic + nAsicsPerFile;
+		sprintf(tableFileName, "%s_asics%02u-%02u.tdc.cal", tableFileNamePrefix, startAsic, endAsic-1);
+		myP2.storeFile(  64*nAsicsPerFile*file, 64*nAsicsPerFile*(file+1), tableFileName);
 	}
 
 	return 0;
 }
 
-void calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2, float nominalM) {
+int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2, float nominalM) {
+	int hasData=0;
 	for(int asic = start; asic < end; asic++) {
 		for(int channel = 0; channel < 64; channel++) {
 			for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
@@ -322,7 +425,9 @@ void calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *
 					ti.hA_Fine = hA_Fine;
 
 					if(ti.hA_Fine == NULL) continue;
-					if(ti.hA_Fine->GetEntries() == 0) continue;
+					if(ti.hA_Fine->GetEntries() == 0)continue;
+				   
+					hasData=1;
 					
 					int nBinsX = hA_Fine->GetXaxis()->GetNbins();
 					float xMin = hA_Fine->GetXaxis()->GetXmin();
@@ -629,6 +734,7 @@ void calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *
 		}
 	
 	}
+	return hasData;
 
 }
 
@@ -636,17 +742,18 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 {
 	// Correct t0 and build shape quality control histograms
 	const int nIterations = 2;
+   
 	// Need two iterations to correct t0, then one more to build final histograms
 	for(int iter = 0; iter <= nIterations; iter++) {
-		for(int n = 0; n < nTAC; n++) {
+		for(int n = 64*4*2*start; n < 64*4*2*end; n++) {
 			if(tacInfo[n].pA_ControlT == NULL) continue;
 			tacInfo[n].pA_ControlT->Reset();
 			tacInfo[n].pA_ControlE->Reset();
-			tacInfo[n].pA_ControlQ->Reset();
-			
+			tacInfo[n].pA_ControlQ->Reset();			
 		}
 
-
+	
+	  
 		for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
 			bool isT = (whichBranch == 0);
 			
@@ -685,11 +792,11 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 			for(int i = 0; i < nEvents; i++) {
 				data->GetEntry(i);				
 				int index2 = 4 * (64 * fAsic + fChannel) + fTac;			
-				if(fAsic >= nASIC) continue;
+				if(fAsic < start || fAsic >= end) continue;
 				if(fChannel >= 64) continue;
 				if(fTac >= 4) continue;
 				
-				
+				//printf("hello2 %d %d %d %d\n", 2*index2 + (isT ? 0 : 1),  fAsic,fChannel, fTac);
 				
 				TacInfo &ti = tacInfo[2*index2 + (isT ? 0 : 1)];
 				
@@ -726,7 +833,9 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 		}
 		
 		if(iter >= nIterations) continue;
+	
 		for(int n = 0; n < nTAC; n++) {
+			if (n < start*64*8 || n>=end*64*8)continue;
 			Int_t channel = (n/2) / 4;
 			Int_t tac = (n/2) % 4;
 			Bool_t isT = (n % 2 == 0);

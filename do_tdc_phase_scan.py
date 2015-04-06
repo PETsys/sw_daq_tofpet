@@ -2,13 +2,32 @@
 import atb
 from loadLocalConfig import loadLocalConfig
 from bitarray import bitarray
-from sys import argv, stdout, exit
+from sys import  stdout, exit
 from time import time, sleep
 import ROOT
 from rootdata import DataFile
 import serial
 import tofpet
 from os.path import dirname, isdir
+import argparse
+
+parser = argparse.ArgumentParser(description='Acquires a set of data for several relative phases of the test pulse, either injecting it directly in the tdcs or in the front end')
+
+
+parser.add_argument('OutputFile',
+                   help='output file (ROOT file).')
+
+parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
+
+parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp'], help='Defines where the test pulse is injected. Two modes are allowed: tdca and fetp. ')
+
+parser.add_argument('--tpDAC', type=int, default=32, help='The amplitude of the test pulse in DAC units (Default is 32 ). ')
+
+parser.add_argument('--hvBias', type=float, help='The HV bias to be used in the scan (Default is 5 V)')
+
+
+args = parser.parse_args()
+
 
 # Parameters
 T = 6.25E-9
@@ -39,21 +58,27 @@ Nmax = 8
 tpLength = 128
 
 
-rootFileName = argv[1]
+rootFileName = args.OutputFile
 assert isdir(dirname(rootFileName))
 
-vbias = 5
-if argv[2] == "tdca":
+
+if args.mode == "tdca":
   tdcaMode = True
-  vbias = 5
+  if args.hvBias == None:
+    vbias =  5
+  else:
+    vbias = args.hvBias
   frameInterval = 0
   pulseLow = False
 	
 
-elif argv[2] == "fetp":
+elif args.mode == "fetp":
   tdcaMode = False
-  tpDAC = int(argv[3])
-  vbias = float(argv[4])
+  tpDAC = args.tpDAC
+  if args.hvBias == None:
+    vbias =  5
+  else:
+    vbias = args.hvBias
   frameInterval = 16
   pulseLow = True
 
@@ -74,8 +99,15 @@ uut.initialize()
 rootData1 = DataFile( rootFile, "3")
 rootData2 = DataFile( rootFile, "3B")
 
+
+if args.asics == None:
+  activeAsics =  uut.getActiveTOFPETAsics()
+else:
+  activeAsics= args.asics
+
+print activeAsics
+
 activeChannels = [ x for x in range(0,64) ]
-activeAsics =  uut.getActiveTOFPETAsics()
 systemAsics = [ i for i in range(max(activeAsics) + 1) ]
 
 minEventsA *= len(activeAsics)
@@ -299,5 +331,4 @@ rootData2.close()
 rootFile.Write()
 rootFile.Close()
 
-for c in range(8):
-  uut.setHVDAC(c, 0)
+uut.setAllHVDAC(0)

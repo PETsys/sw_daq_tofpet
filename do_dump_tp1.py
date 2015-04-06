@@ -15,14 +15,18 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Scan vbl and ib1 ASIC parameters while acquiring fetp data')
 parser.add_argument('acqTime', type=float,
-                   help='acquisition time for each channel')
+                   help='acquisition time for each channel (in seconds)')
 
 parser.add_argument('OutputFilePrefix',
-                   help='output file prefix (files with .raw2 and .idx suffixes will be create)')
+                   help='output file prefix (files with .raw2 and .idx suffixes will be created)')
 
 parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
 
-parser.add_argument('--channel_step', type=int, default=6, help='If set, the scan will be performed for one in every channel_step (default = 6)')
+parser.add_argument('--channel_start', type=int, default=0, help='If set, the channel number ID (form 0 to 63) for which to start the scan (default = 0)')
+
+parser.add_argument('--channel_step', type=int, default=6, help='If set, the scan will be performed for one in every channel_step (default = 6). If only interessted in one channel per ASIC, set this to 64.')
+
+
 
 args = parser.parse_args()
 
@@ -64,7 +68,7 @@ else:
 
 print activeAsics
 
-for tChannel in range(0,64,args.channel_step):
+for tChannel in range(args.channel_start,64,args.channel_step):
 	atbConfig=loadLocalConfig(useBaseline=False)
 
 	for asic in activeAsics:

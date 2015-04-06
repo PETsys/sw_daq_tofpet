@@ -139,7 +139,8 @@ void RawReaderV2::run()
 		int r = fread(rawEvents, sizeof(RawEventV2), count, dataFile);
 		if(r <= 0) break;
 		readPointer += r;
-		printf("events extracted= %lld\n",readPointer);
+	
+		//printf("events extracted= %lld\n",readPointer);
 	
 		for(int j = 0; j < r; j++) {
 			RawEventV2 &rawEvent = rawEvents[j];
