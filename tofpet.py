@@ -344,3 +344,9 @@ class ConfigurationErrorGeneric(ConfigurationError):
 	def __str__(self):
 		return "Unexpected configuration error %02X from ASIC at port %2d, slave %2d, asic %2d" % self.addr
 
+class ConfigurationErrorBadRead(ConfigurationError):
+	def __init__(self, portID, slaveID, asicID, written, read):
+		self.data = (portID, slaveID, asicID, written, read)
+	def __str__(self):
+		return "Configuration readback failed for ASIC at port %2d, slave %2d, asic %2d: wrote %s, read %s" % self.data
+
