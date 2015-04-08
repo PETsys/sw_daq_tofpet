@@ -185,7 +185,8 @@ else:
 maxAsics=max(activeAsics) + 1
 systemAsics = [ i for i in range(maxAsics) ]
 
-targetChannels = [ (x, y) for x in activeAsics for y in range(64) ]
+targetAsics=activeAsics
+targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
 
 postamp=[0 for i in range(maxAsics)]
 success=[0 for i in range(maxAsics)]
@@ -193,7 +194,7 @@ success=[0 for i in range(maxAsics)]
 
 
 for i,asic in enumerate(activeAsics):
-    postamp[asic]=50
+    postamp[asic]=46
     if (args.postamp!= None):
         postamp[asic] = args.postamp[i]
     success[asic]=False
@@ -215,7 +216,7 @@ while i<=n_iter:
   
     uut.initialize()
   
-    for asic in activeAsics:
+    for asic in targetAsics:
         atbConfig.asicConfig[asic].globalConfig.setValue("postamp", postamp[asic])
     
 
@@ -227,11 +228,11 @@ while i<=n_iter:
 
 
     print "\nPerforming threshold scan with:"
-    for  asic in activeAsics:
+    for  asic in targetAsics:
         print "postamp[%d]=%d" % (asic,postamp[asic])
     print "\n"
 
-    check=dump_noise(root_filename,uut, activeAsics, targetChannels, args.hvBias)
+    check=dump_noise(root_filename,uut, targetAsics, targetChannels, args.hvBias)
  
     os.system("root -l %s \"draw_threshold_scan.C(%s,true)\"" % (root_filename,maxAsics))
     prefix, ext = splitext(root_file)
@@ -239,7 +240,7 @@ while i<=n_iter:
     pdf_filename= "%s/pdf/%s_%d.pdf" % (dir_path,base_prefix, i)
     os.system("cp /tmp/baseline_dummy.pdf %s" % pdf_filename)
 
-    for j in activeAsics:
+    for j in targetAsics:
         
         
         os.system("cp asic%d.baseline /tmp/asic%d_%d.baseline" % (j,j,i))
@@ -273,8 +274,8 @@ while i<=n_iter:
             proposal=3
         else:
             proposal=0
-                #targetAsics.pop([j])
-                #targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
+            targetAsics.remove(j)
+            targetChannels = [ (x, y) for x in targetAsics for y in range(64) ]
             success[j]=True
 
         print "\n\n############ ASIC %d: Postamp = %d ############" % (j, postamp[j])
@@ -307,25 +308,25 @@ while i<=n_iter:
             else:
                 Converged=False
                 break
-        if(i==n_iter):
-            for j in activeAsics:
-                if success[j] is False:
-                    print "Could not find a suitable baseline for ASIC/Mezzanine %d!" % j 
-                    print "Check log and plots in:"
-                    print "%s and %s/pdf" % (dir_path, log_filename)
-                    Converged=False
-                    finish=True
-            print "Check log and plots in:"
-            print "%s and %s/pdf" % (dir_path, log_filename)   
+    if(i==n_iter):
+        for j in activeAsics:
+            if success[j] is False:
+                print "Could not find a suitable baseline for ASIC/Mezzanine %d!" % j 
+                print "Check log and plots in:"
+                print "%s and %s/pdf" % (dir_path, log_filename)
+                Converged=False
+                finish=True
+        print "Check log and plots in:"
+        print "%s and %s/pdf" % (dir_path, log_filename)   
                 
-        if Converged: 
-            os.system("evince %s &" % pdf_filename)
-            print "\n\nSuccessfully converged for all asics after %d run(s)!!" % i
-            print "Displaying baseline plots for: "
-            for k in activeAsics:
-                print "postamp[%d]=%d" % (k,postamp[k])
-            finish=True
-            break
+    if Converged: 
+        os.system("evince %s &" % pdf_filename)
+        print "\n\nSuccessfully converged for all asics after %d run(s)!!" % i
+        print "Displaying baseline plots for: "
+        for k in activeAsics:
+            print "postamp[%d]=%d" % (k,postamp[k])
+        finish=True
+        break
                 
     if finish:
         print "\n\n-------------- OPTIONS -------------------" 

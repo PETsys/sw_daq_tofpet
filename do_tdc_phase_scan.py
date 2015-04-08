@@ -17,13 +17,17 @@ parser = argparse.ArgumentParser(description='Acquires a set of data for several
 parser.add_argument('OutputFile',
                    help='output file (ROOT file).')
 
+parser.add_argument('hvBias', type=float,
+                   help='The voltage to be set for the HV DACs')
+
+
 parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
 
 parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp'], help='Defines where the test pulse is injected. Two modes are allowed: tdca and fetp. ')
 
-parser.add_argument('--tpDAC', type=int, default=32, help='The amplitude of the test pulse in DAC units (Default is 32 ). ')
+parser.add_argument('--tpDAC', type=int, default=0, help='The amplitude of the test pulse in DAC units (Default is 32 ). When running in fetp mode, this value needs to be set.')
 
-parser.add_argument('--hvBias', type=float, help='The HV bias to be used in the scan (Default is 5 V)')
+
 
 
 args = parser.parse_args()
@@ -74,7 +78,11 @@ if args.mode == "tdca":
 
 elif args.mode == "fetp":
   tdcaMode = False
+  if args.tpDAC==0:
+    print "Error: Please set tpDAC argument! Exiting..."
+    exit
   tpDAC = args.tpDAC
+
   if args.hvBias == None:
     vbias =  5
   else:

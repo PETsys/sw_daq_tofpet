@@ -17,14 +17,21 @@ parser = argparse.ArgumentParser(description='Scan vbl and ib1 ASIC parameters w
 parser.add_argument('acqTime', type=float,
                    help='acquisition time for each channel (in seconds)')
 
+parser.add_argument('hvBias', type=float,
+                   help='The voltage to be set for the HV DACs')
+
+parser.add_argument('tpDAC', type=int,
+                   help='The amplitude of the test pulse, in DAC units (63 is  minimum and 0 is maximum)')
+
 parser.add_argument('OutputFilePrefix',
                    help='output file prefix (files with .raw2 and .idx suffixes will be created)')
+
 
 parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
 
 parser.add_argument('--channel_start', type=int, default=0, help='If set, the channel number ID (form 0 to 63) for which to start the scan (default = 0)')
 
-parser.add_argument('--channel_step', type=int, default=6, help='If set, the scan will be performed for one in every channel_step (default = 6). If only interessted in one channel per ASIC, set this to 64.')
+parser.add_argument('--channel_step', type=int, default=6, help='If set, the scan will be performed for one in every channel_step (default = 6). If only interested in one channel per ASIC, set this to 64.')
 
 
 
@@ -44,7 +51,7 @@ T = 6.25E-9
 cWindow = 0
 #cWindow = 25E-9
 
-tpDAC = 32
+tpDAC = args.tpDAC
 tpFrameInterval = 16
 tpCoarsePhase = 0
 tpFinePhase = 1
@@ -79,7 +86,7 @@ for tChannel in range(args.channel_start,64,args.channel_step):
 	uut.config=atbConfig
 	uut.uploadConfig()
 	uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
-	uut.setAllHVDAC(5.0)
+	uut.setAllHVDAC(args.hvBias)
 
 	for step1 in range(0,64,4): # vib
 		for step2 in range(0,64,4): #vbl
