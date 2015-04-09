@@ -10,6 +10,7 @@ parser.add_argument('ReqVoltage', type=float,
 args = parser.parse_args()
 
 uut = atb.ATB("/tmp/d.sock")
+
 uut.config = loadLocalConfig(useBaseline=False)
 uut.setAllHVDAC(args.ReqVoltage)
 

@@ -258,27 +258,15 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 			tCoarse_TOFPET = (eventWord >> 38) & 0x3FF;
 			eventTime = 1024ULL*frameID + tCoarse_TOFPET;
 			hasTOFPET = true;
-		}			
-		else if (feType == 1) {
-			channelID = (unsigned short) ((0x0000fc0000000000 & eventWord) >> (32+10));
-			tCoarse_STiC = m_lut[	(unsigned int) ( 0x7FFF & (eventWord  >> 26) ) ];
-			eventTime = 1024ULL*frameID + ((tCoarse_STiC >> 2) & 0x3FF);
-			hasSTiCv3 = true;
-		}
-		else {
-			continue;
-		}
-		//printf("Channel %u tCoarse %u time %llu\n", channelID, feType == 0 ? tCoarse_TOFPET : tCoarse_STiC, eventTime);
-		
-		// Adjust channel idle time for the channel
-		int channelIndex =  64 * asicID + channelID;		
-		int64_t channelIdleTime = eventTime - m->channelLastEventTime[channelIndex];
-		m->channelLastEventTime[channelIndex] = eventTime;
 
-		// If TOFPET, adjust TAC idle time
-		unsigned short tacID_TOFPET = 0;
-		int64_t tacIdleTime = 0;
-		if (feType == 0) {
+			// Adjust channel idle time for the channel
+			int channelIndex =  64 * asicID + channelID;
+			int64_t channelIdleTime = eventTime - m->channelLastEventTime[channelIndex];
+			m->channelLastEventTime[channelIndex] = eventTime;
+
+			// If TOFPET, adjust TAC idle time
+			unsigned short tacID_TOFPET = 0;
+			int64_t tacIdleTime = 0;
 			tacID_TOFPET = (eventWord >> 0) & 0x3;
 			//printf("tacID = %d\n", tacID_TOFPET);
 			int tacIndex = tacID_TOFPET + 4 * channelIndex;
@@ -286,15 +274,12 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 			if(tacIdleTime <= 32) {
 				if(m->debugLevel > 1)
 					fprintf(stderr, "Event with to very small TAC idle time (%lld)\n", tacIdleTime);
-			}		
+			}
 			m->tacLastEventTime[tacIndex] = eventTime;
-		}
-		
-		if(dataFrame == NULL) continue;	
-		Event &event = dataFrame->p->events[nGoodEvents];
-		
-		// Decode the remaining information and fill the structure
-		if (feType == 0) {
+
+			if(dataFrame == NULL) continue;	
+			Event &event = dataFrame->p->events[nGoodEvents];
+
 			event.type = 0;
 			event.asicID = asicID;
 			event.channelID = channelID;
@@ -305,27 +290,38 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 			event.d.tofpet.eFine = (eventWord >> 8) & 0x3FF;
 			event.d.tofpet.tacIdleTime = tacIdleTime;
 			event.d.tofpet.channelIdleTime = channelIdleTime;	
-		}	
+			
+			nGoodEvents += 1;
+		}			
 		else if (feType == 1) {
-					if(debugLevel > 2) printf("Event %3d asicID %3d channelID %2d %016llX\n", n, asicID, channelID, eventWord);
+			channelID = (unsigned short) ((0x0000fc0000000000 & eventWord) >> (32+10));
+			tCoarse_STiC = m_lut[	(unsigned int) ( 0x7FFF & (eventWord  >> 26) ) ];
+			eventTime = 1024ULL*frameID + ((tCoarse_STiC >> 2) & 0x3FF);
+			hasSTiCv3 = true;
+			
+			// Adjust channel idle time for the channel
+			int channelIndex =  64 * asicID + channelID;
+                        int64_t channelIdleTime = eventTime - m->channelLastEventTime[channelIndex];
+                        m->channelLastEventTime[channelIndex] = eventTime;
+
+			if(dataFrame == NULL) continue;	
+			Event &event = dataFrame->p->events[nGoodEvents];
+
 			event.type = 1;
 			event.asicID = asicID;
 			event.channelID = channelID;
 			event.d.sticv3.eFine =  (unsigned short) 	(( 0x0000001f & eventWord));
 			event.d.sticv3.eCoarseL = m_lut[ (unsigned int) (( 0x000fffe0 & eventWord) >> 5)  ];
-			event.d.sticv3.eBadHit =  			(( 0x00100000 & eventWord) != 0 )? true:false;
+			event.d.sticv3.eBadHit =  			(( 0x00100000 & eventWord) != 0 ) ? true:false;
 			event.d.sticv3.tFine =		(unsigned short)(( 0x03e00000 & eventWord) >> 21);
 			event.d.sticv3.tCoarseL = tCoarse_STiC;
-			event.d.sticv3.tBadHit =  			(( 0x0000020000000000 & eventWord) != 0 )? true:false;
+			event.d.sticv3.tBadHit =  			(( 0x0000020000000000 & eventWord) != 0 ) ? true:false;
 			event.tCoarse = (event.d.sticv3.tCoarseL  >> 2) & 0x3FF;			
 			event.d.sticv3.channelIdleTime = channelIdleTime;
-		}
-		else {
-			continue;
+			
+			nGoodEvents += 1;
 		}
 		
-		
-		nGoodEvents += 1;
 	}
 	
 	if(dataFrame == NULL) {

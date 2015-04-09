@@ -44,7 +44,7 @@ M = 392		# 160 MHz PLL, 160 MHz ASIC
 #M = 2*392	# 160 MHz PLL, 80 MHz ASIC 
 K = 19
 minEventsA = 1000    
-minEventsB = 300     
+minEventsB = 300    
 
 ###
 
@@ -202,8 +202,8 @@ for tChannel in activeChannels:
 				nReceivedEvents += 1
 				#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 				if asic not in activeAsics or channel != tChannel:
-					print "WARNING: spurious event Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
-					continue;
+					print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
+					continue
 				
 				nAcceptedEvents += 1				
 			
@@ -242,7 +242,7 @@ for tChannel in activeChannels:
 			if nc < minEventsA/(10*len(activeAsics)) : continue # not enough events
 			if x < 1.0: continue # too early
 			if e < 0.10: continue # yeah, righ!
-			if e > 5.0: continue # too noisy
+			if e > 2.0: continue # too noisy
                         if y < 0.5 * nominal_m: continue; # out of range
 
 			if y < minADCY:
@@ -283,6 +283,8 @@ for tChannel in activeChannels:
 
 		for interval in intervals:		
 			step1 = interval+1
+			expectedChannelIdleTime = 1024*step1
+			expectedTACIdleTime = 4 * expectedChannelIdleTime
 
 			if Generator == 1:
 				## Internal PLL 
@@ -294,6 +296,7 @@ for tChannel in activeChannels:
 				tpFinePhase = phaseStep % M
 
 			uut.setTestPulsePLL(tpLength, interval, tpFinePhase, pulseLow)
+			sleep(expectedTACIdleTime * T)
 			uut.doSync()
 			t0 = time()
 			
@@ -304,6 +307,7 @@ for tChannel in activeChannels:
 			nAcceptedEvents = 0
 			nReceivedFrames = 0
 			t0 = time()
+			#print "Expected idle times: %8d %8d" % (1024*step1, 4*1024*step1)
 			while nAcceptedEvents < minEventsB and (time() - t0) < 15:
 				decodedFrame = uut.getDataFrame(nonEmpty = True)
 				if decodedFrame is None: continue
@@ -314,9 +318,20 @@ for tChannel in activeChannels:
 						nReceivedEvents += 1
 						#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 						if asic not in activeAsics or channel != tChannel:
-							print "WARNING: spurious event Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
-							continue;
-						
+							print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
+							continue
+
+						if channelIdleTime < expectedChannelIdleTime or tacIdleTime < expectedTACIdleTime:						
+							print "WARNING 2: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d (%8d) %8d (%8d)" \
+								% (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, \
+								channelIdleTime, (channelIdleTime-expectedChannelIdleTime), \
+								tacIdleTime, (tacIdleTime-expectedTACIdleTime)) 
+							continue
+
+						if tdcaMode == False and tCoarse == 0 and eCoarse == 0:
+							print "WARNING 3: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
+							continue
+
 						nAcceptedEvents += 1				
 					
 						rootData2.addEvent(step1, step2, decodedFrame['id'], asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime)

@@ -248,6 +248,20 @@ class ErrorNoFEB:
 		return "No active FEB/D on any port"
 
 
+class ErrorAsicPresenceInconsistent:
+	def __init__(self, portID, slaveID, asicID, s):
+		self.__data = (portID, slaveID, asicID, s)
+	def __str__(self):
+		return "ASIC at port %2d, slave %2d, asic %2d has inconsistent state: %s" % (self.__data)
+
+class ErrorAsicPresenceChanged:
+	def __init__(self, portID, slaveID, asicID):
+		self.__data = (portID, slaveID, asicID)
+	def __str__(self):
+		return "ASIC at port %2d, slave %2d, asic %2d changed state" % (self.__data)
+	
+
+
 	
 ## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
 class ATB:
@@ -283,6 +297,23 @@ class ATB:
         ## Starts the data acquisition
 	# @param mode If set to 1, only data frames  with at least one event are transmitted. If set to 2, all data frames are transmitted. If set to 0, the data transmission is stopped
 	def start(self, mode=2):
+		nTry = 0
+		while True:
+			try:
+				return self.__start(mode)
+			except ErrorAsicPresenceChanged as e:
+				nTry = nTry + 1;
+				if nTry > 5: raise e
+				print "WARNING: ", e, ", retrying..."
+
+	def __start(self, mode=2):
+		# First, generate a "sync" in the FEB/D (or ML605) itself
+		for portID, slaveID in self.getActiveFEBDs():
+			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+		#sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
+
+
+		# Now, start the DAQ!
 		mode = 2 # Do not send mode 1 to daqd!
 
 		assert self.config is not None
@@ -296,7 +327,24 @@ class ATB:
 		n = struct.calcsize(template1) + struct.calcsize(template2);
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, mode)
 		self.__socket.send(data)
-		sleep(0.1)
+		sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
+
+		# Check the status from all the ASICs
+		for portID, slaveID in self.getActiveFEBDs():
+			nLocalAsics = len(self.getGlobalAsicIDsForFEBD(portID, slaveID))
+			
+			deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
+			decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
+
+			deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+			decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+
+			for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
+				localOK = deserializerStatus[i] and decoderStatus[i] 
+				globalOK = self.__activeAsics[globalAsicID]
+				if localOK != globalOK:
+					raise ErrorAsicPresenceChanged(portID, slaveID, i)
+
 		return None
        
         ## Stops the data acquisition, the same as calling start(mode=0)
@@ -604,6 +652,12 @@ class ATB:
 			#print data
 			return (status, data[0:dataLength])
 		else:
+			# Check what we wrote
+			readCommand = 'rd' + command[2:]
+			readStatus, readValue = self.__doTOFPETAsicCommand(asicID, readCommand, channel=channel)
+			if readValue != value:
+				raise tofpet.ConfigurationErrorBadRead(febID, 0, asicID % 16, value, readValue)
+
 			return (status, None)
 
 
@@ -632,6 +686,13 @@ class ATB:
 	
 	def initializeFEBD_TOFPET(self, portID, slaveID):
 		print "INFO: FEB/D at port %d, slave %d is of type TOFPET" % (portID, slaveID)
+		# Disable data reception logic
+		self.writeFEBDConfig(portID, slaveID, 0, 4, 0x0)
+		# Disable test pulse
+		self.setTestPulseNone()
+		# Send a 64K clock long reset
+		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
+		sleep(0.120 + 64*self.__frameLength)	# Need to wait for at least 100 ms, plus the reset time
 		# Read the number of ASIC data links expected by this FEB/D
 		# and generate a suitable default global configuration
 		nLinks = self.readFEBDConfig(portID, slaveID, 0, 1)
@@ -658,7 +719,7 @@ class ATB:
 		self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 		#self.sendCommand(portID, slaveID, 0x03, bytearray([0x04, 0x00, 0x00]))
 		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
-		sleep(0.120)	# We need to wait for at least 100 ms after generating a reset
+		sleep(0.120)	# Need to wait for at least 100 ms, plus the reset time
 
 		deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
 		decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
@@ -678,8 +739,7 @@ class ATB:
 				self.__activeAsics[asicID] = False
 			else:
 				# Something failed!!
-				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent: %s" % (asicID, portID, slaveID, i, str(triplet))
-				self.__activeAsics[asicID] = False
+				raise ErrorAsicPresenceInconsistent(portID, slaveID, i, str(triplet))
 
 		return None
 
@@ -687,11 +747,11 @@ class ATB:
 		print "INFO: FEB/D at port %d, slave %d is of type TOFPET" % (portID, slaveID)
 		# Disable data reception logic
 		self.writeFEBDConfig(portID, slaveID, 0, 4, 0x0)
-		# Send a 64K frame long reset
-		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
-		sleep(0.120 + 64* self.__frameLength)	# Need to wait for at least 100 ms, plus the reset time
 		# Disable test pulse
 		self.setTestPulseNone()
+		# Send a 64K clock long reset
+		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
+		sleep(0.120 + 64* self.__frameLength)	# Need to wait for at least 100 ms, plus the reset time
 
 		# Load a minimum power configuration into the FEB/D
 		allOff = sticv3.AsicConfig('stic_configurations/ALL_OFF.txt')
@@ -723,7 +783,7 @@ class ATB:
 		self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 		#self.sendCommand(portID, slaveID, 0x03, bytearray([0x04, 0x00, 0x00]))
 		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
-		sleep(0.120)	# We need to wait for at least 100 ms after generating a reset
+		sleep(0.120)	# Need to wait for at least 100 ms, plus the reset time
 
 		deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
 		decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
@@ -743,8 +803,7 @@ class ATB:
 				self.__activeAsics[asicID] = False
 			else:
 				# Something failed!!
-				print "WARNING: ASIC %d (P%02d S%02d A%02d) initialization inconsistent: %s" % (asicID, portID, slaveID, i, str(triplet))
-				self.__activeAsics[asicID] = False		
+				raise ErrorAsicPresenceInconsistent(portID, slaveID, i, str(triplet))	
 
 		return None
 
@@ -760,12 +819,21 @@ class ATB:
 
 		for portID, slaveID in self.getActiveFEBDs():
 			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
-			if asicType == 0x00010001:
-				self.initializeFEBD_TOFPET(portID, slaveID)
-			elif asicType == 0x00020003:
-				self.initializeFEBD_STICv3(portID, slaveID)
-			else:
-				raise ErrorInvalidAsicType(portID, slaveID, asicType)
+			nTry = 0
+			while True:
+				try:
+					if asicType == 0x00010001:
+						self.initializeFEBD_TOFPET(portID, slaveID)
+					elif asicType == 0x00020003:
+						self.initializeFEBD_STICv3(portID, slaveID)
+					else:
+						raise ErrorInvalidAsicType(portID, slaveID, asicType)
+					break
+				except ErrorAsicPresenceInconsistent as e:
+					nTry = nTry + 1
+					if nTry > 5: raise e
+					print "WARNING ", e, ", retrying..."
+
 
 		self.uploadConfig()
 		self.start()
