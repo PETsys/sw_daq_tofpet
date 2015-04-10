@@ -388,7 +388,7 @@ int main(int argc, char *argv[])
 		
 		
 		if(sink == NULL) {
-			assert (cWindow == 0); // We don't support coincidence filtering when writing to endotofpet files yet
+	
 			if (cWindow == 0) {
 				sink = new EventWriter_RP(outputDataFile, outputIndexFile, step1, step2,
 					new NullSink<RawPulse>()

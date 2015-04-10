@@ -32,7 +32,7 @@ dataFilePrefix = args.OutputFilePrefix
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig()
-uut.openAcquisition(dataFilePrefix, cWindow, writer="writeRaw")
+uut.openAcquisition(dataFilePrefix, cWindow*1E-9, writer="writeRaw")
 uut.initialize()
 uut.config.writeParams(dataFilePrefix)
 # Set all HV DAC channels 

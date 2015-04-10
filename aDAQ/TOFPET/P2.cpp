@@ -72,6 +72,11 @@ int P2::getIndex(int channel, int tac, bool isT)
 	index = index*4 + tac;
 	index = index*2 + (isT ? 0 : 1);
 	
+	if (index <0)index=0;
+	if (index >= tableSize){
+		printf("index=%d, channel=%d, tac=%d\n", index, channel, tac);
+		index=tableSize-1;
+	}
 	assert(index >= 0);
 	assert(index < tableSize);
 	
