@@ -56,7 +56,7 @@ tpFrameInterval = 16
 tpCoarsePhase = 0
 tpFinePhase = 1
 tpLength = 512
-
+tpInvert=True
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 
@@ -85,9 +85,9 @@ for tChannel in range(args.channel_start,64,args.channel_step):
 	
 	uut.config=atbConfig
 	uut.uploadConfig()
-	uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, False)
+	uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, tpInvert)
 	uut.setAllHVDAC(args.hvBias)
-
+	uut.doSync()
 	for step1 in range(0,64,4): # vib
 		for step2 in range(0,64,4): #vbl
 			t0 = time()
