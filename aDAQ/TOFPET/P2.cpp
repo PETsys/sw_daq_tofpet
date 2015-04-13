@@ -260,28 +260,26 @@ void P2::storeFile(int start, int end, const char *fName)
 void P2::loadFile(int start, int end, const char *fName)
 {
 	FILE *f = fopen(fName, "r");
-	for(int channel = start; channel < end; channel++){
-		for(int isT = 0; isT < 2; isT++){
-			for(int tac = 0; tac < 4; tac++) {
-				int index = getIndex(channel, tac, isT == 0);
-				TAC &te = table[index];
-				fscanf(f, "%*5d\t%*c\t%*d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
-				       &te.t0, 
-				       &te.shape.tB, &te.shape.m, &te.shape.p2,
-				       &te.leakage.tQ, &te.leakage.a0, &te.leakage.a1, &te.leakage.a2
-				       );
-				isT == 0 ? nBins_tqT[channel]+=te.shape.m :  nBins_tqE[channel]+=te.shape.m;
-				
-			}
-			
+	int channel;
+	char tOrE;
+	int tac;
+	TAC te;
+	while(fscanf(f, "%5d\t%c\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
+				 &channel, &tOrE, &tac,
+				 &te.t0, 
+				 &te.shape.tB, &te.shape.m, &te.shape.p2,
+				 &te.leakage.tQ, &te.leakage.a0, &te.leakage.a1, &te.leakage.a2
+				 ) == 11)
+		{
+			tOrE == 'T' ? nBins_tqT[start+channel]+=te.shape.m/2.0 :  nBins_tqE[start+channel]+=te.shape.m/2.0;
+			int index = getIndex(start+channel, tac, tOrE == 'T');
+			table[index] = te;
 		}
-		nBins_tqT[channel]/=2.0;
-		nBins_tqE[channel]/=2.0;
-	}
-	fclose(f);
 	
-}
 
+	fclose(f);
+
+}
 void P2::loadTQFile(int start, int end, const char *fTQName)
 {
 	FILE *f = fopen(fTQName, "r");
