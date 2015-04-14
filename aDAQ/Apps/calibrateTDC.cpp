@@ -173,7 +173,7 @@ void displayHelp(char * program)
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr, "  --help \t\t\t\t Show this help message and exit \n");
 	fprintf(stderr, "  --int-factor [=INT_FACTOR] \t\t Nominal TDC interpolation factor (Default is 128)\n");
-	fprintf(stderr, "  --asics_per_file [=ASICS_PER_FILE] \t\t Number of asics to be stored per calibration file (Default is 2). If set to ALL, only one file will be created with calibration for all ASICS with valid data.\n");
+	fprintf(stderr, "  --asics_per_file [=ASICS_PER_FILE] \t Number of asics to be stored per calibration file (Default is 2). If set to ALL, only one file will be created with calibration for all ASICS with valid data.\n");
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  t_branch_data_file \t\t\t Data to be used for T branch calibration\n");
 	fprintf(stderr, "  E_branch_data_file \t\t\t Data to be used for E branch calibration\n");
@@ -292,8 +292,6 @@ int main(int argc, char *argv[])
 				TFile * eDataFile = new TFile(eDataFileName, "READ");
 
 
-				printf("worker %d, dile %d, startAsic %d, endAsic %d\n", worker, file, startAsic, endAsic);
-
 				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2(DAQ::Common::SYSTEM_NCHANNELS);
 				
 				char resumeFileName[1024];
@@ -304,7 +302,6 @@ int main(int argc, char *argv[])
 				
 				int hasData=calibrate(startAsic, endAsic, tDataFile, eDataFile, tacInfo, *myP2, nominalM);
  				if(hasData==0){
-					printf(" exiting worker %d, dile %d, startAsic %d, endAsic %d\n", worker, startAsic, endAsic);
 					resumeFile->Close();
 					remove(resumeFileName);
 					exit(0);
