@@ -344,6 +344,8 @@ for tChannel in activeChannels:
 			print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
 			#uut.start(2)
 
+		uut.setTestPulseNone()
+		uut.doSync()
 
 		rootData2.write()
 
