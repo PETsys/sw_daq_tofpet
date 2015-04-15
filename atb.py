@@ -845,19 +845,16 @@ class ATB:
 		if activePorts == []:
 			raise ErrorNoFEB()
 
-		febID = min(activePorts)
-		reply = self.sendCommand(febID, 0, 0x03, bytearray([0x02]))
-		status = reply[0]
-		#print  [hex(x) for x in reply[1:] ]
-		data = reply[2:6]
-
-		data = sum([ data[i] * 2**(24 - 8*i) for i in range(len(data)) ])
-		return status, data
+		portID = min(activePorts)
+		gray = self.readFEBDConfig(portID, 0, 0, 7)
+		timeTag = binToInt(grayToBin(intToBin(gray, 46)))
+		frameID = timeTag / 1024
+		return frameID
 
         ## Discards all data frames which may have been generated before the function is called. Used to synchronize data reading with the effect of previous configuration commands.
 	def doSync(self, clearFrames=True):
-		_, targetFrameID = self.getCurrentFrameID()
-		#print "Waiting for frame %d" % targetFrameID
+		targetFrameID = self.getCurrentFrameID()
+		#print "Waiting for frame %1d" % targetFrameID
 		while True:
 			df = self.getDataFrame()
 			assert df != None
