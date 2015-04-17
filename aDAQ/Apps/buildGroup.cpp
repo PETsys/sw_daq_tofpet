@@ -232,7 +232,7 @@ int main(int argc, char *argv[])
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(20, 100E-9,
-				new EventWriter(lmData, 5E-9, 1
+				new EventWriter(lmData, 100E-9, 16
 
 		))))));
 		
