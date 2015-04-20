@@ -1,2 +1,2 @@
-0	64	config/M1/tdc.cal
-64	128	config/M2/tdc.cal
+0	128	config/M1/tdc.cal none
+128	256	config/M2/tdc.cal none		 
