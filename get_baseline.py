@@ -325,16 +325,14 @@ while it<=n_iter:
         finish=True
     
 
-    if(i==n_iter):
+    if(it==n_iter):
         for j in activeAsics:
             if success[j] is False:
                 print "Could not find a suitable baseline for ASIC/Mezzanine %d!" % j 
-                print "Check log and plots in:"
-                print "%s and %s/pdf" % (dir_path, log_filename)
                 Converged=False
                 finish=True
         print "Check log and plots in:"
-        print "%s and %s/pdf" % (dir_path, log_filename) 
+        print "%s and %s/pdf" % (dir_path, dir_path) 
 
 
     if finish:
