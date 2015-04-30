@@ -80,7 +80,7 @@ elif args.mode == "fetp":
   tdcaMode = False
   if args.tpDAC==0:
     print "Error: Please set tpDAC argument! Exiting..."
-    exit
+    exit(1)
   tpDAC = args.tpDAC
 
   if args.hvBias == None:
