@@ -310,18 +310,15 @@ class ATB:
 		# First, generate a "sync" in the FEB/D (or ML605) itself
 		for portID, slaveID in self.getActiveFEBDs():
 			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+
 		#sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
 
+		for portID, slaveID in self.getActiveFEBDs(): 
+			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
+			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
 		# Now, start the DAQ!
 		mode = 2 # Do not send mode 1 to daqd!
-
-		assert self.config is not None
-		activeFEBs = set([ i/16 for i, ac in enumerate(self.config.asicConfig) if ac is not None ])
-		#for febID in activeFEBs: self.sendCommand(febID, 0, 0x03, bytearray([0x04, 0x00, 0x0F]))
-		for portID, slaveID in self.getActiveFEBDs(): self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
-		for portID, slaveID in self.getActiveFEBDs(): self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
-
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
