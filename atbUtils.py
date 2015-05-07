@@ -53,7 +53,7 @@ def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName, invert=False):
 		boardConfig.asicConfigFile[asicStart] = fileName
 	f.close()
 
-# Loads the parameters for calibration of the HV DACs from a text file
+## Loads the parameters for calibration of the HV DACs from a text file
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param start The minimum HV DAC channel ID of the configuration to be loaded
 # @param end  The maximium HV DAC channel ID (excluded) of the configuration to be loaded 
@@ -72,7 +72,7 @@ def loadHVDACParams(boardConfig, start, end, fileName):
 		boardConfig.hvParam[start+ch] = (m,b)
 		
 	f.close()
-# Loads the HV DAC voltages desired for a given system form a text file
+## Loads the HV DAC voltages desired for a given system form a text file
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param start The minimum HV DAC channel ID of the configuration to be loaded
 # @param end  The maximium HV DAC channel ID (excluded) for the configuration to be loaded 
