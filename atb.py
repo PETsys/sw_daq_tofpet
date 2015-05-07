@@ -377,7 +377,7 @@ class ATB:
 		name = self.__socket.recv(length - n);
 		return (name, s0, p1, s1)
 
-
+	## Returns an array with the active ports 
 	def getActivePorts(self):
 		template = "@HH"
 		n = struct.calcsize(template)
@@ -391,18 +391,22 @@ class ATB:
 		reply = [ n for n in range(64) if (mask & (1<<n)) != 0 ]
 		return reply
 
+	## Returns a 2 tuple array for the active FEB/Ds (PAB) 
 	def getActiveFEBDs(self):
 		return [ (x, 0) for x in self.getActivePorts() ]
 
 	def getPossibleFEBDs(self):
 		return [ (x, 0) for x in range(4) ]
 
+	## Returns an array with the IDs of the active ASICS
 	def getActiveAsics(self):
 		return [ i for i, active in enumerate(self.__activeAsics) if active ]
 
 	def getActiveTOFPETAsics(self):
 		return [ i for i, active in enumerate(self.__activeAsics) if active and self.__asicType[i] == 0x00010001 ]
 
+	## Returns a 3 tupple with the number of transmitted, received, and error frames for a given port 
+	# @param port The port for which to get the desired output 
 	def getPortCounts(self, port):
 		template = "@HHH"
 		n = struct.calcsize(template)
@@ -419,7 +423,7 @@ class ATB:
 		return (tx, rx, rxBad)
 
 		
-        ## Returns a data frame read form the shared memory block by order ??
+        ## Returns a data frame read form the shared memory block
 	def getDataFrame(self, nonEmpty=False):
 		index = self.getDataFrameByIndex(nonEmpty = nonEmpty)
 		if index is None:
