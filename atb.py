@@ -39,8 +39,6 @@ intToBin = tofpet.intToBin
 ## A class that instances the classes related to one ASIC configuration and adds additional variables required to configure every ASIC in the system  
 class BoardConfig:
         ## Constructor
-        # @param nASIC Number of ASICs present in the system (can be for several boards)
-        # @param nDAC Number of HV DAC configuration files required for this system
 	def __init__(self):
 		maxASIC = 64
 		maxDAC = 8
@@ -585,7 +583,7 @@ class ATB:
         # @param asicID Identification of the ASIC that will receive the command
 	# @param command Command type to be sent. The list of possible keys for this parameter is hardcoded in this function
         # @param value The actual value to be transmitted to the ASIC if it applies to the command type   
-        # @param If the command is destined to a specific channel, this parameter sets its ID. 	  
+        # @param channel If the command is destined to a specific channel, this parameter sets its ID. 	  
 	def doTOFPETAsicCommand(self, asicID, command, value=None, channel=None):
 		nTry = 0
 		while True:
@@ -687,7 +685,7 @@ class ATB:
 		return [x for x in range(16*portID, 16*portID + 16)]
 	
 	## Returns a tuple with the (portID, slaveID, localAsicID) for which an globalAsicID belongs
-	# @param globalAsicID Global ASIC ID
+	# @param asicID Global ASIC ID
 	def asicIDGlobalToTuple(self, asicID):
 		return (asicID / 16, 0, asicID % 16)
 
@@ -904,16 +902,16 @@ class ATB:
 
         ## Sets the HVDAC voltage using calibration data 
         # @param channel The HVDAC channel to be set
-        # @param voltageRequested The voltage to be set in units of Volts, considering the calibration
+        # @param voltageRequested The voltage to be set in units of Volts, using the calibration
 	def setHVDAC(self, channel, voltageRequested):
 		m, b = self.config.hvParam[channel]
 		voltage = voltageRequested* m + b
 		#print "%4d %f => %f, %f => %f" % (channel, voltageRequested, m, b, voltage)
 		self.setHVDAC_(channel, voltage)
         
-        ## Sets the HVDAC voltage 
+        ## Sets the HVDAC voltage to desired uncalibrated value 
         # @param channel The HVDAC channel to be set
-        # @param voltageRequested The voltage to be set in units of Volts
+        # @param voltage The voltage to be set in units of Volts
 	def setHVDAC_(self, channel, voltage):
 		portID, slaveID, localChannel = self.hvChannelGlobalToTulple(channel)
 		if (portID, slaveID) not in self.getActiveFEBDs():			
@@ -1018,6 +1016,7 @@ class ATB:
 	# @param slaveID
 	# @param addr1 Register block (0..127)
 	# @param addr2 Register address (0..255)
+	# @param value The value to written
 	def writeFEBDConfig(self, portID, slaveID, addr1, addr2, value):
 		header = [ 0x80 | (addr1 & 0x7F), addr2 & 0xFF ]
 		data = [ value >> (8*n) & 0xFF for n in range(8) ]
