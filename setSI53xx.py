@@ -11,7 +11,7 @@ print "Configuring SI53xx clock filter"
 
 for line in f:
 	if line[0] == '#': continue
-	line = line[:-1]
+	line = line.rstrip('\r\n')
 	regNum, regValue = line.split(', ')
 	regNum = int(regNum)
 
