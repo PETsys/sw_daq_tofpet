@@ -6,7 +6,7 @@ from atbUtils import loadAsicConfig, dumpAsicConfig, loadHVDACParams, loadBaseli
 def loadLocalConfig(useBaseline=True):
 	atbConfig = atb.BoardConfig()
 	# HV DAC calibration
-	loadHVDACParams(atbConfig, "config/pab6/hvdac.Config")
+	loadHVDACParams(atbConfig, 0,32,"config/pab1/hvdac.Config")
 
 	### Mezzanine A (J15) configuration
 	loadAsicConfig(atbConfig, 0, 1, "config/M1/asic.config")
