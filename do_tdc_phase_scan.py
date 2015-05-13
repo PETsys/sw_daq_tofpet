@@ -202,7 +202,7 @@ for tChannel in activeChannels:
 				nReceivedEvents += 1
 				#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 				if asic not in activeAsics or channel != tChannel:
-					print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
+					#print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 					continue
 				
 				nAcceptedEvents += 1				
@@ -318,18 +318,18 @@ for tChannel in activeChannels:
 						nReceivedEvents += 1
 						#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 						if asic not in activeAsics or channel != tChannel:
-							print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
+							#print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 							continue
 
 						if channelIdleTime < expectedChannelIdleTime or tacIdleTime < expectedTACIdleTime:						
-							print "WARNING 2: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d (%8d) %8d (%8d)" \
+							#print "WARNING 2: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d (%8d) %8d (%8d)" \
 								% (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, \
 								channelIdleTime, (channelIdleTime-expectedChannelIdleTime), \
 								tacIdleTime, (tacIdleTime-expectedTACIdleTime)) 
 							continue
 
 						if tdcaMode == False and tCoarse == 0 and eCoarse == 0:
-							print "WARNING 3: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
+							#print "WARNING 3: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
 							continue
 
 						nAcceptedEvents += 1				
