@@ -57,7 +57,7 @@ def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName, invert=False):
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param start The minimum HV DAC channel ID of the configuration to be loaded
 # @param end  The maximium HV DAC channel ID (excluded) of the configuration to be loaded 
-# @param filename The name of the file from which to load the calibration
+# @param fileName The name of the file from which to load the calibration
 def loadHVDACParams(boardConfig, start, end, fileName):
 	print "Loading %s for DAC" % fileName
 	boardConfig.HVDACParamsFile=fileName
@@ -76,7 +76,8 @@ def loadHVDACParams(boardConfig, start, end, fileName):
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param start The minimum HV DAC channel ID of the configuration to be loaded
 # @param end  The maximium HV DAC channel ID (excluded) for the configuration to be loaded 
-# @param filename The name of the file from which to load the HV DAC voltages
+# @param fileName The name of the file from which to load the HV DAC voltages
+# @param offset An offset (in Volts) to be applied to the voltages loaded from the file
 def loadHVBias(boardConfig, start, end, fileName, offset = 0.0):
 	print "Loading %s for DAC" % fileName
 	f = open(fileName, "r")
