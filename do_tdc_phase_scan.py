@@ -323,9 +323,9 @@ for tChannel in activeChannels:
 
 						if channelIdleTime < expectedChannelIdleTime or tacIdleTime < expectedTACIdleTime:						
 							#print "WARNING 2: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d (%8d) %8d (%8d)" \
-								% (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, \
-								channelIdleTime, (channelIdleTime-expectedChannelIdleTime), \
-								tacIdleTime, (tacIdleTime-expectedTACIdleTime)) 
+							#	% (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, \
+							#	channelIdleTime, (channelIdleTime-expectedChannelIdleTime), \
+							#	tacIdleTime, (tacIdleTime-expectedTACIdleTime)) 
 							continue
 
 						if tdcaMode == False and tCoarse == 0 and eCoarse == 0:
