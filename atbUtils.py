@@ -63,12 +63,12 @@ def loadHVDACParams(boardConfig, start, end, fileName):
 	boardConfig.HVDACParamsFile=fileName
 	f = open(fileName, "r")
 	r = re.compile('[ \t\n\r:]+')
-	for i in range(start, end):
-		l = f.readline()
+	for l in f:
 		ch, m, b, x = r.split(l)
 		m = float(m)
 		b = float(b)
 		ch=int(ch)
+		assert (start + ch) < end
 		boardConfig.hvParam[start+ch] = (m,b)
 		
 	f.close()
@@ -81,11 +81,11 @@ def loadHVBias(boardConfig, start, end, fileName, offset = 0.0):
 	print "Loading %s for DAC" % fileName
 	f = open(fileName, "r")
 	r = re.compile('[ \t\n\r:]+')
-	for i in range(start, end):
-		l = f.readline()
+	for l in f:
 		ch,v, x = r.split(l)
 		v = float(v)
 		ch=int(ch)
+		assert (start + ch) < end
 		boardConfig.hvBias[start+ch] = v + offset
 
 
