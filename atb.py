@@ -427,6 +427,20 @@ class ATB:
 		rxBad = binToInt(grayToBin(intToBin(rxBad, 48)))
 		return (tx, rx, rxBad)
 
+	## Returns a 3 element tupple with the number of transmitted, received, and error packets for a given FEB/D
+	# @param port The port for which to get the desired output 
+	def getFEBDCount1(self, portID, slaveID):
+		tx = self.readFEBDConfig(portID, slaveID, 1, 0)
+		rx = self.readFEBDConfig(portID, slaveID, 1, 1)
+		rxBad = self.readFEBDConfig(portID, slaveID, 1, 2)
+	
+		
+		tx = binToInt(grayToBin(intToBin(tx, 48)))
+		rx = binToInt(grayToBin(intToBin(rx, 48)))
+		rxBad = binToInt(grayToBin(intToBin(rxBad, 48)))
+		return (tx, rx, rxBad)
+
+
 		
         ## Returns a data frame read form the shared memory block
 	def getDataFrame(self, nonEmpty=False):
