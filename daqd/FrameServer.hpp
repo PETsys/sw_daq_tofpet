@@ -13,7 +13,7 @@ static const int N_ASIC=5*16;
 class FrameServer {
 public:
 	FrameServer(int nFEB, int *feTypeMap, int debugLevel);
-        ~FrameServer();	
+        virtual ~FrameServer();	
 	struct DataFramePtr {
 	public:
 		unsigned index;

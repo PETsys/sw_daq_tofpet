@@ -13,7 +13,7 @@ import sticv3
 # @param boardConfig the configuration to be saved. It should be of type atb.BoardConfig
 # @param asicStart The minimum ASIC ID of the configuration to be written
 # @param asicEnd  The maximium ASIC ID (excluded) of the configuration to be written 
-# @param filename The name of the file in which to save the configuration
+# @param fileName The name of the file in which to save the configuration
 def dumpAsicConfig(boardConfig, asicStart, asicEnd, fileName):
 	f = open(fileName, "w")
 	pickler = pickle.Pickler(f, pickle.HIGHEST_PROTOCOL)
@@ -33,7 +33,8 @@ def loadSTICv3AsicConfig(boardConfig, asic, fileName):
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param asicStart The minimum ASIC ID of the configuration to be loaded
 # @param asicEnd  The maximium ASIC ID (excluded) of the configuration to be loaded 
-# @param filename The name of the file from which to load the configuration
+# @param fileName The name of the file from which to load the configuration
+# @param invert If set to true, the configuration file will be read in reverse order
 def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName, invert=False):
 	print "Loading %s for ASICs [%d .. %d[" % (fileName, asicStart, asicEnd)
 	f = open(fileName, "r")
@@ -52,7 +53,7 @@ def loadAsicConfig(boardConfig, asicStart, asicEnd, fileName, invert=False):
 		boardConfig.asicConfigFile[asicStart] = fileName
 	f.close()
 
-# Loads the parameters for calibration of the HV DACs from a text file
+## Loads the parameters for calibration of the HV DACs from a text file
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param start The minimum HV DAC channel ID of the configuration to be loaded
 # @param end  The maximium HV DAC channel ID (excluded) of the configuration to be loaded 
@@ -71,7 +72,7 @@ def loadHVDACParams(boardConfig, start, end, fileName):
 		boardConfig.hvParam[start+ch] = (m,b)
 		
 	f.close()
-# Loads the HV DAC voltages desired for a given system form a text file
+## Loads the HV DAC voltages desired for a given system form a text file
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param start The minimum HV DAC channel ID of the configuration to be loaded
 # @param end  The maximium HV DAC channel ID (excluded) for the configuration to be loaded 
@@ -92,7 +93,7 @@ def loadHVBias(boardConfig, start, end, fileName, offset = 0.0):
 # @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
 # @param asicStart The minimum ASIC ID for the configuration to be loaded
 # @param asicEnd  he maximium ASIC ID (excluded) for the configuration to be loaded 
-# @param filename The name of the file from which to load the baseline values
+# @param fileName The name of the file from which to load the baseline values
 def loadBaseline(boardConfig, asicStart, asicEnd, fileName):
 	print "Loading %s for ASICs [%d .. %d[" % (fileName, asicStart, asicEnd)
 	f = open(fileName, "r")
