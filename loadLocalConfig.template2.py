@@ -11,7 +11,7 @@ def loadLocalConfig(useBaseline=True):
 	### FEBA (F1) configuration
 	loadAsicConfig(atbConfig, 0, 2, "config/FEBA1/asic.config")
 	if useBaseline:
-		loadBaseline(atbConfig, 0, 2, "config/FEBA/asic.baseline");
+		loadBaseline(atbConfig, 0, 2, "config/FEBA1/asic.baseline");
 
 	### FEBA (F2) configuration
 	loadAsicConfig(atbConfig, 2, 4, "config/FEBA2/asic.config")
