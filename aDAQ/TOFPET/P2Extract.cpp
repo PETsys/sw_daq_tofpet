@@ -85,10 +85,12 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	if(pulse.tofpet_TQT < (1.0 - tDenormalTolerance) || pulse.tofpet_TQT > (3.0 + tDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;
+		return false;
 	}
 	if(pulse.tofpet_TQE < (1.0 - eDenormalTolerance) || pulse.tofpet_TQE > (3.0 + eDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;
+		return false;
 	}
 
 	atomicAdd(nPassed, 1); 
