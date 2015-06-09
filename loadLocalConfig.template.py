@@ -7,7 +7,7 @@ def loadLocalConfig(useBaseline=True):
 	atbConfig = atb.BoardConfig()
 
 	# HV DAC calibration
-	loadHVDACParams(atbConfig, 0, 64, "config/febd1/hvdac.Config")
+	loadHVDACParams(atbConfig, 0, 64, "config/pab1/hvdac.Config")
 	#loadHVBias(atbConfig, 0, 32, "config/sipm_set1/hvbias.config")
 
 	### Mezzanine A (J15) configuration
