@@ -4,12 +4,10 @@
 #include <pthread.h>
 #include <queue>
 
-#include "Protocol.hpp"
+#include "SHM.hpp"
 
 namespace DAQd {
 
-static const char *shmObjectPath = "/daqd_shm";
-static const int N_ASIC=16*1024;
 
 class FrameServer {
 public:

@@ -14,6 +14,10 @@ CPPFLAGS := $(CPPFLAGS) -I$(shell root-config --incdir)
 
 CPPFLAGS := $(CPPFLAGS) -I../daqd/
 
+ifeq (1, ${ENDOTOFPET})
+	CPPFLAGS := $(CPPFLAGS) -D__ENDOTOFPET__
+endif 
+
 OBJS := $(SRCS:=.o)
 BOBJS := $(BSRCS:=.o)
 DEPS := $(SRCS:=.d) $(BSRCS:=.d)
@@ -38,13 +42,13 @@ endif
 	@echo Compiling $<
 	$(CXX) -c -o $@ $(CXXFLAGS) $(CPPFLAGS) $(@:.o=) 
 
-%.cpp.d: %.cpp
+%.cpp.d: %.cpp ../daqd/SHM.hpp
 	@echo Generating dependencies for $<
 	$(CPP) -M -MG -MT $@ -o $@ $(CPPFLAGS) $< 
 	
-%.cpp.b: %.cpp.o $(OBJS)
+%.cpp.b: %.cpp.o $(OBJS) ../daqd/SHM.o
 	@echo Linking $@
-	$(CXX) -o $@ $< $(OBJS) $(CXXFLAGS) $(CPPFLAGS) $(LIBS)	
+	$(CXX) -o $@ $< $(OBJS) ../daqd/SHM.o $(CXXFLAGS) $(CPPFLAGS) $(LIBS)	
 
 TOFPET/FEBA_PAB.map:	TOFPET/FEBA_STANDALONE.tsv TOFPET/FEBA_PAB.map.py
 	python TOFPET/FEBA_PAB.map.py TOFPET/FEBA_STANDALONE.tsv TOFPET/FEBA_PAB.map

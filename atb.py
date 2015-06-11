@@ -359,7 +359,7 @@ class ATB:
 
         ## Returns the size of the allocated memory block 
 	def __getSharedMemorySize(self):
-		return self.__dshm.getSize()
+		return self.__dshm.getSizeInBytes()
 		#return self.__shm.size
 
         ## Returns the name of the shared memory block
@@ -1035,13 +1035,11 @@ class ATB:
         # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
         # @param writer The name of the application to be used to save data to disk (Typically writeRaw). 
 	def openAcquisition(self, fileName, writerMode = "TOFPET", cWindow = 0, minToT = 0):
-		if writer not in ["writeRaw", "writeRawE"]:
-			print "ERROR: when calling ATB::openAcquisition(), writer must be set with either:"
-			print " writeRaw	-- standard TOFPET RAW data format"
-			print " writeRawE	-- EndTOFPET-US RAW data format"
+		writerModeDict = { "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' };
+		if writerMode  not in writerModeDict.keys():
+			print "ERROR: when calling ATB::openAcquisition(), writer must be ", ", ".join(writerModeDict.keys())
 
 		
-		writerModeDict = { "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' };
 		m = writerModeDict[writerMode]
 
 
@@ -1075,19 +1073,19 @@ class ATB:
 			data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 0)
 			pin.write(data); pin.flush()
 			
-			data = pin.read(n2)
+			data = pout.read(n2)
 			rdPointer2,  = struct.unpack(template2, data)
 			self.__setDataFrameReadPointer(rdPointer2)
 
 			nFramesInBlock = rdPointer2 - rdPointer
-			if nFramesInBlock < 0: nFramesInBlock += self.__dshm.getSizeInFrames()
+			if nFramesInBlock < 0: nFramesInBlock += 2*self.__dshm.getSizeInFrames()
 			nFrames += nFramesInBlock
 
 		wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
 		data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 1)
 		pin.write(data); pin.flush()
 		
-		data = pin.read(n2)
+		data = pout.read(n2)
 		rdPointer2,  = struct.unpack(template2, data)
 		self.__setDataFrameReadPointer(rdPointer2)
 	

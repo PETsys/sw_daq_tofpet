@@ -14,11 +14,9 @@
 #include <errno.h>
 #include "boost/date_time/posix_time/posix_time.hpp"
 
-//static const char *shmObjectPath = "/daqd_shm";
-//static const int MaxDataFrameQueueSize = 16*1024;
-//static const int N_ASIC=4;
-
 using namespace DAQd;
+
+static const char *shmObjectPath = "/daqd_shm";
 
 FrameServer::FrameServer(int nFEB, int *feTypeMap, int debugLevel)
 	: debugLevel(debugLevel)

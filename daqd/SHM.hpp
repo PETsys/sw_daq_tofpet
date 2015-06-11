@@ -6,6 +6,20 @@
 #include <string>
 
 namespace DAQd {
+	
+static const int MaxDataFrameSize = 2048;
+static const unsigned MaxDataFrameQueueSize = 128*1024;
+static const int N_ASIC=16*1024;
+
+
+struct DataFrame {
+		uint64_t data[MaxDataFrameSize];
+		uint64_t channelIdleTime[MaxDataFrameSize];
+		uint64_t tacIdleTime[MaxDataFrameSize];
+#ifdef __ENDOTOFPET__
+		int8_t feType[MaxDataFrameSize];
+#endif
+};	
 
 class SHM {
 public:
@@ -13,7 +27,9 @@ public:
 	~SHM();
 
 	unsigned long long getSizeInBytes();
-	unsigned long long  getSizeInFrames();
+	unsigned long long  getSizeInFrames() { 
+		return MaxDataFrameQueueSize;
+	};
 
 	unsigned long long getFrameID(int index) {
 		DataFrame *dataFrame = &shm[index];

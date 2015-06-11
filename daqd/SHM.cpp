@@ -65,13 +65,10 @@ SHM::~SHM()
 
 unsigned long long SHM::getSizeInBytes()
 {
+	assert (shmSize = MaxDataFrameQueueSize * sizeof(DataFrame));
 	return shmSize;
 }
 
-unsigned long long SHM::getSizeInFrames()
-{
-	return MaxDataFrameQueueSize;
-}
 
 unsigned SHM::decodeSticCoarse(unsigned coarse, unsigned long long frameID)
 {

@@ -18,8 +18,6 @@
 static const char *feAddr = "192.168.1.25";
 static const unsigned short fePort = 2000;
 
-//static const int N_ASIC=4;
-
 static int myFeTypeMap[1] = { 0 };
 
 using namespace DAQd;
