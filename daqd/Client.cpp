@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/socket.h>
 using namespace std;
+using namespace DAQd;
 
 Client::Client(int socket, FrameServer *frameServer)
 : socket(socket), frameServer(frameServer)
@@ -13,9 +14,6 @@ Client::Client(int socket, FrameServer *frameServer)
 Client::~Client()
 {
 	close(socket);
-	for(map<int, FrameServer::DataFramePtr *>::iterator it = ownedDataFramePtrs.begin(); it != ownedDataFramePtrs.end(); it++) {
-		frameServer->returnDataFramePtr(it->second);
-	}
 }
 
 struct CmdHeader_t { uint16_t type; uint16_t length; };
@@ -42,17 +40,17 @@ int Client::handleRequest()
 			return -1;
 		}
 	}
-	
+
 	int actionStatus = 0;
 //	fprintf(stderr, "commandType = %d, commandLength = %d\n", int(cmdHeader.type), int(cmdHeader.length));
 	if (cmdHeader.type == commandAcqOnOff)
 		doAcqOnOff();
 	else if(cmdHeader.type == commandGetDataFrameSharedMemoryName) 
 		actionStatus = doGetDataFrameSharedMemoryName();
-	else if(cmdHeader.type == commandGetDataFrameBuffers)
-		actionStatus = doGetEventFrameBuffers();
-	else if(cmdHeader.type == commandReturnDataFrameBuffers)
-		actionStatus = doReturnEventFrameBuffers();
+	else if(cmdHeader.type == commandGetDataFrameWriteReadPointer)
+		actionStatus = doGetDataFrameWriteReadPointer();
+	else if(cmdHeader.type == commandSetDataFrameReadPointer)
+		actionStatus = doSetDataFrameReadPointer();
 	else if(cmdHeader.type == commandToFrontEnd)
 		actionStatus = doCommandToFrontEnd(nBytesNext);
 	else if(cmdHeader.type == commandGetPortUp) 
@@ -97,68 +95,25 @@ int Client::doAcqOnOff()
 	return 0;
 }
 
-int Client::doGetEventFrameBuffers()
+int Client::doGetDataFrameWriteReadPointer()
 {
-	uint16_t nFramesRequested = 0;
-	uint16_t nonEmpty = 0;
-	memcpy(&nFramesRequested, socketBuffer + sizeof(CmdHeader_t), sizeof(uint16_t));
-	memcpy(&nonEmpty, socketBuffer + sizeof(CmdHeader_t) + sizeof(uint16_t), sizeof(uint16_t));
-	
-//	printf("Client requested %u frames\n", nFramesRequested);
+	struct { uint16_t length; uint32_t wrPointer; uint32_t rdPointer; }  header;
+	header.length = sizeof(header);
+	header.wrPointer = frameServer->getDataFrameWritePointer();
+	header.rdPointer = frameServer->getDataFrameReadPointer();
 
-	unsigned maxFramesPerRequest = 1024;
-	nFramesRequested = nFramesRequested < maxFramesPerRequest ? nFramesRequested : maxFramesPerRequest;
-	int32_t frameBufferIndexes[maxFramesPerRequest];
-	
-	uint16_t nFramesForClient = 0;
-	
-	for(unsigned n = 0; n < nFramesRequested; n++) {		
-		FrameServer::DataFramePtr *dataFramePtr = frameServer->getDataFrameByPtr(nonEmpty == 0 ? false : true);
-		if (dataFramePtr == NULL) {
-			fprintf(stderr, "Client asked for %d frames, but will only get %d\n", nFramesRequested, nFramesForClient);
-			fprintf(stderr, "Client owns %u frame buffers\n", ownedDataFramePtrs.size());
-			break;
-		}
-		
-		int index  = dataFramePtr->index;		
-		ownedDataFramePtrs.insert(pair<int, FrameServer::DataFramePtr *>(index, dataFramePtr));
-		frameBufferIndexes[n] = index;
-		nFramesForClient += 1;
-
-	}
-
-	struct { uint16_t length; uint16_t nFrames; int32_t indexes[]; } header;
-	header.length = sizeof(header) + nFramesForClient * sizeof(int32_t);
-	header.nFrames = nFramesForClient;
-
-//	fprintf(stderr, "About to send %hu frames to client\n", nFramesForClient);
 	int status = send(socket, &header, sizeof(header), MSG_NOSIGNAL);
 	if(status < sizeof(header)) return -1;
-//	fprintf(stderr, "... header sent\n");
-	status = send(socket, frameBufferIndexes, nFramesForClient*sizeof(int32_t), MSG_NOSIGNAL);
-	if(status < nFramesForClient*sizeof(int32_t)) return -1;
-//	fprintf(stderr, "... list sent\n");
-	
-	
 	return 0;
 }
 
-int Client::doReturnEventFrameBuffers()
+int Client::doSetDataFrameReadPointer()
 {
-	uint16_t nFramesRequested;
-	memcpy(&nFramesRequested, socketBuffer + sizeof(CmdHeader_t), sizeof(uint16_t));
-//	fprintf(stderr, "Returning %hu frames\n", nFramesRequested);
-	for(unsigned n = 0;  n < nFramesRequested; n++) {		
-		int32_t index = -1;
-		unsigned char *p = socketBuffer +  sizeof(CmdHeader_t) + sizeof(uint16_t) + n*sizeof(int32_t);
-		memcpy(&index, p, sizeof(int32_t));
-//		fprintf(stderr, "... returning index %d\n", index);	
-		if(ownedDataFramePtrs.count(index) > 0) {
-			FrameServer::DataFramePtr *dataFramePtr = ownedDataFramePtrs[index];
-			ownedDataFramePtrs.erase(index);
-			frameServer->returnDataFramePtr(dataFramePtr);
-		}
-	}
+	uint32_t readPointer;
+	memcpy(&readPointer, socketBuffer + sizeof(CmdHeader_t), sizeof(readPointer));	
+	frameServer->setDataFrameReadPointer(readPointer);	
+	int status = send(socket, &readPointer, sizeof(readPointer), MSG_NOSIGNAL);
+	if(status < sizeof(readPointer)) return -1;
 	return 0;
 	
 }
@@ -166,16 +121,12 @@ int Client::doReturnEventFrameBuffers()
 int Client::doGetDataFrameSharedMemoryName()
 {
 	const char *name = frameServer->getDataFrameSharedMemoryName();
-	DataFrame *d1;
-	char *p1 = (char *)d1;
-	char *p2 = (char *)&(d1->events[0]);
-	char *p3 = (char *)&(d1->events[1]);
 	
 	struct { uint16_t length;  uint64_t sizes[3]; } header;
 	header.length = sizeof(header) + strlen(name);
 	header.sizes[0] = sizeof(DataFrame);
-	header.sizes[1] = p2 - p1;
-	header.sizes[2] = p3 - p2;
+	header.sizes[1] = 0;
+	header.sizes[2] = 0;
 	
 	int status = 0;
 	status = send(socket, &header, sizeof(header), MSG_NOSIGNAL);

@@ -7,6 +7,7 @@
 #include <boost/unordered_map.hpp> 
 #include "boost/date_time/posix_time/posix_time.hpp"
 
+namespace DAQd {
 
 class UDPFrameServer : public FrameServer
 {
@@ -27,5 +28,5 @@ protected:
 	
 };
 
-
+}
 #endif

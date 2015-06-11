@@ -3,10 +3,13 @@ using namespace boost::python;
 
 #include "SHM.hpp"
 
+using namespace DAQd;
+
 BOOST_PYTHON_MODULE(DSHM) 
 {
 	class_<SHM>("SHM", init<std::string>())
-		.def("getSize", &SHM::getSize)
+		.def("getSizeInBytes", &SHM::getSizeInBytes)
+		.def("getSizeInFrames", &SHM::getSizeInFrames)
 		.def("getFrameID", &SHM::getFrameID)
 		.def("getFrameLost", &SHM::getFrameLost)
 		.def("getNEvents", &SHM::getNEvents)

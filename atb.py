@@ -266,7 +266,6 @@ class ErrorAsicPresenceChanged:
 		return "ASIC at port %2d, slave %2d, asic %2d changed state" % (self.__data)
 	
 
-
 	
 ## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
 class ATB:
@@ -441,94 +440,78 @@ class ATB:
 		rxBad = binToInt(grayToBin(intToBin(rxBad, 48)))
 		return (tx, rx, rxBad)
 
+	## Gets the current write and read pointer
+	def __getDataFrameWriteReadPointer(self):
+		template = "@HH"
+		n = struct.calcsize(template)
+		data = struct.pack(template, 0x03, n);
+		self.__socket.send(data)
 
+		template = "@HII"
+		n = struct.calcsize(template)
+		data = self.__socket.recv(n);
+		n, wrPointer, rdPointer = struct.unpack(template, data)
+
+		return wrPointer, rdPointer
+
+	def __setDataFrameReadPointer(self, rdPointer):
+		template1 = "@HHI"
+		n = struct.calcsize(template1) 
+		data = struct.pack(template1, 0x04, n, rdPointer);
+		self.__socket.send(data)
+
+		template = "@I"
+		n = struct.calcsize(template)
+		data2 = self.__socket.recv(n);
+		r2, = struct.unpack(template, data2)
+		assert r2 == rdPointer
+
+		return None
 		
         ## Returns a data frame read form the shared memory block
 	def getDataFrame(self, nonEmpty=False):
-		index = self.__getDataFrameByIndex(nonEmpty = nonEmpty)
-		if index is None:
-			return None
+		timeout = 0.1
+		t0 = time()
+		r = None
+		while r == None and (time() - t0) < timeout:
+			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+#			print "WR/RD pointers = %08x %08x" % (wrPointer, rdPointer)
+			bs = self.__dshm.getSizeInFrames()
+			while (wrPointer != rdPointer) and (r == None):
+				index = rdPointer % bs
+				rdPointer = (rdPointer + 1) % (2 * bs)
+
+				nEvents = self.__dshm.getNEvents(index)
+				if nEvents == 0 and nonEmpty == True:
+					continue;
+
+		
+				frameID = self.__dshm.getFrameID(index)
+				frameLost = self.__dshm.getFrameLost(index)
+
+				tofpetEvents = [ i for i in range(nEvents) if self.__dshm.getEventType(index, i) == 0 ]
+				events = []
+				for i in tofpetEvents:
+					events.append((	self.__dshm.getAsicID(index, i), \
+							self.__dshm.getChannelID(index, i), \
+							self.__dshm.getTACID(index, i), \
+							self.__dshm.getTCoarse(index, i), \
+							self.__dshm.getECoarse(index, i), \
+							self.__dshm.getTFine(index, i), \
+							self.__dshm.getEFine(index, i), \
+							self.__dshm.getChannelIdleTime(index, i), \
+							self.__dshm.getTACIdleTime(index, i), \
+						))
+
+				r = { "id" : frameID, "lost" : frameLost, "events" : events }
+
+#			print "Setting rdPointer to %08x\n" %rdPointer
+			self.__setDataFrameReadPointer(rdPointer)
+
+		return r
 
 	
-		frameID = self.__dshm.getFrameID(index)
-		frameLost = self.__dshm.getFrameLost(index)
-		nEvents = self.__dshm.getNEvents(index)
-
-		tofpetEvents = [ i for i in range(nEvents) if self.__dshm.getEventType(index, i) == 0 ]
-		events = []
-		for i in tofpetEvents:
-			events.append((	self.__dshm.getAsicID(index, i), \
-					self.__dshm.getChannelID(index, i), \
-					self.__dshm.getTACID(index, i), \
-					self.__dshm.getTCoarse(index, i), \
-					self.__dshm.getECoarse(index, i), \
-					self.__dshm.getTFine(index, i), \
-					self.__dshm.getEFine(index, i), \
-					self.__dshm.getChannelIdleTime(index, i), \
-					self.__dshm.getTACIdleTime(index, i), \
-				))
-
-		reply = { "id" : frameID, "lost" : frameLost, "events" : events }
-		self.__returnDataFrameByIndex(index)
-		return reply
-
-	def __getDataFrameByIndex(self, nonEmpty = False):
-		rawIndexes = self.__getDataFramesByRawIndex(1, nonEmpty=nonEmpty);
-		if len(rawIndexes) == 0:
-			return None
-		template = "@i"
-		index, = struct.unpack(template, rawIndexes)
-		return index
-	
-	def __returnDataFrameByIndex(self, index):
-		template = "@i"
-		rawIndexes = struct.pack(template, index)
-		self.__returnDataFramesByRawIndex(rawIndexes)
-
-
-	def __returnDataFramesByRawIndex(self, rawIndexes):
-		template = "@i"
-		n0 = struct.calcsize(template)
-		nFrames = len(rawIndexes)/n0
-		template1 = "@HH";
-		template2 = "@H";
-		template3 = "@i"
-		n1 = struct.calcsize(template1)
-		n2 = struct.calcsize(template2)
-		n3 = struct.calcsize(template3) * nFrames
-		data = struct.pack(template1, 0x04, n1+n2+n3) + struct.pack(template2, nFrames) + rawIndexes[0:n3]
-		self.__socket.send(data)
-
-		  
-	def __getDataFramesByRawIndex(self, nRequestedFrames, nonEmpty = False):
-		template1 = "@HH";
-		template2 = "@HH";
-		if nonEmpty: 
-			p2 = 1	
-		else:
-			p2 = 0
-
-		n1 = struct.calcsize(template1)
-		n2 = struct.calcsize(template2)
-		data = struct.pack(template1, 0x03, n1+n2) + struct.pack(template2, nRequestedFrames, p2)
-		self.__socket.send(data)
-
-		template = "@HH"
-		n = struct.calcsize(template)
-		data = self.__socket.recv(n)
-		length, nFrames = struct.unpack(template, data)
-
-		#print "DBG %d %d %d" % (nRequestedFrames, nTry, nFrames)
-		if nFrames == 0:
-			return ""
-				
-		template = "@i"
-		n = struct.calcsize(template)
-		return self.__socket.recv(n * nFrames)
-	
-
-	
-       	## Sends a command to the FPGA
+	## Sends a command to the FPGA
 	# @param portID  DAQ port ID where the FEB/D is connected
 	# @param slaveID Slave ID on the FEB/D chain
         # @param commandType Information for the FPGA firmware regarding the type of command being transmitted
@@ -886,8 +869,9 @@ class ATB:
 				#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
 				break
 
-			indexes = self.__getDataFramesByRawIndex(128)
-			self.__returnDataFramesByRawIndex(indexes)
+			# Set the read pointer to write pointer, in order to consume all available frames in buffer
+			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer();
+			self.__setDataFrameReadPointer(wrPointer);
 		
 
 		return
@@ -1050,21 +1034,24 @@ class ATB:
         # @param fileName The name of the file containg the data written by aDAQ/writeRaw
         # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
         # @param writer The name of the application to be used to save data to disk (Typically writeRaw). 
-	def openAcquisition(self, fileName, cWindow, writer=None):
+	def openAcquisition(self, fileName, writerMode = "TOFPET", cWindow = 0, minToT = 0):
 		if writer not in ["writeRaw", "writeRawE"]:
 			print "ERROR: when calling ATB::openAcquisition(), writer must be set with either:"
 			print " writeRaw	-- standard TOFPET RAW data format"
 			print " writeRawE	-- EndTOFPET-US RAW data format"
 
+		
+		writerModeDict = { "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' };
+		m = writerModeDict[writerMode]
+
 
 		from os import environ
-		if not environ.has_key('ADAQ_CRYSTAL_MAP'):
+		if cWindow != 0 and not environ.has_key('ADAQ_CRYSTAL_MAP'):
 			print 'Error: ADAQ_CRYSTAL_MAP environment variable is not set'
 			exit(1)
 
-		cmd = [ "aDAQ/%s" % writer, self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
-				"%e" % cWindow, \
-				fileName ]
+		cmd = [ "aDAQ/writeRaw", self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
+				"%e" % cWindow, "%e" % minToT, m, fileName ]
 		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
 
         ## Acquires data and decodes it, while writting through the acquisition pipeline 
@@ -1076,58 +1063,33 @@ class ATB:
 		(pin, pout) = (self.__acquisitionPipe.stdin, self.__acquisitionPipe.stdout)
 		nFrames = 0
 
-		template1 = "@ffii"
-		template2 = "@i"
+		template1 = "@ffIIi"
+		template2 = "@I"
 		n1 = struct.calcsize(template1)
 		n2 = struct.calcsize(template2)
-		rawIndexes = self.__getDataFramesByRawIndex(1024)
 
-                nRequiredFrames = acquisitionTime / self.__frameLength
-		t0 = time()
+		nRequiredFrames = acquisitionTime / self.__frameLength
+                t0 = time()
 		while nFrames < nRequiredFrames:
-			nFramesInBlock = len(rawIndexes)/n2
-			if nFramesInBlock <= 0:
-				print "Python:: Could not read any data frame indexes"
-				break
-			#print "Python:: About to push %d frames" % nFramesInBlock
+			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+			data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 0)
+			pin.write(data); pin.flush()
 			
-			header = struct.pack(template1, step1, step2, nFramesInBlock, 0)
-			pin.write(header)
-			pin.write(rawIndexes[0:n2*nFramesInBlock])
-			pin.flush()
+			data = pin.read(n2)
+			rdPointer2,  = struct.unpack(template2, data)
+			self.__setDataFrameReadPointer(rdPointer2)
 
+			nFramesInBlock = rdPointer2 - rdPointer
+			if nFramesInBlock < 0: nFramesInBlock += self.__dshm.getSizeInFrames()
 			nFrames += nFramesInBlock
-			newRawIndexes = self.__getDataFramesByRawIndex(1024)
 
-			tmp = pout.read(n2*nFramesInBlock)
-			#print "Python:: got back %d frames" % (len(tmp)/n2)
-			
-			self.__returnDataFramesByRawIndex(rawIndexes)
-			rawIndexes = newRawIndexes
-
-		#print "Python:: Returning last frames"
-		self.__returnDataFramesByRawIndex(rawIndexes)
-
-
-		#t0 = time()
-		#while time() - t0 < acquisitionTime:
-			#print "Asking for indexes..."
-			#rawIndexes = self.__getDataFramesByRawIndex(1024)
-			
-			#self.__returnDataFramesByRawIndex(rawIndexes)
-
-		# Close the deal by sending a block with a -1 index and endOfStep set to 1
-		header = struct.pack(template1, step1, step2, 1, 1)
-		rawIndexes = struct.pack(template2, -1)		
-		#print "Python:: closing step with ",[hex(ord(c)) for c in rawIndexes ]
-		pin.write(header)
-		pin.write(rawIndexes)
-		pin.flush()
-		rawIndexes = pout.read(n2)
-		index, = struct.unpack(template2, rawIndexes)
-		assert index == -1
-		#print "Python:: got back %ld\n" % (long(index)), [hex(ord(c)) for c in rawIndexes ]
-		#self.__returnDataFramesByRawIndex(rawIndexes)
+		wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+		data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 1)
+		pin.write(data); pin.flush()
+		
+		data = pin.read(n2)
+		rdPointer2,  = struct.unpack(template2, data)
+		self.__setDataFrameReadPointer(rdPointer2)
 	
 
 		print "Python:: Acquired %d frames in %f seconds, corresponding to %f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)

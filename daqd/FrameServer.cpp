@@ -7,7 +7,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <boost/crc.hpp>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>  
@@ -19,9 +18,10 @@
 //static const int MaxDataFrameQueueSize = 16*1024;
 //static const int N_ASIC=4;
 
+using namespace DAQd;
 
 FrameServer::FrameServer(int nFEB, int *feTypeMap, int debugLevel)
-	: debugLevel(debugLevel), nFEB(nFEB), feTypeMap(feTypeMap)
+	: debugLevel(debugLevel)
 {
 
 	
@@ -46,10 +46,8 @@ FrameServer::FrameServer(int nFEB, int *feTypeMap, int debugLevel)
 		exit(1);
 	}
 
-	for(int i = 0; i < MaxDataFrameQueueSize; i++)
-	{
-		cleanDataFrameQueue.push(new DataFramePtr(i, false, dataFrameSharedMemory+i));
-	}
+	dataFrameWritePointer = 0;
+	dataFrameReadPointer = 0;
 	
 	pthread_mutex_init(&lock, NULL);
 	pthread_cond_init(&condCleanDataFrame, NULL);
@@ -59,10 +57,16 @@ FrameServer::FrameServer(int nFEB, int *feTypeMap, int debugLevel)
 	acquisitionMode = 0;
 	hasWorker = false;
 	
-	printf("Size of event is %u\n", sizeof(Event));
 	printf("Size of frame is %u\n", sizeof(DataFrame));
 	
 	
+	this->feTypeMap = new int8_t[N_ASIC/16];
+	for(int i = 0; i < N_ASIC/16; i++) {
+		this->feTypeMap[i] = 0;
+	}
+	for(int i = 0; i < nFEB; i++) {
+		this->feTypeMap[i] = feTypeMap[i];
+	}
 	tacLastEventTime = new uint64_t[N_ASIC * 64 * 4];
 	channelLastEventTime = new uint64_t[N_ASIC * 64];
 	
@@ -98,18 +102,6 @@ FrameServer::~FrameServer()
 	delete [] channelLastEventTime;
 	delete [] tacLastEventTime;
 
-	while(!cleanDataFrameQueue.empty()) {
-		DataFramePtr *dataFrame = cleanDataFrameQueue.front();
-		cleanDataFrameQueue.pop();		
-		delete dataFrame;
-	}
-
-	while(!dirtyDataFrameQueue.empty()) {
-		DataFramePtr *dataFrame = dirtyDataFrameQueue.front();
-		dirtyDataFrameQueue.pop();		
-		delete dataFrame;
-	}
-
 	pthread_cond_destroy(&condReplyQueue);
 	pthread_cond_destroy(&condDirtyDataFrame);
 	pthread_cond_destroy(&condCleanDataFrame);
@@ -121,15 +113,6 @@ FrameServer::~FrameServer()
 	
 }
 
-static unsigned int grayToBinary(unsigned int num)
-{
-    unsigned int mask;
-    for (mask = num >> 1; mask != 0; mask = mask >> 1)
-    {
-        num = num ^ mask;
-    }
-    return num;
-}
 void FrameServer::startAcquisition(int mode)
 {
 	pthread_mutex_lock(&lock);
@@ -144,277 +127,39 @@ void FrameServer::stopAcquisition()
 	pthread_mutex_unlock(&lock);
 	
 	pthread_mutex_lock(&lock);
-	while(!dirtyDataFrameQueue.empty()) {
-		DataFramePtr *dataFramePtr = dirtyDataFrameQueue.front();
-		dirtyDataFrameQueue.pop();	
-		if(dataFramePtr != NULL)
-			cleanDataFrameQueue.push(dataFramePtr);			
-		
-		pthread_mutex_unlock(&lock);
-		pthread_mutex_lock(&lock);
-	}
+	dataFrameWritePointer = 0;
+	dataFrameReadPointer = 0;
 	pthread_mutex_unlock(&lock);	
 }
 
-bool FrameServer::decodeSTiCv3Event(uint64_t *data, Event &event)
-{
 
-
-	uint64_t buf_ptr=*data;
-	
-	event.type = 1;
-	
-	event.d.sticv3.eFine =  (unsigned short) 	(( 0x0000001f & buf_ptr));
-	event.d.sticv3.eCoarseL = m_lut[ (unsigned int)	(( 0x000fffe0 & buf_ptr) >> 5)	];
-	event.d.sticv3.eBadHit =  			(( 0x00100000 & buf_ptr) != 0 )? true:false;
-
-	event.d.sticv3.tFine =		(unsigned short)(( 0x03e00000 & buf_ptr) >> 21);
-
-	event.d.sticv3.tCoarseL = m_lut[	(unsigned int) ( 0x7FFF & (buf_ptr  >> 26) ) ];
-
-	event.d.sticv3.tBadHit =  			(( 0x0000020000000000 & buf_ptr) != 0 )? true:false;
-	event.channelID = 	(unsigned short) ((0x0000fc0000000000 & buf_ptr) >> (32+10));
-	event.asicID =	(unsigned short) ((0x000f000000000000 & buf_ptr) >> (32+16));
-	
-	
-	event.tCoarse = (event.d.sticv3.tCoarseL  >> 2) & 0x3FF;
-
-	if(debugLevel > 1) { 
-		printf("ASIC ID: %u\n",event.asicID);
-		printf("Channel ID: %u\n",event.channelID);
-		printf("eFine: %u\n",event.d.sticv3.eFine);
-		printf("eCoarse: %u\n",event.d.sticv3.eCoarseL);
-		printf("tFine: %u\n",event.d.sticv3.tFine);
-		printf("tCoarse: %u\n",event.d.sticv3.tCoarseL );
-		printf("tBadHit: %u\n",event.d.sticv3.tBadHit);
-	}
-	return true;
-  
-}
-
-
-bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes)
-{
-	uint64_t * buffer64 = (uint64_t *)buffer;
-	int nWords = nBytes / sizeof(uint64_t);
-
-	unsigned long frameID = buffer64[0] & 0xFFFFFFFFFULL;
-	int nEvents = buffer64[1] & 0xFFFF;
-	bool frameLost = (buffer64[1] & 0x10000) != 0;
-// 	if (frameLost) nEvents = 0;
-
-	if(nWords != 2 + nEvents) {		
-		printf("Inconsistent size: got %4d words, expected %4d words(%d events).\n", 
-			nWords, 2 + nEvents, nEvents);
-		return false;
-	}
-
-	// Print frame ID on occasion or when debugLevel > 1
-	if(m->debugLevel > 1) {
-		// WARNING For some reason, this seems to always print 0 events..
-		printf("Frame %12lu has %4d events (max is %4d), missing is %s\n", frameID, nEvents, MaxEventsPerFrame, frameLost ? "true" : "false");
-	
-	}
-	
-	
-	if(nEvents > MaxEventsPerFrame) {
-		nEvents = MaxEventsPerFrame;
-	}
-	
-	DataFramePtr *dataFrame = NULL;	
-	if(m->acquisitionMode > 1 || nEvents > 0) {
-		pthread_mutex_lock(&m->lock);
-		if(!m->cleanDataFrameQueue.empty()) {
-			dataFrame = m->cleanDataFrameQueue.front();
-			m->cleanDataFrameQueue.pop();
-		}
-		pthread_mutex_unlock(&m->lock);
-	}
-	
-	
-	
-	int nGoodEvents = 0;
-	bool hasTOFPET = false;
-	bool hasSTiCv3 = false;
-	for(int n = 0; n < nEvents; n++) {
-		uint64_t eventWord = (buffer64[2 + n]);
-		unsigned asicID = eventWord >> 48;
-	
-		if(asicID >= N_ASIC) {
-			fprintf(stderr, "Data from non-existing ASIC: %u\n", asicID);
-			continue;
-		}
-			
-		int feType = feTypeMap[asicID / 16];
-		//printf("n = %d word = %016llx\n", n, eventWord);
-		//printf("ASIC %d type %d\n", asicID, feType);
-		
-		unsigned short channelID ;
-		unsigned short tCoarse_TOFPET;
-		unsigned short tCoarse_STiC;
-		
-		// Decode basic common information: channel ID, tCoarse and absolute coarse event time
-		uint64_t eventTime;
-		if (feType == 0) {
-			channelID = (eventWord >> 2) & 0x3F;
-			tCoarse_TOFPET = (eventWord >> 38) & 0x3FF;
-			eventTime = 1024ULL*frameID + tCoarse_TOFPET;
-			hasTOFPET = true;
-
-			// Adjust channel idle time for the channel
-			int channelIndex =  64 * asicID + channelID;
-			int64_t channelIdleTime = eventTime - m->channelLastEventTime[channelIndex];
-			m->channelLastEventTime[channelIndex] = eventTime;
-
-			// If TOFPET, adjust TAC idle time
-			unsigned short tacID_TOFPET = 0;
-			int64_t tacIdleTime = 0;
-			tacID_TOFPET = (eventWord >> 0) & 0x3;
-			//printf("tacID = %d\n", tacID_TOFPET);
-			int tacIndex = tacID_TOFPET + 4 * channelIndex;
-			tacIdleTime = eventTime - m->tacLastEventTime[tacIndex];
-			if(tacIdleTime <= 32) {
-				if(m->debugLevel > 1)
-					fprintf(stderr, "Event with to very small TAC idle time (%lld)\n", tacIdleTime);
-			}
-			m->tacLastEventTime[tacIndex] = eventTime;
-
-			if(dataFrame == NULL) continue;	
-			Event &event = dataFrame->p->events[nGoodEvents];
-
-			event.type = 0;
-			event.asicID = asicID;
-			event.channelID = channelID;
-			event.d.tofpet.tacID = tacID_TOFPET;
-			event.tCoarse = tCoarse_TOFPET;
-			event.d.tofpet.eCoarse = (eventWord >> 18) & 0x3FF;
-			event.d.tofpet.tFine = (eventWord >> 28) & 0x3FF;
-			event.d.tofpet.eFine = (eventWord >> 8) & 0x3FF;
-			event.d.tofpet.tacIdleTime = tacIdleTime;
-			event.d.tofpet.channelIdleTime = channelIdleTime;	
-			
-			nGoodEvents += 1;
-		}			
-		else if (feType == 1) {
-			channelID = (unsigned short) ((0x0000fc0000000000 & eventWord) >> (32+10));
-			tCoarse_STiC = m_lut[	(unsigned int) ( 0x7FFF & (eventWord  >> 26) ) ];
-			eventTime = 1024ULL*frameID + ((tCoarse_STiC >> 2) & 0x3FF);
-			hasSTiCv3 = true;
-			
-			// Adjust channel idle time for the channel
-			int channelIndex =  64 * asicID + channelID;
-                        int64_t channelIdleTime = eventTime - m->channelLastEventTime[channelIndex];
-                        m->channelLastEventTime[channelIndex] = eventTime;
-
-			if(dataFrame == NULL) continue;	
-			Event &event = dataFrame->p->events[nGoodEvents];
-
-			event.type = 1;
-			event.asicID = asicID;
-			event.channelID = channelID;
-			event.d.sticv3.eFine =  (unsigned short) 	(( 0x0000001f & eventWord));
-			event.d.sticv3.eCoarseL = m_lut[ (unsigned int) (( 0x000fffe0 & eventWord) >> 5)  ];
-			event.d.sticv3.eBadHit =  			(( 0x00100000 & eventWord) != 0 ) ? true:false;
-			event.d.sticv3.tFine =		(unsigned short)(( 0x03e00000 & eventWord) >> 21);
-			event.d.sticv3.tCoarseL = tCoarse_STiC;
-			event.d.sticv3.tBadHit =  			(( 0x0000020000000000 & eventWord) != 0 ) ? true:false;
-			event.tCoarse = (event.d.sticv3.tCoarseL  >> 2) & 0x3FF;			
-			event.d.sticv3.channelIdleTime = channelIdleTime;
-			
-			nGoodEvents += 1;
-		}
-		
-	}
-	
-	if(dataFrame == NULL) {
-		if(m->debugLevel > 2) {
-			printf("no space in buffer to store events...\n");
-		}
-		return true;
-	}
-
-
-	if(false && hasTOFPET && hasSTiCv3) {
-		printf("Frame %lu has %d good events\n", frameID, nGoodEvents);
-		for (int n = 0; n < nGoodEvents; n++) { 
-			Event &event = dataFrame->p->events[n];
-			if(event.type == 0) printf("%4d %2d %4u\n", event.asicID, event.channelID, event.tCoarse);
-			if(event.type == 1) printf("%4d %2d %4u %6u %4u\n", event.asicID, event.channelID, event.tCoarse, event.d.sticv3.tCoarseL, (event.d.sticv3.tCoarseL/4) & 0x3FF);
-				
-		}
-	}
-
-	
-	dataFrame->p->frameID = frameID;
-	dataFrame->p->frameLost = frameLost;
-	dataFrame->p->nEvents = nGoodEvents;
-	
-	pthread_mutex_lock(&m->lock);
-	m->dirtyDataFrameQueue.push(dataFrame);
-	pthread_mutex_unlock(&m->lock);
-	
-	return true;
-
-}
 
 const char *FrameServer::getDataFrameSharedMemoryName()
 {
 	return shmObjectPath;
 }
 
-FrameServer::DataFramePtr * FrameServer::getDataFrameByPtr(bool nonEmpty)
+unsigned FrameServer::getDataFrameWritePointer()
 {
-	int index = -1;
-	
-	DataFramePtr * dataFramePtr = NULL;
 	pthread_mutex_lock(&lock);
-	
-	boost::posix_time::ptime t0 = boost::posix_time::microsec_clock::local_time();
-	while(	!die && (acquisitionMode != 0)	&& (dataFramePtr == NULL) ) {
-		
-		boost::posix_time::ptime t1 = boost::posix_time::microsec_clock::local_time();
-		if ((t1 - t0).total_milliseconds() > 1000) break;
-	
-		
-		if(dirtyDataFrameQueue.empty()) {
-			struct timespec ts;
-			clock_gettime(CLOCK_REALTIME, &ts);
-			ts.tv_nsec += 100000000L; // 100 ms
-			ts.tv_sec += (ts.tv_nsec / 1000000000L);
-			ts.tv_nsec = (ts.tv_nsec % 1000000000L);	
-			pthread_cond_timedwait(&condDirtyDataFrame, &lock, &ts);
-		}
-		
-		if(!dirtyDataFrameQueue.empty()) {
-			dataFramePtr = dirtyDataFrameQueue.front();
-			dirtyDataFrameQueue.pop();	
-		}
-		
-		if(dataFramePtr != NULL) {
-			if(nonEmpty && (dataFramePtr->p->nEvents == 0)) {
-				pthread_mutex_unlock(&lock);
-				returnDataFramePtr(dataFramePtr);
-				dataFramePtr = NULL;
-				pthread_mutex_lock(&lock);
-			}
-		}
-	}
-	
-/*	boost::posix_time::ptime t2 = boost::posix_time::microsec_clock::local_time();		
-	printf("time: %4ld %8p\n", (t2 - t0).total_milliseconds(), dataFramePtr);*/
-	pthread_mutex_unlock(&lock);	
-	
-	return dataFramePtr;
+	unsigned r = dataFrameWritePointer;
+	pthread_mutex_unlock(&lock);
+	return r % (2*MaxDataFrameQueueSize);
 }
 
-
-void FrameServer::returnDataFramePtr(DataFramePtr *dataFramePtr)
+unsigned FrameServer::getDataFrameReadPointer()
 {
-	if(dataFramePtr == NULL) return;
-	
 	pthread_mutex_lock(&lock);
-	cleanDataFrameQueue.push(dataFramePtr);
-	pthread_mutex_unlock(&lock);	
+	unsigned r = dataFrameReadPointer;
+	pthread_mutex_unlock(&lock);
+	return r % (2*MaxDataFrameQueueSize);
+}
+
+void FrameServer::setDataFrameReadPointer(unsigned ptr)
+{
+	pthread_mutex_lock(&lock);
+	dataFrameReadPointer = ptr % (2*MaxDataFrameQueueSize);
+	pthread_mutex_unlock(&lock);
 	pthread_cond_signal(&condCleanDataFrame);
 }
 
@@ -446,17 +191,6 @@ void FrameServer::stopWorker()
 		pthread_join(worker, NULL);
 	}
 
-	pthread_mutex_lock(&lock);
-	while(!dirtyDataFrameQueue.empty()) {		
-		DataFramePtr *dataFrame = dirtyDataFrameQueue.front();
-		dirtyDataFrameQueue.pop();	
-		if(dataFrame != NULL)
-			cleanDataFrameQueue.push(dataFrame);
-	}
-	printf("Clean buffer queue has %u entries\n", cleanDataFrameQueue.size());
-	pthread_mutex_unlock(&lock);
-
-
 	printf("FrameServer::stopWorker exiting...\n");
 }
 
@@ -466,5 +200,61 @@ void *FrameServer::runWorker(void *arg)
         return F->doWork();
 }
 
+bool FrameServer::parseDataFrame(DataFrame *dataFrame)
+{
+	
+	unsigned long long frameID = dataFrame->data[0] & 0xFFFFFFFFFULL;
+	unsigned long frameSize = (dataFrame->data[0] >> 36) & 0x7FFF;
+	unsigned nEvents = dataFrame->data[1] & 0xFFFF;
+	bool frameLost = (dataFrame->data[1] & 0x10000) != 0;
+	
+	if (frameSize != 2 + nEvents) {
+		printf("Inconsistent size: got %4d words, expected %4d words(%d events).\n", 
+			frameSize, 2 + nEvents, nEvents);
+		return false;
+	}
+	
+	for(unsigned n = 2; n < frameSize; n++) {
+		uint64_t eventWord = (dataFrame->data[n]);
+		unsigned asicID = eventWord >> 48;		
+		
+#ifdef __ENDOTOFPET__
+		int feType = feTypeMap[asicID / 16];
+#else
+		const int feType = 0;
+#endif
+		
+		unsigned tofpet_ChannelID = (eventWord >> 2) & 0x3F;
+		unsigned tofpet_TACID = (eventWord >> 0) & 0x3;
+		unsigned long long tofpet_EventTime = (1024ULL*frameID) + ((eventWord >> 38) & 0x3FF);
+	
+		unsigned stic_ChannelID = ((0x0000fc0000000000 & eventWord) >> (32+10));
+		unsigned stic_TACID = 0;
+		// Calculating a proper TCoarse for STICv3 requires some CPU, thus we just use the Frame ID
+		unsigned long long stic_EventTime = (1024ULL*frameID) + 0; 
+		
+		
+		unsigned channelID = (feType == 0) ? tofpet_ChannelID : stic_ChannelID;
+		unsigned tacID = (feType == 0) ? tofpet_TACID : stic_TACID;
+		unsigned long long eventTime = (feType == 0) ? tofpet_EventTime : stic_EventTime;
+		
+		int channelIndex =  64 * asicID + channelID;
+		int64_t channelIdleTime = eventTime - channelLastEventTime[channelIndex];
+		channelLastEventTime[channelIndex] = eventTime;
+		
+		int tacIndex = tacID + 4 * channelIndex;
+		int64_t tacIdleTime = eventTime - tacLastEventTime[tacIndex];
+		tacLastEventTime[tacIndex] = eventTime;
 
+#ifdef __ENDOTOFPET____
+		dataFrame->feType[n] = feType;
+#endif
+		dataFrame->channelIdleTime[n] = channelIdleTime;
+		dataFrame->tacIdleTime[n] = tacIdleTime;
+		
+	
+	}
+	
+	return true;
+}
 

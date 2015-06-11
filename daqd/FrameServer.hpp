@@ -6,23 +6,16 @@
 
 #include "Protocol.hpp"
 
+namespace DAQd {
+
 static const char *shmObjectPath = "/daqd_shm";
-static const int MaxDataFrameQueueSize = 128*1024;
-static const int N_ASIC=5*16;
+static const int N_ASIC=16*1024;
 
 class FrameServer {
 public:
 	FrameServer(int nFEB, int *feTypeMap, int debugLevel);
         virtual ~FrameServer();	
-	struct DataFramePtr {
-	public:
-		unsigned index;
-		bool fake;
-		DataFrame *p;
-		
-		DataFramePtr (unsigned index, bool fake, DataFrame *p) : index(index), fake(fake), p(p) {};
-	};
-	
+
 	// Sends a command and gets the reply
 	// buffer is used to carry the command and the reply
 	// bufferSize is the max capacity of the size
@@ -31,8 +24,9 @@ public:
 	virtual int sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength) = 0;
 	
 	virtual const char *getDataFrameSharedMemoryName();
-	virtual DataFramePtr *getDataFrameByPtr(bool nonEmpty);
-	virtual void returnDataFramePtr(DataFramePtr *ptr);
+	virtual unsigned getDataFrameWritePointer();
+	virtual unsigned getDataFrameReadPointer();
+	virtual void setDataFrameReadPointer(unsigned ptr);
 	
 	virtual void startAcquisition(int mode);
 	virtual void stopAcquisition();
@@ -42,17 +36,17 @@ public:
 	
 	
 protected:	
+	bool parseDataFrame(DataFrame *dataFrame);
+	
 	int debugLevel;
 	
-	int nFEB;
-	int *feTypeMap;
+	int8_t *feTypeMap;
 	
 	int dataFrameSharedMemory_fd;
 	DataFrame *dataFrameSharedMemory;
 	
 	static void *runWorker(void *);
 	virtual void * doWork() = 0;
-	bool decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes);
 	void startWorker();
 	void stopWorker();
 	
@@ -63,8 +57,8 @@ protected:
 	pthread_mutex_t lock;
 	pthread_cond_t condCleanDataFrame;
 	pthread_cond_t condDirtyDataFrame;
-	std::queue<DataFramePtr *> cleanDataFrameQueue;
-	std::queue<DataFramePtr *> dirtyDataFrameQueue;
+	unsigned dataFrameWritePointer;
+	unsigned dataFrameReadPointer;
 	
 	
 
@@ -81,9 +75,8 @@ protected:
 	
 	int16_t m_lut[ 1 << 15 ];
 	
-	private:
-	bool decodeSTiCv3Event(uint64_t *data, Event &event);
 
 };
 
+}
 #endif

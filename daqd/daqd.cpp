@@ -22,6 +22,7 @@
 #include <string.h>
 #include <getopt.h>
 
+using namespace DAQd;
 
 /*
  * Used to stop on CTRL-C or kill
@@ -36,7 +37,6 @@ static void catchUserStop(int signal) {
 
 static int createListeningSocket(char *socketName);
 static void pollSocket(int listeningSocket, FrameServer *frameServer);
-
 
 
 int main(int argc, char *argv[])

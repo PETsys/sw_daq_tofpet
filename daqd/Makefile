@@ -10,6 +10,9 @@ ifeq (1, ${DTFLY})
 	LDFLAGS := $(LDFLAGS)  -ldtfly -lwdapi1011 
 endif 
 
+ifeq (1, ${ENDOTOFPET})
+	CPPFLAGS := $(CPPFLAGS) -D__ENDOTOFPET__
+endif 
 
 all: daqd DSHM.so
 headers: Client.hpp FrameServer.hpp UDPFrameServer.hpp DAQFrameServer.hpp DtFlyP.hpp Protocol.hpp SHM.hpp

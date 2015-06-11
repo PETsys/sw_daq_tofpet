@@ -16,6 +16,8 @@ extern "C" {
 
 }
 
+namespace DAQd {
+
 typedef boost::crc_optimal<32, 0x04C11DB7, 0x0A1CB27F, 0, false, false> crcResult_t;
 
 class DtFlyP {
@@ -67,4 +69,5 @@ private:
 
 };
 
+}
 #endif

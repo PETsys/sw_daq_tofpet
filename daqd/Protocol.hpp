@@ -3,65 +3,29 @@
 
 #include <stdint.h>
 
+namespace DAQd {
 
 static const uint16_t commandAcqOnOff = 0x01;
 static const uint16_t commandGetDataFrameSharedMemoryName = 0x02;
-static const uint16_t commandGetDataFrameBuffers = 0x03;
-static const uint16_t commandReturnDataFrameBuffers = 0x04;
+static const uint16_t commandGetDataFrameWriteReadPointer = 0x03;
+static const uint16_t commandSetDataFrameReadPointer = 0x04;
 static const uint16_t commandToFrontEnd = 0x05;
 static const uint16_t commandGetPortUp = 0x06;
 static const uint16_t commandGetPortCounts = 0x07;
 
 
 
-static const int MaxEventsPerFrame = 1024-2;
-static const int MaxTimestampsPerCluster = 96;
-
-struct EventTOFPET {
-	uint16_t tacID;
-	uint16_t eCoarse;
-	uint16_t tFine;
-	uint16_t eFine;	
-	int64_t channelIdleTime;
-	int64_t tacIdleTime;
-};
-
-struct EventSTiCv3 {
-	uint16_t tCoarseL;
-	uint16_t eCoarseL;
-	uint16_t tFine;
-	uint16_t eFine;	
-	bool tBadHit;
-	bool eBadHit;
-	int64_t channelIdleTime;
-};
-
-struct EventDISPM {
-	uint16_t asicID;
-	uint16_t clusterID;
-	uint16_t energy;
-	uint16_t nTimestamps;
-	uint16_t timestamps[MaxTimestampsPerCluster];
-};
-
-struct Event {
-	uint16_t asicID;
-	uint16_t channelID;
-	uint16_t tCoarse;
-	uint8_t type;
-	
-	union { 
-		EventTOFPET tofpet;
-		EventSTiCv3 sticv3;
-		//EventDISPM probe;
-	} d;
-};
+static const int MaxDataFrameSize = 2048;
+static const unsigned MaxDataFrameQueueSize = 128*1024;
 
 struct DataFrame {
-	uint64_t frameID;
-	bool frameLost;
-	uint16_t nEvents;
-	Event events[MaxEventsPerFrame];
+		uint64_t data[MaxDataFrameSize];
+		uint64_t channelIdleTime[MaxDataFrameSize];
+		uint64_t tacIdleTime[MaxDataFrameSize];
+#ifdef __ENDOTOFPET__
+		int8_t feType[MaxDataFrameSize];
+#endif
 };
 
+}
 #endif

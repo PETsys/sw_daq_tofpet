@@ -4,6 +4,8 @@
 #include "FrameServer.hpp"
 #include <map>
 
+namespace DAQd {
+	
 class Client {
 public:
 	Client (int socket, FrameServer *frameServer);
@@ -18,14 +20,13 @@ private:
 	
 	int doAcqOnOff();
 	int doGetDataFrameSharedMemoryName();
-	int doGetEventFrameBuffers();
-	int doReturnEventFrameBuffers();
+	int doGetDataFrameWriteReadPointer();
+	int doSetDataFrameReadPointer();
 	int doCommandToFrontEnd(int commandLength);
 	int doGetPortUp();
 	int doGetPortCounts();
-	
-	std::map<int, FrameServer::DataFramePtr *> ownedDataFramePtrs;
-	
+
 };
 
+}
 #endif

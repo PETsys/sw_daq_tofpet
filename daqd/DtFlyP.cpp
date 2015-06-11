@@ -27,6 +27,7 @@
 // }
 
 using namespace DTFLY;
+using namespace DAQd;
 
 extern "C" {
 #include "dtfly_p_etpu_api.h"

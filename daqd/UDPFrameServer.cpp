@@ -22,6 +22,8 @@ static const unsigned short fePort = 2000;
 
 static int myFeTypeMap[1] = { 0 };
 
+using namespace DAQd;
+
 UDPFrameServer::UDPFrameServer(int debugLevel)
 	: FrameServer(1, myFeTypeMap, debugLevel)
 {
@@ -64,6 +66,14 @@ UDPFrameServer::~UDPFrameServer()
 }
 
 
+static bool isFull(unsigned writePointer, unsigned readPointer)
+{
+	return (writePointer != readPointer) && ((writePointer % MaxDataFrameQueueSize) == (readPointer & MaxDataFrameQueueSize));
+}
+static unsigned getIndex(unsigned pointer)
+{
+	return pointer % MaxDataFrameQueueSize;
+}
 
 void *UDPFrameServer::doWork()
 {	
@@ -114,8 +124,22 @@ void *UDPFrameServer::doWork()
 				uint64_t *p = dataBuffer;
 				do {
 					unsigned frameSize = (p[0] >> 36) & 0x7FFF;
-					bool decodeOK = decodeDataFrame(m, (unsigned char *)p, frameSize * sizeof(uint64_t));
-					if(!decodeOK) break;
+					
+					pthread_mutex_lock(&m->lock);
+					unsigned lWritePointer = m->dataFrameWritePointer % (2*MaxDataFrameQueueSize);
+					unsigned lReadPointer = m->dataFrameReadPointer % (2*MaxDataFrameQueueSize);
+					pthread_mutex_unlock(&m->lock);
+					
+					if(isFull(lWritePointer, lReadPointer)) break;
+					DataFrame *dataFrame = &dataFrameSharedMemory[getIndex(lWritePointer)];
+					
+					memcpy(dataFrame->data, p, frameSize * sizeof(uint64_t));
+					if(!m->parseDataFrame(dataFrame)) break;
+					
+					pthread_mutex_lock(&m->lock);
+					m->dataFrameWritePointer = (m->dataFrameWritePointer + 1) % (2*MaxDataFrameQueueSize);
+					pthread_mutex_unlock(&m->lock);
+					pthread_cond_signal(&m->condDirtyDataFrame);
 					p += frameSize;
 					
 				} while(p < dataBuffer + nWords);

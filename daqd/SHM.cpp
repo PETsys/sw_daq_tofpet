@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <errno.h>
 
+using namespace DAQd;
+
 SHM::SHM(std::string shmPath)
 {
 	shmfd = shm_open(shmPath.c_str(), 
@@ -20,12 +22,38 @@ SHM::SHM(std::string shmPath)
 		exit(1);
 	}
 	shmSize = lseek(shmfd, 0, SEEK_END);
+	assert(shmSize = MaxDataFrameQueueSize * sizeof(DataFrame));
+	
 	shm = (DataFrame *)mmap(NULL, 
 				shmSize,
 				PROT_READ, 
 				MAP_SHARED, 
 				shmfd,
 				0);
+				
+				
+	m_lut[ 0x7FFF ] = -1; // invalid state
+	uint16_t lfsr = 0x0000;
+	for ( int16_t n = 0; n < ( 1 << 15 ) - 1; ++n )
+	{
+		m_lut[ lfsr ] = n;
+		const uint8_t bits13_14 = lfsr >> 13;
+		uint8_t new_bit;
+		switch ( bits13_14 )
+		{ // new_bit = !(bit13 ^ bit14)
+			case 0x00:
+			case 0x03:
+				new_bit = 0x01;
+				break;
+			case 0x01:
+			case 0x02:
+				new_bit = 0x00;
+				break;
+		}// switch
+		lfsr = ( lfsr << 1 ) | new_bit; // add the new bit to the right
+		lfsr &= 0x7FFF; // throw away the 16th bit from the shift
+	}// for
+	assert ( lfsr == 0x0000 ); // after 2^15-1 steps we're back at 0				
   
 }
 
@@ -35,96 +63,23 @@ SHM::~SHM()
 	close(shmfd);
 }
 
-unsigned long long SHM::getSize()
+unsigned long long SHM::getSizeInBytes()
 {
 	return shmSize;
 }
 
-unsigned long long SHM::getFrameID(int index)
+unsigned long long SHM::getSizeInFrames()
 {
-	DataFrame &df = shm[index];
-	unsigned long long r = df.frameID;
-	return r;
+	return MaxDataFrameQueueSize;
 }
 
-bool SHM::getFrameLost(int index)
+unsigned SHM::decodeSticCoarse(unsigned coarse, unsigned long long frameID)
 {
-	DataFrame &df = shm[index];
-	return df.frameLost;
-}
-
-int SHM::getNEvents(int index)
-{
-	DataFrame &df = shm[index];
-	return df.nEvents;
-}
-
-int SHM::getEventType(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.type;
-}
-
-int SHM::getTCoarse(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.tCoarse;
-}
-
-int SHM::getECoarse(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.d.tofpet.eCoarse;
-}
-
-int SHM::getTFine(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.d.tofpet.tFine;
-}
-
-int SHM::getEFine(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.d.tofpet.eFine;
-}
-
-int SHM::getAsicID(int index, int event)
-{ 
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.asicID;
-}
-
-int SHM::getChannelID(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.channelID;  
-	}
-
-int SHM::getTACID(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.d.tofpet.tacID;
-}
-
-long long SHM::getTACIdleTime(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.d.tofpet.tacIdleTime;
-}
-
-long long SHM::getChannelIdleTime(int index, int event)
-{
-	DataFrame &df = shm[index];
-	Event &e = df.events[event];
-	return e.d.tofpet.channelIdleTime;
+	coarse = m_lut[coarse];
+	long long clocksElapsed = (frameID % 256) *1024*4ULL;	// Periodic reset every 256 frames
+	long long wrapNumber	= clocksElapsed / 32767;
+	long long wrapRemainder	= clocksElapsed % 32767;
+	if(coarse < wrapRemainder) coarse += 32767;
+	coarse -= wrapRemainder;
+	return coarse;
 }
