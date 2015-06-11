@@ -1,8 +1,6 @@
-default: DSHM.so
+default: 
 	$(MAKE) -f module.mk -C daqd $(MAKEFLAGS)
 	$(MAKE) -f module.mk -C aDAQ $(MAKEFLAGS)
-
-DSHM.so: daqd/DSHM.so
 	cp -f daqd/DSHM.so DSHM.so
 
 clean: 
