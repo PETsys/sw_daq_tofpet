@@ -57,7 +57,7 @@ EventBuffer<Pulse> * CoarseExtract::handleEvents (EventBuffer<RawPulse> *inBuffe
 		p.time = raw.time;
 		p.region = raw.region;
 		p.channelID = raw.channelID;
-		p.energy = coarseToT  * (raw.d.tofpet.T * 1E-3); // In ns
+		p.energy = coarseToT  * (raw.T * 1E-3); // In ns
 		
 		outBuffer->pushWriteSlot();
 		lPassed++;

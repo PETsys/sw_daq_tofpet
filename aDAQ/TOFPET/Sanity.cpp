@@ -35,7 +35,7 @@ EventBuffer<RawPulse> * Sanity::handleEvents (EventBuffer<RawPulse> *inBuffer)
 		RawPulse &raw1 = inBuffer->get(i);
 		if(raw1.time < tMin || raw1.time >= tMax) continue;
 
-		long long T = raw1.d.tofpet.T;
+		long long T = raw1.T;
 
 		for(unsigned j = i+1; j < nEvents; j++) {
 			RawPulse &raw2 = inBuffer->get(j);

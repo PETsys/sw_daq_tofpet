@@ -19,7 +19,7 @@ Sticv3Handler::Sticv3Handler()
 
         pulse.raw = raw;                
         // WARNING: rounding sensitive!
-        pulse.time = raw.time + (raw.d.stic.tfine * raw.d.stic.T / (4*32));  
+        pulse.time = raw.time + (raw.d.stic.tfine * raw.T / (4*32));  
         pulse.timeEnd = raw.timeEnd;
         pulse.region = raw.region;
         pulse.channelID = raw.channelID;

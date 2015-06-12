@@ -14,8 +14,7 @@ using namespace DAQ::Core;
 using namespace DAQ::ENDOTOFPET;
 using namespace DAQ::Common;
 
-static const unsigned outBlockSize = 128*1024;
-static const unsigned maxEventsPerFrame = 16*1024;
+static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 
 RawReader::RawReader(FILE *dataFile, float T, EventSink<RawPulse> *sink)
 	: EventSource<RawPulse>(sink), dataFile(dataFile), T(T)
@@ -43,8 +42,6 @@ void RawReader::run()
 	
 	EventBuffer<RawPulse> *outBuffer = NULL;
 	
-	RawPulse framePulses[maxEventsPerFrame];
-	SortEntry sortArray[maxEventsPerFrame];
 	int nEventsInFrame = 0;
 	
 	long long tMax = 0, lastTMax = 0;
@@ -100,15 +97,14 @@ void RawReader::run()
 
 
 				// Carefull with the float/double/integer conversions here..
-				p.d.tofpet.T = T * 1E12;
-				p.time = (1024LL * CurrentFrameID + rawEvent.tCoarse) * p.d.tofpet.T;
-				p.timeEnd = (1024LL * CurrentFrameID + rawEvent.eCoarse) * p.d.tofpet.T;
-				if((p.timeEnd - p.time) < -256*p.d.tofpet.T) p.timeEnd += (1024LL * p.d.tofpet.T);
+				p.T = T * 1E12;
+				p.time = (1024LL * CurrentFrameID + rawEvent.tCoarse) * p.T;
+				p.timeEnd = (1024LL * CurrentFrameID + rawEvent.eCoarse) * p.T;
+				if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
 				p.channelID = rawEvent.channelID;
 				p.channelIdleTime = rawEvent.channelIdleTime;
 				p.region = rawEvent.channelID / 16;
 				p.feType = RawPulse::TOFPET;
-				p.d.tofpet.frameID = CurrentFrameID;
 				p.d.tofpet.tac = rawEvent.tac;
 				p.d.tofpet.tcoarse = rawEvent.tCoarse;
 				p.d.tofpet.ecoarse = rawEvent.eCoarse;
@@ -170,16 +166,15 @@ void RawReader::run()
 				//printf("tCoarse: %6lu %6lu\n", rawEvent2.tCoarse, tCoarse);
 
 			
-				p.d.stic.T = T * 1E12;
-				p.time = 1024LL * CurrentFrameID * p.d.stic.T + tCoarse * p.d.stic.T/4;
-				p.timeEnd = 1024LL * CurrentFrameID * p.d.stic.T + eCoarse * p.d.stic.T/4;
-				if((p.timeEnd - p.time) < -256*p.d.stic.T) p.timeEnd += (1024LL * p.d.stic.T);
+				p.T = T * 1E12;
+				p.time = 1024LL * CurrentFrameID * p.T + tCoarse * p.T/4;
+				p.timeEnd = 1024LL * CurrentFrameID * p.T + eCoarse * p.T/4;
+				if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
 				p.channelID = rawEvent2.channelID;
 				p.channelIdleTime = rawEvent2.channelIdleTime;
 				
 				
 				p.feType = RawPulse::STIC;
-				p.d.stic.frameID = CurrentFrameID;				   
 				p.d.stic.tcoarse = rawEvent2.tCoarse;
 				p.d.stic.ecoarse = rawEvent2.eCoarse;
 				p.d.stic.tfine =  rawEvent2.tFine;

@@ -140,12 +140,11 @@ void RawReaderV1::run()
 		RawPulse &p = outBuffer->getWriteSlot();
 		
 		// Carefull with the float/double/integer conversions here..
-		p.d.tofpet.T = T * 1E12;
-		p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * p.d.tofpet.T;
+		p.T = T * 1E12;
+		p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * p.T;
 		p.channelID = 64 * rawEvent.asicID + rawEvent.channelID;
 		p.region = (64 * rawEvent.asicID + rawEvent.channelID) / 16;
 		p.feType = RawPulse::TOFPET;
-		p.d.tofpet.frameID = rawEvent.frameID;
 		p.d.tofpet.tac = rawEvent.tacID;
 		p.d.tofpet.tcoarse = rawEvent.tCoarse;
 		p.d.tofpet.ecoarse = rawEvent.eCoarse;

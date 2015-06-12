@@ -91,7 +91,7 @@ public:
 					Hit &hit1 = c.photons[0].hits[j1];
 					Hit &hit2 = c.photons[1].hits[j2];
 					
-					long long T = hit1.raw.top.raw.d.tofpet.T;
+					long long T = hit1.raw.top.raw.T;
 					
 					float dt1 = hit1.time - t0_1;
 					if(dt1 > maxDeltaT) continue;

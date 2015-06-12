@@ -1032,20 +1032,19 @@ class ATB:
 
         ##Opens the acquisition pipeline, allowing the data frames read from the shared memory block to be written to disk by a writing applications
         # @param fileName The name of the file containg the data written by aDAQ/writeRaw
-        # @param cWindow Coincidence window. If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
-        # @param writer The name of the application to be used to save data to disk (Typically writeRaw). 
-	def openAcquisition(self, fileName, writerMode = "TOFPET", cWindow = 0, minToT = 0):
-		writerModeDict = { "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' };
-		if writerMode  not in writerModeDict.keys():
+        # @param writer The desired outout file format. Default is "TOFPET", which is equivalent to "writeRaw"
+        # @param cWindow Coincidence window (in seconds) If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
+	# @param minToT Minimal ToT (in seconds) for events to be considered as a coincidence trigger candidate.
+	def openAcquisition(self, fileName, cWindow = 0, minToT = 0, writer = "TOFPET"):
+		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' }
+		if writer  not in writerModeDict.keys():
 			print "ERROR: when calling ATB::openAcquisition(), writer must be ", ", ".join(writerModeDict.keys())
-
 		
-		m = writerModeDict[writerMode]
-
+		m = writerModeDict[writer]
 
 		from os import environ
 		if cWindow != 0 and not environ.has_key('ADAQ_CRYSTAL_MAP'):
-			print 'Error: ADAQ_CRYSTAL_MAP environment variable is not set'
+			print 'Error: ADAQ_CRYSTAL_MAP environment variable must be set when using cWindow different than zero'
 			exit(1)
 
 		cmd = [ "aDAQ/writeRaw", self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
@@ -1068,6 +1067,8 @@ class ATB:
 
 		nRequiredFrames = acquisitionTime / self.__frameLength
                 t0 = time()
+		nBlocks = 0
+		bs = self.__dshm.getSizeInFrames()
 		while nFrames < nRequiredFrames:
 			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
 			data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 0)
@@ -1077,8 +1078,11 @@ class ATB:
 			rdPointer2,  = struct.unpack(template2, data)
 			self.__setDataFrameReadPointer(rdPointer2)
 
-			nFramesInBlock = rdPointer2 - rdPointer
-			if nFramesInBlock < 0: nFramesInBlock += 2*self.__dshm.getSizeInFrames()
+			nFramesInBlock1 = (rdPointer2 % bs) - (rdPointer % bs)
+			nFramesInBlock = nFramesInBlock1;
+			if nFramesInBlock < 0:
+				nFramesInBlock = nFramesInBlock + bs
+		
 			nFrames += nFramesInBlock
 
 		wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()

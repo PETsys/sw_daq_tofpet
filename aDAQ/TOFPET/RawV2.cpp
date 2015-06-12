@@ -7,12 +7,13 @@
 #include <set>
 #include <limits.h>
 #include <iostream>
+#include <assert.h>
 
 using namespace std;
 using namespace DAQ::Core;
 using namespace DAQ::TOFPET;
 
-static const unsigned outBlockSize = 128*1024;
+static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 static const unsigned maxEventsPerFrame = 16*1024;
 
 RawReaderV2::RawReaderV2(FILE *dataFile, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink)
@@ -115,8 +116,6 @@ void RawReaderV2::run()
 	
 	EventBuffer<RawPulse> *outBuffer = NULL;
 	
-	RawPulse framePulses[maxEventsPerFrame];
-	SortEntry sortArray[maxEventsPerFrame];
 	int nEventsInFrame = 0;
 	
 	long long tMax = 0, lastTMax = 0;
@@ -153,15 +152,14 @@ void RawReaderV2::run()
 			RawPulse &p = outBuffer->getWriteSlot();
 			
 			// Carefull with the float/double/integer conversions here..
-			p.d.tofpet.T = T * 1E12;
-			p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * p.d.tofpet.T;
-			p.timeEnd = (1024LL * rawEvent.frameID + rawEvent.eCoarse) * p.d.tofpet.T;
-			if((p.timeEnd - p.time) < -256*p.d.tofpet.T) p.timeEnd += (1024LL * p.d.tofpet.T);
+			p.T = T * 1E12;
+			p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * p.T;
+			p.timeEnd = (1024LL * rawEvent.frameID + rawEvent.eCoarse) * p.T;
+			if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
 			p.channelID = (64 * rawEvent.asicID) + rawEvent.channelID;
 			p.channelIdleTime = rawEvent.channelIdleTime;
 			p.region = (64 * rawEvent.asicID + rawEvent.channelID) / 16;
 			p.feType = RawPulse::TOFPET;
-			p.d.tofpet.frameID = rawEvent.frameID;
 			p.d.tofpet.tac = rawEvent.tacID;
 			p.d.tofpet.tcoarse = rawEvent.tCoarse;
 			p.d.tofpet.ecoarse = rawEvent.eCoarse;
@@ -243,3 +241,57 @@ void RawScannerV2::getStep(int stepIndex, float &step1, float &step2, unsigned l
 	eventsEnd = step.eventsEnd;
 }
 
+
+RawWriterV2::RawWriterV2(char *fileNamePrefix)
+{
+	char dataFileName[512];
+	char indexFileName[512];
+	sprintf(dataFileName, "%s.raw2", fileNamePrefix);
+	sprintf(indexFileName, "%s.idx2", fileNamePrefix);
+
+	outputDataFile = fopen(dataFileName, "w");
+	outputIndexFile = fopen(indexFileName, "w");
+	assert(outputDataFile != NULL);
+	assert(outputIndexFile != NULL);
+	stepBegin = 0;
+}
+
+RawWriterV2::~RawWriterV2()
+{
+ 	fclose(outputDataFile);
+ 	fclose(outputIndexFile);
+}
+
+void RawWriterV2::openStep(float step1, float step2)
+{
+	this->step1 = step1;
+	this->step2 = step2;
+	stepBegin = ftell(outputDataFile) / sizeof(DAQ::TOFPET::RawEventV2);
+}
+
+void RawWriterV2::closeStep()
+{
+	long stepEnd = ftell(outputDataFile) / sizeof(DAQ::TOFPET::RawEventV2);	
+	fprintf(outputIndexFile, "%f %f %ld %ld\n", step1, step2, stepBegin, stepEnd);
+	fflush(outputDataFile);
+	fflush(outputIndexFile);
+}
+
+void RawWriterV2::addEvent(RawPulse &p)
+{
+	uint32_t frameID = p.time / (1024L * p.T);
+	DAQ::TOFPET::RawEventV2 eventOut = {
+		frameID,
+		uint16_t(p.channelID / 64),
+		uint16_t(p.channelID % 64),
+		p.d.tofpet.tac,
+		p.d.tofpet.tcoarse,
+		p.d.tofpet.ecoarse,
+		p.d.tofpet.tfine,
+		p.d.tofpet.efine,
+		p.channelIdleTime,
+		p.d.tofpet.tacIdleTime
+	};
+
+	fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);
+}

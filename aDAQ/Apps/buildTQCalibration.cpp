@@ -90,7 +90,7 @@ public:
 			
 			
 
-			long long T = e.raw.d.tofpet.T;
+			long long T = e.raw.T;
 			eventTime = e.time;
 			eventChannel = e.channelID;
 			eventToT = 1E-3*(e.timeEnd - e.time);

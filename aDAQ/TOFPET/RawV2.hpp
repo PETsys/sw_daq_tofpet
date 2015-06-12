@@ -3,6 +3,7 @@
 #include <Common/Task.hpp>
 #include <Core/EventSourceSink.hpp>
 #include <Core/Event.hpp>
+#include <Core/RawPulseWriter.hpp>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -25,6 +26,21 @@ namespace DAQ { namespace TOFPET {
 		uint16_t eFine;
 		int64_t channelIdleTime;
 		int64_t tacIdleTime;
+	};
+	
+	class RawWriterV2 : public AbstractRawPulseWriter {
+	public:
+		RawWriterV2(char *fileNamePrefix);
+		virtual ~RawWriterV2();
+		virtual void openStep(float step1, float step2);
+		virtual void closeStep();
+		virtual void addEvent(RawPulse &p);
+	private:
+		FILE *outputDataFile;
+		FILE *outputIndexFile;
+		float step1;
+		float step2;
+		long stepBegin;
 	};
 
 	

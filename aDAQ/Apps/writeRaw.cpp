@@ -12,30 +12,23 @@
 #include <SHM.hpp>
 #include <TFile.h>
 #include <TTree.h>
-#include <TOFPET/RawV2.hpp>
 #include <vector>
 #include <algorithm>
 #include <functional>
-
 #include <Common/Constants.hpp>
 #include <Common/Utils.hpp>
 #include <Core/Event.hpp>
-#include <Core/CoarseExtract.hpp>
-#include <Core/PulseFilter.hpp>
-#include <Core/SingleReadoutGrouper.hpp>
-#include <Core/CrystalPositions.hpp>
-#include <Core/NaiveGrouper.hpp>
+#include <Core/CoarseSorter.hpp>
 #include <Core/CoincidenceFilter.hpp>
+#include <Core/RawPulseWriter.hpp>
+#include <TOFPET/RawV2.hpp>
 #include <ENDOTOFPET/Raw.hpp>
-// #include <Core/RawPulseWriter.hpp>
 
 using namespace std;
 using namespace DAQ;
 using namespace DAQ::Core;
 
-const double T = SYSTEM_PERIOD;
-static const unsigned outBlockSize = 128*1024;
-
+const long long T = (long long)(SYSTEM_PERIOD * 1E12);
 
 struct BlockHeader  {
 	float step1;
@@ -58,14 +51,14 @@ int main(int argc, char *argv[])
 	char *outputFilePrefix = argv[6];
 	
 	DAQd::SHM *shm = new DAQd::SHM(shmObjectPath);
-// 	
-// 	AbstractRawPulseWriter *writer = NULL;
-// 	if (outputType = 'T') {
-// 		writer = new TOFPET::RawWriterV2(outputFilePrefix);
-// 	}
-// 	else {
-// 		writer = new NullRawPulseWriter();
-// 	}
+	
+	AbstractRawPulseWriter *writer = NULL;
+	if(outputType == 'T') {
+		writer = new TOFPET::RawWriterV2(outputFilePrefix);
+	}
+	else {
+		writer = new NullRawPulseWriter();
+	}
 
 	bool firstBlock = true;
 	float step1;
@@ -80,97 +73,114 @@ int main(int argc, char *argv[])
 	
 	EventSink<RawPulse> *sink = NULL;
 	EventBuffer<RawPulse> *outBuffer = NULL;
-	long long tMax = 0, lastTMax = 0;
+	long long maxFrameID = 0, lastMaxFrameID = 0;
+	
+	long long lastFrameID = -1;
 
 	while(fread(&blockHeader, sizeof(blockHeader), 1, stdin) == 1) {
 
 		step1 = blockHeader.step1;
 		step2 = blockHeader.step2;
 		
+		if(sink == NULL) {
+			writer->openStep(step1, step2);
+			if (cWindow == 0) {
+				sink =	new CoarseSorter(
+					new RawPulseWriterHandler(writer,
+					new NullSink<RawPulse>()
+					));
+			}
+			else {
+				sink =	new CoarseSorter(
+					new CoincidenceFilter(Common::getCrystalMapFileName(), cWindow, minToT,
+					new RawPulseWriterHandler(writer,
+					new NullSink<RawPulse>()
+					)));
+			}
+		}
 		
-// 		if(sink == NULL) {
-// 			
-// 			
-// 			
-// 			sink =	new RawPulseWriterHandler(writer,
-// 				new NullSink<RawPulse>()
-// 				);
-// 	
-// 		}
-/*		
-		if(outBuffer == NULL) {
-			outBuffer = new EventBuffer<RawPulse>(outBlockSize);
-		}*/
-		
-		unsigned rdPointer = blockHeader.rdPointer;
-		unsigned wrPointer = blockHeader.wrPointer;
 		unsigned bs = shm->getSizeInFrames();
-		for(; rdPointer != wrPointer; rdPointer = (rdPointer + 1) % (2*bs) ) {
+		unsigned rdPointer = blockHeader.rdPointer % (2*bs);
+		unsigned wrPointer = blockHeader.wrPointer % (2*bs);
+		while(rdPointer != wrPointer) {
 			unsigned index = rdPointer % bs;
-
 			
-			unsigned long long frameID = shm->getFrameID(index);
+			long long frameID = shm->getFrameID(index);
+			if(frameID <= lastFrameID) {
+				fprintf(stderr, "WARNING!! Frame ID reversal: %12lld -> %12lld | %04u %04u %04u\n", 
+					lastFrameID, frameID, 
+					blockHeader.wrPointer, blockHeader.rdPointer, rdPointer
+					);
+					
+					
+				
+			}
+			lastFrameID = frameID;
+			maxFrameID = maxFrameID > frameID ? maxFrameID : frameID;
+			
 			int nEvents = shm->getNEvents(index);
 			bool frameLost = shm->getFrameLost(index);
 			
-// 			for (int n = 0; n < nEvents; n++) {
-// 				RawPulse &p = outBuffer->getWriteSlot();
-// 				
-// #ifdef __ENDOTOFPET__
-// 				int feType = shm->getEventType(index, n);
-// #else
-// 				const int feType = 0;
-// #endif
-// 
-// 				if (feType == 0) {
-// 					p.feType = RawPulse::TOFPET;
-// 					p.T = T * 1E12;
-// 					unsigned tCoarse = shm->getTCoarse(index, n);
-// 					unsigned eCoarse = shm->getECoarse(index, n);
-// 					p.time = (1024LL * frameID + tCoarse) * p.T;
-// 					p.timeEnd = (1024LL * frameID + eCoarse) * p.T;
-// 					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
-// 					p.d.tofpet.tac = shm->getTACID(index, n);
-// 					p.d.tofpet.tcoarse = tCoarse;
-// 					p.d.tofpet.ecoarse = eCoarse;
-// 					p.d.tofpet.tfine =  shm->getTFine(index, n);
-// 					p.d.tofpet.efine = shm->getEFine(index, n);
-// 					p.channelIdleTime = shm->getChannelIdleTime(index, n);
-// 					p.d.tofpet.tacIdleTime = shm->getTACIdleTime(index, n);
-// 				}
-// 				else if (feType == 1) {
-// 					p.feType = RawPulse::STIC;
-// 					p.T = T * 1E12;
-// 					unsigned tCoarse = shm->getTCoarse(index, n);
-// 					unsigned eCoarse = shm->getECoarse(index, n);
-// 					p.time = (1024LL * frameID + ((tCoarse>>2) & 0x3FF)) * p.T;
-// 					p.timeEnd = (1024LL * frameID + ((eCoarse>>2) & 0x3FF)) * p.T;
-// 					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
-// 					p.d.stic.tcoarse = tCoarse;
-// 					p.d.stic.ecoarse = eCoarse;
-// 					p.d.stic.tfine =  shm->getTFine(index, n);
-// 					p.d.stic.efine = shm->getEFine(index, n);
-// 					p.channelIdleTime = shm->getChannelIdleTime(index, n);
-// 					p.d.stic.tBadHit = shm->getTBadHit(index, n);
-// 					p.d.stic.eBadHit = shm->getEBadHit(index, n);
-// 				}
-// 				
-// 				if(p.time > tMax) {
-// 					tMax = p.time;
-// 				}
-// 				
-// 				outBuffer->pushWriteSlot();
-// 				
-// 			}
-// 			
-// 			if(outBuffer->getSize() >= (outBlockSize - MaxDataFrameSize)) {
-// 				outBuffer->setTMin(lastTMax);
-// 				outBuffer->setTMax(tMax);
-// 				lastTMax = tMax;
-// 				sink->pushEvents(outBuffer);
-// 				outBuffer = NULL;
-// 				
-// 			}
+			if(outBuffer == NULL) {
+				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE);
+			}
+			
+			for (int n = 0; n < nEvents; n++) {
+				RawPulse &p = outBuffer->getWriteSlot();
+#ifdef __ENDOTOFPET__
+				int feType = shm->getEventType(index, n);
+#else
+				const int feType = 0;
+#endif
+				if (feType == 0) {
+					p.feType = RawPulse::TOFPET;
+					p.T = T;
+					unsigned tCoarse = shm->getTCoarse(index, n);
+					unsigned eCoarse = shm->getECoarse(index, n);
+					p.time = (1024LL * frameID + tCoarse) * p.T;
+					p.timeEnd = (1024LL * frameID + eCoarse) * p.T;
+					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
+					p.d.tofpet.tac = shm->getTACID(index, n);
+					p.d.tofpet.tcoarse = tCoarse;
+					p.d.tofpet.ecoarse = eCoarse;
+					p.d.tofpet.tfine =  shm->getTFine(index, n);
+					p.d.tofpet.efine = shm->getEFine(index, n);
+					p.channelIdleTime = shm->getChannelIdleTime(index, n);
+					p.d.tofpet.tacIdleTime = shm->getTACIdleTime(index, n);
+				}
+				else if (feType == 1) {
+					p.feType = RawPulse::STIC;
+					p.T = T;
+					unsigned tCoarse = shm->getTCoarse(index, n);
+					unsigned eCoarse = shm->getECoarse(index, n);
+					p.time = (1024LL * frameID + ((tCoarse>>2) & 0x3FF)) * p.T;
+					p.timeEnd = (1024LL * frameID + ((eCoarse>>2) & 0x3FF)) * p.T;
+					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
+					p.d.stic.tcoarse = tCoarse;
+					p.d.stic.ecoarse = eCoarse;
+					p.d.stic.tfine =  shm->getTFine(index, n);
+					p.d.stic.efine = shm->getEFine(index, n);
+					p.channelIdleTime = shm->getChannelIdleTime(index, n);
+					p.d.stic.tBadHit = shm->getTBadHit(index, n);
+					p.d.stic.eBadHit = shm->getEBadHit(index, n);
+				} else {
+					continue;
+				}
+				
+				outBuffer->pushWriteSlot();
+				
+			}
+			
+			if(outBuffer->getSize() >= (EVENT_BLOCK_SIZE - DAQd::MaxDataFrameSize)) {
+				long long tMin = lastMaxFrameID * 1024 * T;
+				long long tMax = (maxFrameID+1) * 1024 * T - 1;
+				outBuffer->setTMin(tMin);
+				outBuffer->setTMax(tMax);
+				lastMaxFrameID = maxFrameID;
+				sink->pushEvents(outBuffer);
+				outBuffer = NULL;
+				
+			}
 
 			stepEvents += nEvents;
 			stepMaxFrame = stepMaxFrame > nEvents ? stepMaxFrame : nEvents;
@@ -180,6 +190,8 @@ int main(int argc, char *argv[])
 					stepLostFrames0 += 1;
 			}			
 			stepGoodFrames += 1;
+			
+			rdPointer = (rdPointer+1) % (2*bs);
 		}		
 		
 		fwrite(&rdPointer, sizeof(uint32_t), 1, stdout);
@@ -187,11 +199,12 @@ int main(int argc, char *argv[])
 
 		if(blockHeader.endOfStep != 0) {
 			if(sink != NULL) {
-
 				if(outBuffer != NULL) {
-					outBuffer->setTMin(lastTMax);
+					long long tMin = lastMaxFrameID * 1024 * T;
+					long long tMax = (maxFrameID+1) * 1024 * T - 1;
+					outBuffer->setTMin(tMin);
 					outBuffer->setTMax(tMax);
-					lastTMax = tMax;
+					lastMaxFrameID = maxFrameID;
 					sink->pushEvents(outBuffer);
 					outBuffer = NULL;
 				}
@@ -200,6 +213,7 @@ int main(int argc, char *argv[])
 				sink->report();
 				delete sink;
 				sink = NULL;
+				writer->closeStep();
 			}
 
 			fprintf(stderr, "writeRaw:: Step had %d frames with %d events; %f events/frame avg, %d event/frame max\n", 
@@ -212,13 +226,10 @@ int main(int argc, char *argv[])
 			stepMaxFrame = 0;
 			stepLostFrames = 0;
 			stepLostFrames0 = 0;
-
-		}				
+		}
 	}
-	
 
-
-//	delete writer;
+	delete writer;
 	
 	return 0;
 }

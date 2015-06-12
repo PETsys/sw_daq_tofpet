@@ -74,7 +74,7 @@ public:
 						&c.photons[1].hits[j2].raw 
 					};
 					
-					long long T = crystals[0]->top.raw.d.tofpet.T;
+					long long T = crystals[0]->top.raw.T;
 					
 					event1J	= j1;
 					

@@ -45,7 +45,12 @@ public:
 		unsigned nEvents = buffer->getSize();
 		for(unsigned i = 0; i < nEvents; i++) {
 			Pulse & p = buffer->get(i);
-			EventOut e = { step1, step2, p.time, p.channelID, p.energy, p.raw.d.tofpet.tac, p.badEvent ? 1 : 0 };
+			EventOut e = { step1, step2, 
+				p.time, 
+				(unsigned short)(p.channelID), 
+				p.energy, 
+				(unsigned char)(p.raw.d.tofpet.tac), 
+				(unsigned char)(p.badEvent ? 1 : 0) };
 			fwrite(&e, sizeof(e), 1, dataFile);
 		}
 		

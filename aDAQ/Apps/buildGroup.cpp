@@ -71,7 +71,7 @@ public:
 				float dt = hit.time - t0;
 				if(dt > maxDeltaT) continue;
 				
-				long long T = hit.raw.top.raw.d.tofpet.T;
+				long long T = hit.raw.top.raw.T;
 				eventJ = j1;
 				eventN = e.nHits;
 				eventDeltaT = dt;

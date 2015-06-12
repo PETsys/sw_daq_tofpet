@@ -61,7 +61,7 @@ public:
 			Hit &hit = buffer->get(i);
 			
 			RawHit &raw= hit.raw;
-			long long T = raw.top.raw.d.tofpet.T;
+			long long T = raw.top.raw.T;
 			eventTime = raw.time;
 			eventChannel = raw.top.channelID;
 			eventToT = 1E-3*(raw.top.timeEnd - raw.top.time);

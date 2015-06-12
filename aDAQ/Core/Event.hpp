@@ -2,14 +2,16 @@
 #define __nDAQ__EVENT_HPP__DEFINED__
 
 #include <sys/types.h>
+#include <stdint.h>
+
 namespace DAQ { namespace Core {
 
 	inline long long tAbs(long long x) { return x >= 0 ? x : - x; };
-		
+
 	struct RawPulse {
 		enum Type { TOFPET, STIC, DSIPM };
 	  
-
+		unsigned short T;
 		long long time;
 		long long timeEnd;
 		short region;
@@ -20,24 +22,20 @@ namespace DAQ { namespace Core {
 
 		union {
 		  struct {
-			  long long frameID;
 			  short tcoarse;
 			  short ecoarse;
 			  short tfine;
 			  short efine;
 			  short tac;
-			  long long T;
 			  long long tacIdleTime;
 		  } tofpet;
 		  struct {
-			  long long frameID;
 			  short tcoarse;
 			  short ecoarse;
 			  short tfine;
 			  short efine;
 			  bool tBadHit;
 			  bool eBadHit;
-			  long long T;
 			  // Write here any other STIC auxiliary fields that may be relevant for data analysis;
 		  } stic;
 		  struct {

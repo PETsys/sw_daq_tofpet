@@ -116,18 +116,17 @@ void FrameServer::startAcquisition(int mode)
 	pthread_mutex_lock(&lock);
 	acquisitionMode = mode;
 	pthread_mutex_unlock(&lock);
+	pthread_cond_signal(&condCleanDataFrame);
 }
 
 void FrameServer::stopAcquisition()
 {
 	pthread_mutex_lock(&lock);
 	acquisitionMode = 0;
-	pthread_mutex_unlock(&lock);
-	
-	pthread_mutex_lock(&lock);
 	dataFrameWritePointer = 0;
 	dataFrameReadPointer = 0;
 	pthread_mutex_unlock(&lock);	
+	pthread_cond_signal(&condCleanDataFrame);
 }
 
 
