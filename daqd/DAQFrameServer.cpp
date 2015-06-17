@@ -253,7 +253,7 @@ void *DAQFrameServer::doWork()
 			uint8_t * framePayload = (uint8_t *)frameBuffer;
 			
 			if (acquisitionMode != 0) {
-				bool decodeOK = decodeDataFrame(m, framePayload, frameSize * sizeof(uint64_t));
+				bool decodeOK = decodeDataFrame(m, framePayload, frameSize * sizeof(uint64_t), true);
 			}
 		}
 		else {

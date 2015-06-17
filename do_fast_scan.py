@@ -9,6 +9,27 @@ import ROOT
 from rootdata import DataFile
 import serial
 import numpy as np
+import argparse
+
+parser = argparse.ArgumentParser(description='Acquires a set of data for 4 relative phases of the test pulse, either injecting it directly in the tdcs or/and in the front end. Output reports the time rms and tot by asic')
+
+
+parser.add_argument('OutputFile',
+                   help='output file (ROOT file). Contains histograms of data.')
+
+parser.add_argument('hvBias', type=float,
+                   help='The voltage to be set for the HV DACs. Relevant only to fetp mode. In tdca mode, it is set to 5V.')
+
+
+parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
+
+parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp', 'both'], help='Defines where the test pulse is injected. Three modes are allowed: tdca, fetp and both. ')
+
+parser.add_argument('--tpDAC', type=int, default=32, help='The amplitude of the test pulse in DAC units (Default is 32 )')
+
+args = parser.parse_args()
+
+
 # Parameters
 T = 6.25E-9
 nominal_m = 128
@@ -51,15 +72,15 @@ defaultConfig=atbConfig
 uut.config=atbConfig
 uut.initialize()
 
-rootFileName="/tmp/hists.root"
+rootFileName=args.OutputFile
 rootFile = ROOT.TFile(rootFileName, "RECREATE");
 #rootData1 = DataFile( rootFile, "3")
 #rootData2 = DataFile( rootFile, "3B")
 
 activeChannels = [ x for x in range(0,64) ]
-activeAsics =  [0,1]#[ i for i,ac in enumerate(uut.config.asicConfig) ]
-activeAsics =  uut.getActiveTOFPETAsics()
 
+activeAsics =  uut.getActiveTOFPETAsics()
+#activeAsics =  [0,1]
 
 for tAsic in activeAsics:
     print "-------------------"
@@ -68,6 +89,7 @@ for tAsic in activeAsics:
     print "vbl= ",atbConfig.asicConfig[tAsic].channelConfig[0].getValue("vbl")
     print "ib1= ",atbConfig.asicConfig[tAsic].globalConfig.getValue("vib1")
     print "postamp= ", atbConfig.asicConfig[tAsic].globalConfig.getValue("postamp")
+    print "g0= ",atbConfig.asicConfig[tAsic].channelConfig[0].getValue("g0")
 
 print "-------------------\n"
 maxAsics=max(activeAsics) + 1
@@ -98,14 +120,38 @@ hTFine = [[[[ ROOT.TH1F("htFine_%03d_%02d_%1d_%1d" % (tAsic, tChannel, tac, fine
 hEFine = [[[[ ROOT.TH1F("heFine_%03d_%02d_%1d_%1d" % (tAsic, tChannel, tac, finephase), "E Fine", 1024, 0, 1014) for finephase in range(4)]for tac in range(4) ] for tChannel in range(64)] for tAsic in systemAsics ]
 hToT = [[[[ ROOT.TH1F("heToT_%03d_%02d_%1d_%1d" % (tAsic, tChannel, tac, finephase), "Coarse ToT", 1024, 0, 1014) for finephase in range(4)]for tac in range(4) ] for tChannel in range(64)] for tAsic in systemAsics ]
 
+nmodes=0
+if args.mode == "tdca" or args.mode == "fetp":
+    nmodes=1
+if args.mode == "both":
+    nmodes=2
+  
 
-for tdcaMode in [True,False]:
-    if tdcaMode:
+
+
+for iteration in range(nmodes):
+   
+
+    if (args.mode == "tdca" and iteration==0) or (args.mode == "both" and iteration==0):
         mode=0
-    else:
+        tdcaMode = True
+        vbias =  5
+        frameInterval = 0
+        pulseLow = False
+	
+
+    elif (args.mode == "fetp" and iteration ==0) or (args.mode == "both" and iteration ==1):
         mode=1
-    for  asic in range(len(activeAsics)):
-        print asic
+        tdcaMode = False
+        tpDAC = args.tpDAC
+        if args.hvBias == None:
+            vbias =  5
+        else:
+            vbias = args.hvBias
+        frameInterval = 16
+        pulseLow = True
+
+    for  asic in range(len(systemAsics)):
         for  channel in range(64):
             for  tac in range(4):
                 for  finephase in range(4):
@@ -137,16 +183,6 @@ for tdcaMode in [True,False]:
       #  smallToTChannel=[]
       #  smallToTTAC=[]
        # smallToT=[]
-
-        if tdcaMode:
-            vbias = 5
-            pulseLow = False
-            frameInterval = 0
-        else:
-            frameInterval = 16
-            tpDAC = 32
-            vbias = 5
-            pulseLow = True
 
         if vbias > 50: minEventsA *= 10
 
@@ -275,18 +311,22 @@ for tAsic in activeAsics:
     nNUToT=0
     print "\n\n############ Report for ASIC %d ############\n\n" % tAsic
     for tChannel in activeChannels:
-        #if any(deadChannels[0][tAsic][tChannel][:])==1:
-        #    print "Channel %d: DEAD on TDCA" % tChannel
-        #    nDeadTAC+=1
-        #    continue
-        #if any(largeTFineTAC[0][tAsic][tChannel][:])==1:
-        #    print "Channel %d: High RMS on TDCA" % tChannel
-        #    nLargeRmsTAC+=1
-        #    continue
+        if any(deadChannels[0][tAsic][tChannel][:])==1 and args.mode!="fetp":
+            print "Channel %d: DEAD on TDCA" % tChannel
+            nDeadTAC+=1
+            continue
+        if any(largeTFineTAC[0][tAsic][tChannel][:])==1 and args.mode!="fetp":
+            print "Channel %d: High RMS on TDCA" % tChannel
+            nLargeRmsTAC+=1
+            continue
+        
+        if args.mode=="tdca":
+            continue
         if any(deadChannels[1][tAsic][tChannel][:])==1:
             print "Channel %d:  DEAD on FETP" % tChannel
             nDeadFETP+=1
             continue
+            
  ###########################################################       
         if (TFineRMS[1][tAsic][tChannel][0]> 1 and TFineRMS[1][tAsic][tChannel][0]<2 and ToT[1][tAsic][tChannel][0]> 50 and ToT[1][tAsic][tChannel][0]<80):
             print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][0], ToT[1][tAsic][tChannel][0])

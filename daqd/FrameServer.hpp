@@ -52,7 +52,7 @@ protected:
 	
 	static void *runWorker(void *);
 	virtual void * doWork() = 0;
-	bool decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes);
+	bool decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes, bool useIdleTime);
 	void startWorker();
 	void stopWorker();
 	

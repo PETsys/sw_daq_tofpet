@@ -193,7 +193,7 @@ bool FrameServer::decodeSTiCv3Event(uint64_t *data, Event &event)
 }
 
 
-bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes)
+bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBytes, bool useIdleTime)
 {
 	uint64_t * buffer64 = (uint64_t *)buffer;
 	int nWords = nBytes / sizeof(uint64_t);
@@ -288,7 +288,8 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 			event.d.tofpet.eCoarse = (eventWord >> 18) & 0x3FF;
 			event.d.tofpet.tFine = (eventWord >> 28) & 0x3FF;
 			event.d.tofpet.eFine = (eventWord >> 8) & 0x3FF;
-			event.d.tofpet.tacIdleTime = tacIdleTime;
+			if(useIdleTime)event.d.tofpet.tacIdleTime = tacIdleTime;
+			else event.d.tofpet.tacIdleTime = 0; 
 			event.d.tofpet.channelIdleTime = channelIdleTime;	
 			
 			nGoodEvents += 1;

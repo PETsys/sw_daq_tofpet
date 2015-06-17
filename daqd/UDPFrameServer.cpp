@@ -114,7 +114,7 @@ void *UDPFrameServer::doWork()
 				uint64_t *p = dataBuffer;
 				do {
 					unsigned frameSize = (p[0] >> 36) & 0x7FFF;
-					bool decodeOK = decodeDataFrame(m, (unsigned char *)p, frameSize * sizeof(uint64_t));
+					bool decodeOK = decodeDataFrame(m, (unsigned char *)p, frameSize * sizeof(uint64_t), true);
 					if(!decodeOK) break;
 					p += frameSize;
 					
