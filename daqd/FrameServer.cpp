@@ -200,8 +200,7 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 
 	unsigned long frameID = buffer64[0] & 0xFFFFFFFFFULL;
 	int nEvents = buffer64[1] & 0xFFFF;
-//	bool frameLost = (buffer64[1] & 0x10000) != 0;
- 	bool frameLost = false;
+	bool frameLost = (buffer64[1] & 0x10000) != 0;
 // 	if (frameLost) nEvents = 0;
 
 	if(nWords != 2 + nEvents) {		
@@ -211,13 +210,16 @@ bool FrameServer::decodeDataFrame(FrameServer *m, unsigned char *buffer, int nBy
 	}
 
 	// Print frame ID on occasion or when debugLevel > 1
-	if( (m->debugLevel > 1)) {
+	if(m->debugLevel > 1) {
 		// WARNING For some reason, this seems to always print 0 events..
-		printf("Frame %12lu has %4d events\n", frameID, nEvents);
+		printf("Frame %12lu has %4d events (max is %4d), missing is %s\n", frameID, nEvents, MaxEventsPerFrame, frameLost ? "true" : "false");
 	
 	}
-
-	if(nEvents > MaxEventsPerFrame) nEvents = MaxEventsPerFrame;
+	
+	
+	if(nEvents > MaxEventsPerFrame) {
+		nEvents = MaxEventsPerFrame;
+	}
 	
 	DataFramePtr *dataFrame = NULL;	
 	if(m->acquisitionMode > 1 || nEvents > 0) {

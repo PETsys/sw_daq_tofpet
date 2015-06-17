@@ -14,7 +14,7 @@ static const uint16_t commandGetPortCounts = 0x07;
 
 
 
-static const int MaxEventsPerFrame = 512;
+static const int MaxEventsPerFrame = 1024-2;
 static const int MaxTimestampsPerCluster = 96;
 
 struct EventTOFPET {

@@ -427,6 +427,21 @@ class ATB:
 		rxBad = binToInt(grayToBin(intToBin(rxBad, 48)))
 		return (tx, rx, rxBad)
 
+	## Returns a 3 element tupple with the number of transmitted, received, and error packets for a given FEB/D
+	# @param portID  DAQ port ID where the FEB/D is connected
+	# @param slaveID Slave ID on the FEB/D chain
+	def getFEBDCount1(self, portID, slaveID):
+		tx = self.readFEBDConfig(portID, slaveID, 1, 0)
+		rx = self.readFEBDConfig(portID, slaveID, 1, 1)
+		rxBad = self.readFEBDConfig(portID, slaveID, 1, 2)
+	
+		
+		tx = binToInt(grayToBin(intToBin(tx, 48)))
+		rx = binToInt(grayToBin(intToBin(rx, 48)))
+		rxBad = binToInt(grayToBin(intToBin(rxBad, 48)))
+		return (tx, rx, rxBad)
+
+
 		
         ## Returns a data frame read form the shared memory block
 	def getDataFrame(self, nonEmpty=False):
@@ -514,8 +529,8 @@ class ATB:
 
 	
        	## Sends a command to the FPGA
-        # @param portID
-        # @param slaveID
+	# @param portID  DAQ port ID where the FEB/D is connected
+	# @param slaveID Slave ID on the FEB/D chain
         # @param commandType Information for the FPGA firmware regarding the type of command being transmitted
 	# @param payload The actual command to be transmitted
         # @param maxTries The maximum number of attempts to send the command without obtaining a valid reply   	
@@ -679,8 +694,8 @@ class ATB:
 	
 
 	## Returns list globalAsicIDs belonging to this FEB/D
-	# @param portID  DAQ port number where the FEB/D is connected
-	# @param slaveID Slave number on the FEB/D chain
+	# @param portID  DAQ port ID where the FEB/D is connected
+	# @param slaveID Slave ID on the FEB/D chain
 	def getGlobalAsicIDsForFEBD(self, portID, slaveID):
 		return [x for x in range(16*portID, 16*portID + 16)]
 	
@@ -884,8 +899,8 @@ class ATB:
 		return (globalHVChannelID / 64, 0, globalHVChannelID % 64)
 
 	## Return a list of global HV channel IDs for a FEB/D
-	# @param portID 
-	# @param slaveID
+	# @param portID  DAQ port ID where the FEB/D is connected
+	# @param slaveID Slave ID on the FEB/D chain
 	def getGlobalHVChannelIDForFEBD(self, portID, slaveID):
 		return [ x for x in range(portID * 64, portID * 64 + 64) ]
 
@@ -994,8 +1009,8 @@ class ATB:
 		#return self.sendCommand(0, 0, 0x03,cmd)
 
 	## Reads a configuration register from a FEB/D
-	# @param portID
-	# @param slaveID
+	# @param portID  DAQ port ID where the FEB/D is connected
+	# @param slaveID Slave ID on the FEB/D chain
 	# @param addr1 Register block (0..127)
 	# @param addr2 Register address (0..255)
 	def readFEBDConfig(self, portID, slaveID, addr1, addr2):
@@ -1012,8 +1027,8 @@ class ATB:
 		return value
 
 	## Writes a FEB/D configuration register
-	# @param portID
-	# @param slaveID
+	# @param portID  DAQ port ID where the FEB/D is connected
+	# @param slaveID Slave ID on the FEB/D chain
 	# @param addr1 Register block (0..127)
 	# @param addr2 Register address (0..255)
 	# @param value The value to written

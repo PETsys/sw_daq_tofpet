@@ -278,6 +278,7 @@ int main(int argc, char *argv[])
 	int stepEvents = 0;
 	int stepMaxFrame = 0;
 	int stepLostFrames = 0;
+	int stepLostFrames0 = 0;
 	unsigned long lastFrameID = 0;
 	vector<int32_t> shmIndexList;
 	vector<SortEntry> sortList;
@@ -310,11 +311,12 @@ int main(int argc, char *argv[])
 					stepGoodFrames, stepEvents, 
 					float(stepEvents)/stepGoodFrames,
 					stepMaxFrame); fflush(stderr);
-			fprintf(stderr, "writeRaw:: %d frames received were lost frames\n", stepLostFrames); fflush(stderr);
+			fprintf(stderr, "writeRaw:: %d frames received had missing data; %d of these had no data\n", stepLostFrames, stepLostFrames0); fflush(stderr);
 			stepGoodFrames = 0;
 			stepEvents = 0;
 			stepMaxFrame = 0;
 			stepLostFrames = 0;
+			stepLostFrames0 = 0;
 
 			//fprintf(stderr, "writeRaw:: EoS found with %d frames. Returning ", blockHeader.nFrames);
 			for(int n = 0; n < blockHeader.nFrames; n++) {
@@ -494,10 +496,12 @@ int main(int argc, char *argv[])
 			}
 			
 			stepMaxFrame = stepMaxFrame > dataFrame.nEvents ? stepMaxFrame : dataFrame.nEvents;
-			if(dataFrame.frameLost) 
+			if(dataFrame.frameLost) {
 				stepLostFrames += 1;
-			else
-				stepGoodFrames += 1;
+				if (dataFrame.nEvents == 0)
+					stepLostFrames0 += 1;
+			}
+			stepGoodFrames += 1;
 			
 		}
 
@@ -518,7 +522,7 @@ int main(int argc, char *argv[])
 				stepGoodFrames, stepEvents, 
 				float(stepEvents)/stepGoodFrames,
 				stepMaxFrame); fflush(stderr);
-		fprintf(stderr, "writeRaw:: %d frames received were lost frames\n", stepLostFrames); fflush(stderr);
+		fprintf(stderr, "writeRaw:: %d frames received had missing data; %d of these had no data\n", stepLostFrames, stepLostFrames0); fflush(stderr);
 	}
 
 	
