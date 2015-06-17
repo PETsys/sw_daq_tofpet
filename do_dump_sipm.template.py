@@ -14,6 +14,8 @@ parser.add_argument('OutputFilePrefix',
 
 parser.add_argument('--cWindow', type=float, default=0, help='If set, defines the coincidence time window (in seconds) for preliminary selection of events (default is 0, accepting all events)')
 
+parser.add_argument('--minToT', type=float, default=150, help='Sets the minimum ToT (in ns) for coincidence based preliminary selection of events (default is 150)')
+
 args = parser.parse_args()
 
 
@@ -25,6 +27,11 @@ if args.cWindow == None:
 	cWindow = 0
 else:
 	cWindow = args.cWindow
+
+if args.minToT == None:
+	minTOT = 0
+else:
+	minToT = args.minToT
 	
 acquisitionTime = args.acqTime
 dataFilePrefix = args.OutputFilePrefix
@@ -32,7 +39,7 @@ dataFilePrefix = args.OutputFilePrefix
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig()
-uut.openAcquisition(dataFilePrefix, cWindow*1E-9, writer="writeRaw")
+uut.openAcquisition(dataFilePrefix, cWindow*1E-9, minToT*1E-9, writer="TOFPET")
 uut.initialize()
 uut.config.writeParams(dataFilePrefix)
 # Set all HV DAC channels 

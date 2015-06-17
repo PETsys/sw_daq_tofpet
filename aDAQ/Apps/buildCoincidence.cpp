@@ -9,6 +9,7 @@
 #include <Core/CrystalPositions.hpp>
 #include <Core/NaiveGrouper.hpp>
 #include <Core/CoincidenceGrouper.hpp>
+#include <Core/CoincidenceFilter.hpp>
 #include <assert.h>
 #include <math.h>
 #include <string.h>
@@ -207,7 +208,7 @@ int main(int argc, char *argv[])
 	char indexFileName[512];
 	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
 	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
-	FILE *inputDataFile = fopen(dataFileName, "r");
+	FILE *inputDataFile = fopen(dataFileName, "rb");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
@@ -285,15 +286,22 @@ int main(int argc, char *argv[])
 				P2->loadFiles(argv[1], true, true,eventStep1,eventStep2);
 			}
 		}
+		
+		float cWindow = 20E-9; // s
+		float gWindow = 100E-9; // s
+		float gRadius = 20; // mm 
+		float minToT = 150; // ns
+		
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
+				new CoincidenceFilter(Common::getCrystalMapFileName(), 1.25 * cWindow, 0.75 * minToT * 1E-9,
 				new P2Extract(P2, false, 1.0, 1.0,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(20, 100E-9,
-				new CoincidenceGrouper(20E-9,
-				new EventWriter(lmData, 50E-9, 1
+				new NaiveGrouper(gRadius, gWindow, minToT,
+				new CoincidenceGrouper(cWindow,
+				new EventWriter(lmData, gWindow, 1
 
-		)))))));
+		))))))));
 		
 		reader->wait();
 		delete reader;

@@ -89,6 +89,7 @@ void RawReaderV3::run()
 			p.T = T * 1E12;
 			p.time = (1024LL * frameID + tCoarse) * p.T;
 			p.timeEnd = (1024LL * frameID + eCoarse) * p.T;
+			if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
 			p.channelID = (64 * asicID) + channelID;
 			p.channelIdleTime = channelIdleTime;
 			p.feType = RawPulse::TOFPET;
@@ -178,7 +179,7 @@ RawWriterV3::RawWriterV3(char *fileNamePrefix)
 	sprintf(dataFileName, "%s.raw3", fileNamePrefix);
 	sprintf(indexFileName, "%s.idx3", fileNamePrefix);
 
-	outputDataFile = fopen(dataFileName, "w");
+	outputDataFile = fopen(dataFileName, "wb");
 	outputIndexFile = fopen(indexFileName, "w");
 	assert(outputDataFile != NULL);
 	assert(outputIndexFile != NULL);

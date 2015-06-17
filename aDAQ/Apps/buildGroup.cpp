@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
 	char indexFileName[512];
 	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
 	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
-	FILE *inputDataFile = fopen(dataFileName, "r");
+	FILE *inputDataFile = fopen(dataFileName, "rb");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
@@ -225,14 +225,16 @@ int main(int argc, char *argv[])
 			}
 		}
 		
-
+		float gWindow = 100E-9; // s
+		float gRadius = 20; // mm
+		float minToT = 150; // ns
+		
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
-								      
 				new P2Extract(P2, false, 1.0, 1.0,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(20, 100E-9,
-				new EventWriter(lmData, 100E-9, 16
+				new NaiveGrouper(gRadius, gWindow, minToT,
+				new EventWriter(lmData, gWindow, 16
 
 		))))));
 		

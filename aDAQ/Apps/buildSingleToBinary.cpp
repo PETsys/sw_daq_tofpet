@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
 	char indexFileName[512];
 	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
 	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
-	FILE *inputDataFile = fopen(dataFileName, "r");
+	FILE *inputDataFile = fopen(dataFileName, "rb");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	
 	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);

@@ -45,6 +45,8 @@ CoincidenceFilter::~CoincidenceFilter()
 void CoincidenceFilter::report()
 {
 	fprintf(stderr, ">> CoincidenceFilter report\n");
+	fprintf(stderr, "  cWindow: %lld\n", cWindow);
+	fprintf(stderr, "  min ToT: %lld\n", minToT);
 	fprintf(stderr, "  %10u events received\n", nEventsIn);
 	fprintf(stderr, "  %10u (%5.1f%%) events met minimum ToT \n", nTriggersIn, 100.0 * nTriggersIn / nEventsIn);
 	fprintf(stderr, "  %10u (%5.1f%%) events passed\n", nEventsOut, 100.0 * nEventsOut / nEventsIn);
@@ -64,7 +66,8 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 	vector<bool> meetsMinToT(nEvents, false);
 	vector<bool> coincidenceMatched(nEvents, false);
 	for(unsigned i = 0; i < nEvents; i++) {
-		RawPulse p1 = inBuffer->get(i);
+		RawPulse &p1 = inBuffer->get(i);
+
 		if((p1.timeEnd - p1.time) >= minToT) {
 			meetsMinToT[i] = true;
 		}
@@ -74,7 +77,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		}
 		
 		for (unsigned j = i+1; j < nEvents; j++) {
-			RawPulse p2 = inBuffer->get(j);
+			RawPulse &p2 = inBuffer->get(j);
 			if((p2.time - p1.time) > (overlap + cWindow)) break;		// No point in looking further
 			if((p2.timeEnd - p2.time) < minToT) continue;			// Does not meet min ToT
 			if(tAbs(p2.time - p1.time) > cWindow) continue;			// Does not meet cWindow
@@ -105,7 +108,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		}
 		
 		for (unsigned j = i; j < nEvents; j++) {// Look for events after p1
-			RawPulse p2 = inBuffer->get(j);
+			RawPulse &p2 = inBuffer->get(j);
 			if(p2.time > (p1.time + dWindow + overlap)) break;	// No point in looking further
 			if(p2.time > (p1.time + dWindow)) continue;		// Doesn't meet dWindow
 			accepted[j] = true;
@@ -123,11 +126,10 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		
 		if(meetsMinToT[i]) lTriggersIn += 1;
 		
-		if (!accepted[p1.channelID]) {
+		if (!accepted[i]) {
 			p1.time = -1;
 			continue;
 		}
-			
 		lEventsOut += 1;
 	}
 	

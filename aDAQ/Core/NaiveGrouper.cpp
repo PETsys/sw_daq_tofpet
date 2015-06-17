@@ -6,9 +6,9 @@ using namespace DAQ::Common;
 using namespace DAQ::Core;
 using namespace std;
 
-NaiveGrouper::NaiveGrouper(float radius, double timeWindow1, 
+NaiveGrouper::NaiveGrouper(float radius, double timeWindow1, float minEnergy,
 			EventSink<GammaPhoton> *sink) :
-			radius2(radius*radius), timeWindow1((long long)(timeWindow1*1E12)),
+			radius2(radius*radius), timeWindow1((long long)(timeWindow1*1E12)), minEnergy(minEnergy),
 			OverlappedEventHandler<Hit, GammaPhoton>(sink, false)
 {
 	for(int i = 0; i < GammaPhoton::maxHits; i++)
@@ -118,20 +118,11 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		photon.x = photon.hits[0].x;
 		photon.y = photon.hits[0].y;		
 		photon.z = photon.hits[0].z;		
-		photon.energy = 0;
+		photon.energy = photon.hits[0].energy;
 		photon.missingEnergy = 0;
 		photon.nMissing = 0;
-		for(int k = 0; k < photon.nHits; k++) {
-			photon.energy += photon.hits[k].energy;
-			photon.missingEnergy += photon.hits[k].missingEnergy;
-			photon.nMissing += photon.hits[k].nMissing;
-		}
 		
-/*		int64_t t0 = photon.hits[0].time;
-		for(int k = 0; k < nHits; k++) {
-			fprintf(stderr, "H%3d: %3d %8lld %f\n", k, photon.hits[k].raw.crystalID, photon.hits[k].time-t0, photon.hits[k].energy);
-		}
-		fprintf(stderr, "--------\n");*/
+		if(photon.energy < minEnergy) continue;
 	
 
 

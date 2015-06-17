@@ -179,10 +179,11 @@ void RawReaderV2::run()
 		
 			outBuffer->pushWriteSlot();
 		
-			if(outBuffer->getSize() >= (outBlockSize - 512)) {
+			if(outBuffer->getSize() >= outBlockSize) {
 				outBuffer->setTMin(lastTMax);
-				outBuffer->setTMax(tMax);		
+				outBuffer->setTMax(tMax);
 				sink->pushEvents(outBuffer);
+				lastTMax = tMax;
 				outBuffer = NULL;
 			}
 		}
@@ -249,7 +250,7 @@ RawWriterV2::RawWriterV2(char *fileNamePrefix)
 	sprintf(dataFileName, "%s.raw2", fileNamePrefix);
 	sprintf(indexFileName, "%s.idx2", fileNamePrefix);
 
-	outputDataFile = fopen(dataFileName, "w");
+	outputDataFile = fopen(dataFileName, "wb");
 	outputIndexFile = fopen(indexFileName, "w");
 	assert(outputDataFile != NULL);
 	assert(outputIndexFile != NULL);
@@ -292,6 +293,5 @@ void RawWriterV2::addEvent(RawPulse &p)
 		p.channelIdleTime,
 		p.d.tofpet.tacIdleTime
 	};
-
 	fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);
 }

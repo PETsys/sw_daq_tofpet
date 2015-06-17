@@ -139,6 +139,7 @@ int main(int argc, char *argv[])
 					unsigned eCoarse = shm->getECoarse(index, n);
 					p.time = (1024LL * frameID + tCoarse) * p.T;
 					p.timeEnd = (1024LL * frameID + eCoarse) * p.T;
+					if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
 					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
 					p.d.tofpet.tac = shm->getTACID(index, n);
 					p.d.tofpet.tcoarse = tCoarse;
@@ -155,6 +156,7 @@ int main(int argc, char *argv[])
 					unsigned eCoarse = shm->getECoarse(index, n);
 					p.time = (1024LL * frameID + ((tCoarse>>2) & 0x3FF)) * p.T;
 					p.timeEnd = (1024LL * frameID + ((eCoarse>>2) & 0x3FF)) * p.T;
+					if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
 					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
 					p.d.stic.tcoarse = tCoarse;
 					p.d.stic.ecoarse = eCoarse;

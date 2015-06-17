@@ -39,7 +39,7 @@ EventBuffer<RawPulse> * CoarseSorter::handleEvents (EventBuffer<RawPulse> *inBuf
 		RawPulse &p = inBuffer->get(i);
 		if(p.time < tMin || p.time >=  tMax) continue;
 		long frameTime = 1024L * p.T;
-		SortEntry entry = { p.time / frameTime, p.time / (overlap/2), i };
+		SortEntry entry = { p.time / frameTime, p.time / (4*p.T), i };
 		sortList.push_back(entry);
 	}
 	
