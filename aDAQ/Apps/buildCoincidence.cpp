@@ -294,7 +294,7 @@ int main(int argc, char *argv[])
 		
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 				new CoincidenceFilter(Common::getCrystalMapFileName(), 1.25 * cWindow, 0.75 * minToT * 1E-9,
-				new P2Extract(P2, false, 1.0, 1.0,
+				new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(gRadius, gWindow, minToT,
