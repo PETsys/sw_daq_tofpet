@@ -88,7 +88,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 	vector<bool> accepted(nEvents, false);	
 	const long long dWindow = 100000; // 100 ns acceptance window for events which come after the first
 	for(unsigned i = 0; i < nEvents; i++) {
-		RawPulse p1 = inBuffer->get(i);
+		RawPulse &p1 = inBuffer->get(i);
 
 		if(coincidenceMatched[i]) {
 			accepted[i] = true;
@@ -98,7 +98,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		}
 		
 		for(unsigned j = i; j > 0; j--) {	// Look for events before p1
-			RawPulse p2 = inBuffer->get(j);
+			RawPulse &p2 = inBuffer->get(j);
 			if(p2.time < (p1.time - cWindow - overlap)) break;	// No point in looking further
 			if(p2.time < (p1.time - cWindow)) continue;		// Doesn't meet cWindow
 			accepted[j] = true;
@@ -114,7 +114,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 	
 	// Filter unaccepted events by setting their time to -1
 	for(unsigned i = 0; i < nEvents; i++) {
-		RawPulse p1 = inBuffer->get(i);
+		RawPulse &p1 = inBuffer->get(i);
 		if(p1.time < tMin || p1.time >= tMax) {
 			p1.time = -1;
 			continue;

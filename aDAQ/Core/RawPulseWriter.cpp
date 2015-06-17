@@ -28,7 +28,7 @@ EventBuffer<RawPulse> * RawPulseWriterHandler::handleEvents (EventBuffer<RawPuls
 	unsigned N = inBuffer->getSize();
 	for(unsigned i = 0; i < N; i++) {
 		RawPulse &p = inBuffer->get(i);
-		if(p.time < tMin || p.time >=  tMax) continue;
+		if((p.time < tMin) || (p.time >= tMax)) continue;
 		writer->addEvent(p);
 		lSingleRead++;
 	}

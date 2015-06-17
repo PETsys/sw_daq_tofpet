@@ -470,10 +470,10 @@ class ATB:
 		
         ## Returns a data frame read form the shared memory block
 	def getDataFrame(self, nonEmpty=False):
-		timeout = 0.1
+		timeout = 0.5
 		t0 = time()
 		r = None
-		while r == None and (time() - t0) < timeout:
+		while (r == None) and ((time() - t0) < timeout):
 			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
 #			print "WR/RD pointers = %08x %08x" % (wrPointer, rdPointer)
 			bs = self.__dshm.getSizeInFrames()
