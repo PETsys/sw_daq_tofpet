@@ -270,7 +270,7 @@ for tChannel in activeChannels:
 	hEFine = [[ ROOT.TH2F("heFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1014) for tac in range(4) ] for tAsic in systemAsics ]
 
 
-	for nStep, stepDelta in enumerate([-0.2]): # Pick points for the scan from the edge
+	for nStep, stepDelta in enumerate([-0.35]): # Pick points for the scan from the edge
 		x = min(edgesX) + stepDelta
 		while x < 0: x += 2.0
 		phaseStep = sumProfile.FindBin(x) * K 
