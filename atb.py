@@ -18,7 +18,7 @@ import mmap
 import os
 import struct
 from subprocess import Popen, PIPE
-from sys import maxint
+from sys import maxint, stdout
 
 import DSHM
 
@@ -1084,6 +1084,10 @@ class ATB:
 				nFramesInBlock = nFramesInBlock + bs
 		
 			nFrames += nFramesInBlock
+			nBlocks += 1
+			if nBlocks % 100 == 0:
+				stdout.write("Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data\r" % (nFrames, time()-t0, nFrames * self.__frameLength))
+				stdout.flush()
 
 		wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
 		data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 1)
@@ -1094,7 +1098,7 @@ class ATB:
 		self.__setDataFrameReadPointer(rdPointer2)
 	
 
-		print "Python:: Acquired %d frames in %f seconds, corresponding to %f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
+		print "Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
 		return None
 
 	## \internal
