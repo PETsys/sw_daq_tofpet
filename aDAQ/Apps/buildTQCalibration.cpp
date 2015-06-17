@@ -207,8 +207,8 @@ int main(int argc, char *argv[])
 
 	char dataFileName[512];
 	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
+	sprintf(dataFileName, "%s.raw3", inputFilePrefix);
+	sprintf(indexFileName, "%s.idx3", inputFilePrefix);
 	FILE *inputDataFile = fopen(dataFileName, "rb");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	

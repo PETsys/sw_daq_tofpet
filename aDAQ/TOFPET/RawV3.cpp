@@ -44,9 +44,6 @@ void RawReaderV3::run()
 
 	sink->pushT0(0);
 	
-	long long minFrameID = LLONG_MAX;
-	long long maxFrameID = LLONG_MIN;
-	
 	fprintf(stderr, "Reading %llu to %llu\n", eventsBegin, eventsEnd);
 	fseek(dataFile, eventsBegin * sizeof(RawEventV3), SEEK_SET);
 	
@@ -101,9 +98,6 @@ void RawReaderV3::run()
 			p.channelIdleTime = channelIdleTime;
 			p.d.tofpet.tacIdleTime = tacIdleTime;
 		
-			if(frameID < minFrameID) minFrameID = frameID;
-			if(frameID > maxFrameID) maxFrameID = frameID;
-		
 			if(p.time > tMax)
 				tMax = p.time;
 		
@@ -132,8 +126,6 @@ void RawReaderV3::run()
 	sink->finish();
 	
 	fprintf(stderr, "RawReaderV3 report\n");
-	fprintf(stderr, "\t%16lld minFrameID\n", minFrameID);
-	fprintf(stderr, "\t%16lld maxFrameID\n", maxFrameID);
 	sink->report();
 }
 

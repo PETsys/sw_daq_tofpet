@@ -1,6 +1,6 @@
 #include <TFile.h>
 #include <TNtuple.h>
-#include <TOFPET/RawV2.hpp>
+#include <TOFPET/RawV3.hpp>
 #include <TOFPET/Sanity.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <TOFPET/P2.hpp>
@@ -144,12 +144,12 @@ int main(int argc, char *argv[])
 
 	char dataFileName[512];
 	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
+	sprintf(dataFileName, "%s.raw3", inputFilePrefix);
+	sprintf(indexFileName, "%s.idx3", inputFilePrefix);
 	FILE *inputDataFile = fopen(dataFileName, "rb");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	
-	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
+	DAQ::TOFPET::RawScannerV3 * scanner = new DAQ::TOFPET::RawScannerV3(inputIndexFile);
 	
 	TOFPET::P2 *lut = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(argv[1], "none") == 0) {
@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 		}
 	
 
-		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
+		DAQ::TOFPET::RawReaderV3 *reader = new DAQ::TOFPET::RawReaderV3(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 
 				new Sanity(100E-9, 		      
 				new P2Extract(lut, false, 0.0, 0.20,

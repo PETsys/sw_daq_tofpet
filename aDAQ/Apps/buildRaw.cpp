@@ -1,6 +1,6 @@
 #include <TFile.h>
 #include <TNtuple.h>
-#include <TOFPET/RawV2.hpp>
+#include <TOFPET/RawV3.hpp>
 #include <Core/OverlappedEventHandler.hpp>
 #include <assert.h>
 #include <math.h>
@@ -110,12 +110,12 @@ int main(int argc, char *argv[])
 
 	char dataFileName[512];
 	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
+	sprintf(dataFileName, "%s.raw3", inputFilePrefix);
+	sprintf(indexFileName, "%s.idx3", inputFilePrefix);
 	FILE *inputDataFile = fopen(dataFileName, "rb");
 	FILE *inputIndexFile = fopen(indexFileName, "r");
 	
-	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
+	DAQ::TOFPET::RawScannerV3 * scanner = new DAQ::TOFPET::RawScannerV3(inputIndexFile);
 	
 	TFile *hFile = new TFile(argv[2], "RECREATE");
 	TNtuple *data = new TNtuple("data", "Event List", "step1:step2:channel:tac:tcoarse:tfine:ecoarse:efine:channelIdleTime:tacIdleTime");
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 //		if(eventsEnd > eventsBegin + 20E6) eventsEnd = eventsBegin + 20E6;
 
 		const unsigned nChannels = 2*128; 
-		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
+		DAQ::TOFPET::RawReaderV3 *reader = new DAQ::TOFPET::RawReaderV3(inputDataFile, 6.25E-9,  eventsBegin, eventsEnd, 
 				new EventReport(data, step1, step2,
 				new NullSink<RawPulse>()
 

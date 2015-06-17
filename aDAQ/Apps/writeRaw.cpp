@@ -21,7 +21,7 @@
 #include <Core/CoarseSorter.hpp>
 #include <Core/CoincidenceFilter.hpp>
 #include <Core/RawPulseWriter.hpp>
-#include <TOFPET/RawV2.hpp>
+#include <TOFPET/RawV3.hpp>
 #include <ENDOTOFPET/Raw.hpp>
 
 using namespace std;
@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 	
 	AbstractRawPulseWriter *writer = NULL;
 	if(outputType == 'T') {
-		writer = new TOFPET::RawWriterV2(outputFilePrefix);
+		writer = new TOFPET::RawWriterV3(outputFilePrefix);
 	}
 	else {
 		writer = new NullRawPulseWriter();
