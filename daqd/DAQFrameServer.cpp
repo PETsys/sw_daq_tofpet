@@ -102,10 +102,6 @@ int DAQFrameServer::sendCommand(int portID, int slaveID, char *buffer, int buffe
 }
 
 
-static bool isEmpty(unsigned writePointer, unsigned readPointer)
-{
-	return writePointer == readPointer;
-}
 static bool isFull(unsigned writePointer, unsigned readPointer)
 {
 	return (writePointer != readPointer) && ((writePointer % MaxDataFrameQueueSize) == (readPointer % MaxDataFrameQueueSize));
@@ -118,7 +114,7 @@ void *DAQFrameServer::doWork()
 	printf("DP object is %p\n", DP);
 	DAQFrameServer *m = this;
 	
-	DataFrame devNull;
+	DataFrame *devNull = new DataFrame;
 	
 	for(int i = 0; i < N_ASIC * 64 * 4; i++) {
 		tacLastEventTime[i] = 0;
@@ -168,7 +164,7 @@ void *DAQFrameServer::doWork()
 		if (nWords != 1) { skippedLoops = 1000003; continue; }		
 		//printf("DBG3 %016llx\n", firstWord);		
 		
-		DataFrame *dataFrame = &devNull;
+		DataFrame *dataFrame = devNull;
 		if (m->acquisitionMode != 0) {
 			// Wait until we have space in the data frame queue to write this frame
 			pthread_mutex_lock(&m->lock);
@@ -208,13 +204,14 @@ void *DAQFrameServer::doWork()
 		if (!m->parseDataFrame(dataFrame))
 			continue;
 
-		if(dataFrame != &devNull) {
+		if(dataFrame != devNull) {
 			pthread_mutex_lock(&m->lock);
 			m->dataFrameWritePointer = (m->dataFrameWritePointer + 1)  % (2*MaxDataFrameQueueSize);
 			pthread_mutex_unlock(&m->lock);
 		}
 		pthread_cond_signal(&m->condDirtyDataFrame);
 	}	
+	delete devNull;
 	printf("DAQFrameServer::runWorker exiting...\n");
 }
 

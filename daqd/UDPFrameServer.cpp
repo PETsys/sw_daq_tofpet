@@ -66,12 +66,9 @@ UDPFrameServer::~UDPFrameServer()
 
 static bool isFull(unsigned writePointer, unsigned readPointer)
 {
-	return (writePointer != readPointer) && ((writePointer % MaxDataFrameQueueSize) == (readPointer & MaxDataFrameQueueSize));
+	return (writePointer != readPointer) && ((writePointer % MaxDataFrameQueueSize) == (readPointer % MaxDataFrameQueueSize));
 }
-static unsigned getIndex(unsigned pointer)
-{
-	return pointer % MaxDataFrameQueueSize;
-}
+
 
 void *UDPFrameServer::doWork()
 {	
@@ -88,6 +85,7 @@ void *UDPFrameServer::doWork()
 	long nFramesFound = 0;
 	long nFramesPushed = 0;
 	
+	DataFrame *devNull = new DataFrame;
 	
 	unsigned char rxBuffer[2048];
 	uint64_t dataBuffer[2048/sizeof(uint64_t)];
@@ -123,20 +121,22 @@ void *UDPFrameServer::doWork()
 				do {
 					unsigned frameSize = (p[0] >> 36) & 0x7FFF;
 					
-					pthread_mutex_lock(&m->lock);
-					unsigned lWritePointer = m->dataFrameWritePointer % (2*MaxDataFrameQueueSize);
-					unsigned lReadPointer = m->dataFrameReadPointer % (2*MaxDataFrameQueueSize);
-					pthread_mutex_unlock(&m->lock);
+					DataFrame *dataFrame = devNull;
 					
-					if(isFull(lWritePointer, lReadPointer)) break;
-					DataFrame *dataFrame = &dataFrameSharedMemory[getIndex(lWritePointer)];
+					pthread_mutex_lock(&m->lock);
+					if(!isFull(m->dataFrameWritePointer,  m->dataFrameReadPointer)) {
+						dataFrame = &dataFrameSharedMemory[m->dataFrameWritePointer  % MaxDataFrameQueueSize];
+					}
+					pthread_mutex_unlock(&m->lock);
 					
 					memcpy(dataFrame->data, p, frameSize * sizeof(uint64_t));
 					if(!m->parseDataFrame(dataFrame)) break;
 					
-					pthread_mutex_lock(&m->lock);
-					m->dataFrameWritePointer = (m->dataFrameWritePointer + 1) % (2*MaxDataFrameQueueSize);
-					pthread_mutex_unlock(&m->lock);
+					if(dataFrame != devNull) {
+						pthread_mutex_lock(&m->lock);					
+						m->dataFrameWritePointer = (m->dataFrameWritePointer + 1) % (2*MaxDataFrameQueueSize);
+						pthread_mutex_unlock(&m->lock);
+					}
 					pthread_cond_signal(&m->condDirtyDataFrame);
 					p += frameSize;
 					
@@ -154,10 +154,7 @@ void *UDPFrameServer::doWork()
 		
 	}
 	
-
-// 	printf("UDPFrameServer::runWorker stats\n");
-// 	printf("\t%10ld frames found\n", nFramesFound);
-// 	printf("\t%10ld frames pushed\n", nFramesPushed);
+	delete devNull;
 	printf("UDPFrameServer::runWorker exiting...\n");
 	return NULL;
 }
