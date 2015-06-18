@@ -34,6 +34,8 @@ public:
 	
 	
 protected:	
+	static const int CommandTimeout = 250; // ms
+	
 	bool parseDataFrame(DataFrame *dataFrame);
 	
 	int debugLevel;
