@@ -84,7 +84,10 @@ int main(int argc, char *argv[])
 		
 		if(sink == NULL) {
 			writer->openStep(step1, step2);
-			if (cWindow == 0) {
+			if (outputType == 'N') {
+				sink = new NullSink<RawPulse>();
+			}
+			else if (cWindow == 0) {
 				sink =	new CoarseSorter(
 					new RawPulseWriterHandler(writer,
 					new NullSink<RawPulse>()
@@ -125,7 +128,7 @@ int main(int argc, char *argv[])
 				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE);
 			}
 			
-			for (int n = 0; n < nEvents; n++) {
+			for (int n = 0; outputType != 'N' && n < nEvents; n++) {
 				RawPulse &p = outBuffer->getWriteSlot();
 #ifdef __ENDOTOFPET__
 				int feType = shm->getEventType(index, n);
