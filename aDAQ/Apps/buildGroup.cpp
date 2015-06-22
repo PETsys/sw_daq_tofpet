@@ -1,5 +1,6 @@
 #include <TFile.h>
 #include <TNtuple.h>
+#include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <Core/PulseFilter.hpp>
@@ -115,6 +116,7 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
+	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration files (required) and tq correction files (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
@@ -131,14 +133,27 @@ int main(int argc, char *argv[])
 
 
 	static struct option longOptions[] = {
-		{ "help", no_argument, 0, 0 }
+		{ "help", no_argument, 0, 0 },
+		{ "raw_version", optional_argument,0,0 }
 	};
+	char rawV[128];
+	sprintf(rawV,"3");
 	int optionIndex = -1;
+	int nOptArgs=0;
+	
 	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
 		if(optionIndex==0){
 			displayHelp(argv[0]);
 			return(1);
 		}
+		if(optionIndex==1){
+			nOptArgs++;
+			sprintf(rawV,optarg);
+			if(rawV[0]!='2' && rawV[0]!='3'){
+				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2 or 3\n", argv[0]);
+				return(1);
+			}
+		}		
 		else{
 			displayUsage(argv[0]);
 			fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
@@ -146,12 +161,12 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc < 4){
+	if(argc - nOptArgs < 4){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc > 4){
+	if(argc - nOptArgs < 4){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
 		return(1);
@@ -160,16 +175,13 @@ int main(int argc, char *argv[])
 
 	char *inputFilePrefix = argv[2];
 
-	char dataFileName[512];
-	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
-	FILE *inputDataFile = fopen(dataFileName, "rb");
-	FILE *inputIndexFile = fopen(indexFileName, "r");
-	
-	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
-	
-	TOFPET::P2 *P2 = new TOFPET::P2(4096);
+	DAQ::TOFPET::RawScanner *scanner = NULL;
+	if(rawV[0]=='3')
+		scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
+	else
+		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
+
+	TOFPET::P2 *P2 = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(argv[1], "none") == 0) {
 		P2->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
@@ -229,15 +241,20 @@ int main(int argc, char *argv[])
 		float gRadius = 20; // mm
 		float minToT = 150; // ns
 		
-		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
-				new P2Extract(P2, false, 0.0, 0.20,
+		
+		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(gRadius, gWindow, minToT,
-				new EventWriter(lmData, gWindow, 16
+				new EventWriter(lmData, gWindow, 1
+								)))));
 
-		))))));
-		
+		DAQ::TOFPET::RawReader *reader=NULL;
+	
+		if(rawV[0]=='3') 
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+		else 
+		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 		reader->wait();
 		delete reader;
 		
@@ -248,10 +265,8 @@ int main(int argc, char *argv[])
 		lmFile->Write();
 		
 	}
-	
+	delete scanner;
 	lmFile->Close();
-	fclose(inputDataFile);
-	fclose(inputIndexFile);
 	return 0;
 	
 }

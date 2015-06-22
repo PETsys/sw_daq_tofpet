@@ -7,6 +7,7 @@
 #include <TF1.h>
 #include <TGraph.h>
 #include <TOFPET/RawV2.hpp>
+#include <TOFPET/RawV3.hpp>
 #include <TOFPET/Sanity.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <TOFPET/P2.hpp>
@@ -115,10 +116,7 @@ public:
 					
 
 					TH1D *htq = isT ? htqT2D[channel]->ProjectionX("htqT_proj",tot_bin+1,tot_bin+2) : htqE2D[channel]->ProjectionX("htqE_proj",tot_bin+1,tot_bin+2);
-				
-					
-						
-					
+								
 					Double_t C = isT ? (end_t-start_t)/htq->Integral() : (end_e-start_e)/htq->Integral() ;
 					
 					//printf("%5d\t%s\t%10.6e\t%10.6e\n",channel, isT ? "T" : "E", C, isT ? htq->Integral() : htq->Integral());
@@ -159,6 +157,7 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
+	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration files (required) and tq correction files (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
@@ -174,15 +173,29 @@ int main(int argc, char *argv[])
 {
 
 
-	static struct option longOptions[] = {
-		{ "help", no_argument, 0, 0 }
+   	static struct option longOptions[] = {
+		{ "help", no_argument, 0, 0 },
+		{ "raw_version", optional_argument,0,0 }
 	};
+
+	char rawV[128];
+	sprintf(rawV,"3");
 	int optionIndex = -1;
+	int nOptArgs=0;
 	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
 		if(optionIndex==0){
 			displayHelp(argv[0]);
 			return(1);
+			
 		}
+		if(optionIndex==1){
+			nOptArgs++;
+			sprintf(rawV,optarg);
+			if(rawV[0]!='2' && rawV[0]!='3'){
+				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2 or 3\n", argv[0]);
+				return(1);
+			}
+		}		
 		else{
 			displayUsage(argv[0]);
 			fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
@@ -190,29 +203,24 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc < 4){
+	if(argc - nOptArgs < 4){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc > 4){
+	else if(argc - nOptArgs> 4){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
 		return(1);
 	}
 
-	
-
 	char *inputFilePrefix = argv[2];
 
-	char dataFileName[512];
-	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw3", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx3", inputFilePrefix);
-	FILE *inputDataFile = fopen(dataFileName, "rb");
-	FILE *inputIndexFile = fopen(indexFileName, "r");
-	
-	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
+	DAQ::TOFPET::RawScanner *scanner = NULL;
+	if(rawV[0]=='3')
+		scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
+	else
+		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
 	
 	TOFPET::P2 *lut = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(argv[1], "none") == 0) {
@@ -246,22 +254,22 @@ int main(int argc, char *argv[])
 		}
 		f = fopen(filename_tq, "w");
 
-		
-		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
-
-				new Sanity(100E-9, 		      
+		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
 				new P2Extract(lut, false, 0.0, 0.20,
 				new TQCorrWriter(f, lut
-
-		))));
+        )));
+		DAQ::TOFPET::RawReader *reader=NULL;
+		if(rawV[0]=='3') 
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+		else 
+		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 	
 		reader->wait();
 		delete reader;
 	
 	}
-
-	fclose(inputDataFile);
-	fclose(inputIndexFile);
+	
+	delete scanner;
 	return 0;
 	
 }
