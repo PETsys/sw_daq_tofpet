@@ -224,34 +224,34 @@ def grayToInt(v):
 
 ## Exception: a command to FEB/D was sent but a reply was not received.
 #  Indicates a communication problem.
-class CommandErrorTimeout:
+class CommandErrorTimeout(Exception):
 	def __init__(self, portID, slaveID):
 		self.addr = portID, slaveID
 	def __str__(self):
 		return "Time out from FEB/D at port %2d, slave %2d" % self.addr
 ## Exception: The number of ASIC data links read from FEB/D is invalid.
 #  Indicates a communication problem or bad firmware in FEB/D.
-class ErrorInvalidLinks:
+class ErrorInvalidLinks(Exception):
 	def __init__(self, portID, slaveID, value):
 		self.addr = value, portID, slaveID
 	def __str__(self):
 		return "Invalid NLinks value (%d) from FEB/D at port %2d, slave %2d" % self.addr
 ## Exception: the ASIC type ID read from FEB/D is invalid.
 #  Indicates a communication problem or bad firmware in FEB/D.
-class ErrorInvalidAsicType: 
+class ErrorInvalidAsicType(Exception): 
 	def __init__(self, portID, slaveID, value):
 		self.addr = portID, slaveID, value
 	def __str__(self):
 		return "Invalid ASIC type FEB/D at port %2d, slave %2d: %016llx" % self.addr
 ## Exception: no active FEB/D was found in any port.
 #  Indicates that no FEB/D is plugged and powered on or that it's not being able to establish a data link.
-class ErrorNoFEB:
+class ErrorNoFEB(Exception):
 	def __str__(self):
 		return "No active FEB/D on any port"
 
 ## Exception: testing for ASIC presence in FEB/D has returned a inconsistent result.
 #  Indicates that there's a FEB/A board is not properly plugged or a hardware problem.
-class ErrorAsicPresenceInconsistent:
+class ErrorAsicPresenceInconsistent(Exception):
 	def __init__(self, portID, slaveID, asicID, s):
 		self.__data = (portID, slaveID, asicID, s)
 	def __str__(self):
@@ -259,13 +259,20 @@ class ErrorAsicPresenceInconsistent:
 
 ## Exception: testing for ASIC presence in FEB/D has changed state after system initialization.
 #  Indicates that there's a FEB/A board is not properly plugged or a hardware problem.
-class ErrorAsicPresenceChanged:
+class ErrorAsicPresenceChanged(Exception):
 	def __init__(self, portID, slaveID, asicID):
 		self.__data = (portID, slaveID, asicID)
 	def __str__(self):
 		return "ASIC at port %2d, slave %2d, asic %2d changed state" % (self.__data)
 	
-
+class TMP104CommunicationError(Exception):
+	def __init__(self, portID, slaveID, din, dout):
+		self.__portID = portID
+		self.__slaveID = slaveID
+		self.__din = din
+		self.__dout = dout
+	def __str__(self):
+		return "TMP104 read error at port %d, slave %d. IN = %s, OUT = %s" % (self.__portID, self.__slaveID, [ hex(x) for x in self.__din ], [ hex(x) for x in self.__dout ])
 	
 ## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
 class ATB:
@@ -1221,5 +1228,52 @@ class ATB:
 		self.doTOFPETAsicCommand(asic, "wrGlobalTCfg", value=ac.globalTConfig)
 		#print "DONE!"
 
-
+	## Initializes the temperature sensors in the FEB/As
+	# Return a list of active sensors found in FEB/As, in the form of a list of 
+	# (portID, slaveID, nSensors) tuples
+	def getTemperatureSensorList(self):
+		sensorList = []
+		for portID, slaveID in self.getActiveFEBDs():
+			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
+			if asicType not in [0x00010001]: continue;
+			din = [ 3, 0x55, 0b10001100, 0b10010000 ]
+			din = bytearray(din)
+			dout = self.sendCommand(portID, slaveID, 0x04, din)
+			if len(dout) < 5:
+				raise TMP104CommunicationError(portID, slaveID, din, dout)
+			
+			nSensors = dout[4] & 0x0F
 		
+			din = [ 3, 0x55, 0b11110010, 0b01100011]
+			din = bytearray(din)
+			dout = self.sendCommand(portID, slaveID, 0x04, din)
+			if len(dout) < 5:
+				raise TMP104CommunicationError(portID, slaveID, din, dout)
+
+			din = [ 2 + nSensors, 0x55, 0b11110011 ]
+			din = bytearray(din)
+			dout = self.sendCommand(portID, slaveID, 0x04, din)
+			if len(dout) < (4 + nSensors):
+				raise TMP104CommunicationError(portID, slaveID, din, dout)
+
+			sensorList.append((portID, slaveID, nSensors))
+			
+		return sensorList
+
+	## Reads the temperature found in the specified FEB/D
+	# @param portID  DAQ port ID where the FEB/D is connected
+	# @param slaveID Slave ID on the FEB/D chain
+	# @param nSensors Number of sensors to read
+	def getTemperatureSensorReading(self, portID, slaveID, nSensors):
+			din = [ 2 + nSensors, 0x55, 0b11110001 ]
+			din = bytearray(din)
+			dout = self.sendCommand(portID, slaveID, 0x04, din)
+			if len(dout) < (4 + nSensors):
+				raise TMP104CommunicationError(portID, slaveID, din, dout)
+
+			temperatures = dout[4:]
+			for i, t in enumerate(temperatures):
+				if t > 127: t = t - 256
+			temperatures[i] = t
+			return temperatures
+
