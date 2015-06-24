@@ -78,15 +78,17 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 			float v = hit.y - hit2.y;
 			float w = hit.y - hit2.y;
 			float d2 = u*u + v*v + w*w;
-			
-			if((d2 <= radius2) && (tAbs(hit.time - hit2.time) <= timeWindow1)) {
-				taken[j] = true;
-				if(nHits < maxHits) {
-					hits[nHits] = &hit2;
-				}
-				nHits++;
-				continue;
-			}
+
+
+			if(d2 > radius2) continue;
+			if(tAbs(hit.time - hit2.time) > timeWindow1) continue;
+
+			taken[j] = true;
+
+			if(nHits >= maxHits) continue;
+			hits[nHits] = &hit2;
+			nHits++;
+
 			
 			
 		}

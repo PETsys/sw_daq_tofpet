@@ -64,7 +64,7 @@ int DAQFrameServer::sendCommand(int portID, int slaveID, char *buffer, int buffe
 	char replyBuffer[12*4];
 	do {
 		boost::posix_time::ptime tl = boost::posix_time::microsec_clock::local_time();
-		if((tl - t2).total_milliseconds() > 10) break;
+		if((tl - t2).total_milliseconds() > CommandTimeout) break;
 
 		int status = DP->recvReply(replyBuffer, 12*4);
 		if (status < 0) {

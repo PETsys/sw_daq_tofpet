@@ -440,7 +440,7 @@ int main(int argc, char *argv[])
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
 				new CoincidenceGrouper(cWindow,
 				writer
-									   ))))));
+				))))));
 		
 	
 		

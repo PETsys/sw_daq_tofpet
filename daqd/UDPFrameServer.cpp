@@ -183,9 +183,9 @@ int UDPFrameServer::sendCommand(int portID, int slaveID, char *buffer, int buffe
 		if(replyQueue.empty()) {
 			struct timespec ts; 
 			clock_gettime(CLOCK_REALTIME, &ts);
-			ts.tv_nsec += 100000000L; // 100 ms
-			ts.tv_sec += (ts.tv_nsec / 1000000000L);
-			ts.tv_nsec = (ts.tv_nsec % 1000000000L);                        
+			ts.tv_nsec += 10000000L; // 10 ms
+			ts.tv_sec += (ts.tv_nsec / 100000000L);
+			ts.tv_nsec = (ts.tv_nsec % 100000000L);                        
 			pthread_cond_timedwait(&condReplyQueue, &lock, &ts);
 		}
 
@@ -198,7 +198,7 @@ int UDPFrameServer::sendCommand(int portID, int slaveID, char *buffer, int buffe
 		
 		if(reply == NULL) {
 			boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-			if ((now - start).total_milliseconds() > 100) 
+			if ((now - start).total_milliseconds() > CommandTimeout) 
 				break;
 			else
 				continue;
