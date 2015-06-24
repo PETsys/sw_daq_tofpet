@@ -1274,6 +1274,6 @@ class ATB:
 			temperatures = dout[4:]
 			for i, t in enumerate(temperatures):
 				if t > 127: t = t - 256
-			temperatures[i] = t
+				temperatures[i] = t
 			return temperatures
 
