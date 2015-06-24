@@ -117,8 +117,12 @@ void displayHelp(char * program)
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
 	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
+	fprintf(stderr,  "  --minEnergy=MINENERGY\t\tThe minimum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n");
+	fprintf(stderr,  "  --maxEnergy=MAXENERGY\t\tThe maximum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n");
+	fprintf(stderr,  "  --gWindow=gWINDOW\t\tMaximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n");
+	fprintf(stderr,  "  --gMaxHits=gMAXHITS\t\tMaximum number of hits inside a given multi-hit group (default is 16)\n");
 	fprintf(stderr, "\npositional arguments:\n");
-	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration files (required) and tq correction files (optional)\n");
+	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
 	fprintf(stderr, "  output_file \t\t\t ROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
 };
@@ -134,13 +138,24 @@ int main(int argc, char *argv[])
 
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
-		{ "raw_version", optional_argument,0,0 }
+		{ "raw_version", optional_argument,0,0 },
+		{ "minEnergy", optional_argument,0,0 },
+		{ "maxEnergy", optional_argument,0,0 },
+		{ "gWindow", optional_argument,0,0 },
+		{ "gMaxHits", optional_argument,0,0 },
+		{ NULL, 0, 0, 0 }
 	};
 	char rawV[128];
 	sprintf(rawV,"3");
 	int optionIndex = -1;
 	int nOptArgs=0;
 	
+	float gWindow = 100E-9; // s
+	int maxHits=16;
+	float minEnergy = 150; // keV or ns (if energy=tot)
+	float maxEnergy = 500; // keV or ns (if energy=tot)
+
+
 	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
 		if(optionIndex==0){
 			displayHelp(argv[0]);
@@ -153,7 +168,23 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2 or 3\n", argv[0]);
 				return(1);
 			}
-		}		
+		}
+		else if(optionIndex==2){
+			nOptArgs++;
+			minEnergy=atof(optarg);
+		}
+		else if(optionIndex==3){
+			nOptArgs++;
+			maxEnergy=atof(optarg);
+		}
+		else if(optionIndex==4){
+			nOptArgs++;
+			gWindow=atof(optarg);
+		}
+		else if(optionIndex==5){
+			nOptArgs++;
+			maxHits=atoi(optarg);
+		}
 		else{
 			displayUsage(argv[0]);
 			fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
@@ -237,16 +268,15 @@ int main(int argc, char *argv[])
 			}
 		}
 		
-		float gWindow = 100E-9; // s
+	
 		float gRadius = 20; // mm
-		float minToT = 150; // ns
 		
 		
 		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(gRadius, gWindow, minToT,
-				new EventWriter(lmData, gWindow, 1
+				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
+				new EventWriter(lmData, gWindow, maxHits 
 								)))));
 
 		DAQ::TOFPET::RawReader *reader=NULL;

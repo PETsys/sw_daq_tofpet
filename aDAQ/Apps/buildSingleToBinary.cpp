@@ -74,7 +74,7 @@ void displayHelp(char * program)
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
 	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
 	fprintf(stderr, "\npositional arguments:\n");
-	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration files (required) and tq correction files (optional)\n");
+	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
 	fprintf(stderr, "  output_file \t\t\t Binary output file containing all events\n");
 };

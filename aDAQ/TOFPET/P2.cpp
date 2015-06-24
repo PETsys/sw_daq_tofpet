@@ -105,8 +105,8 @@ int P2::getIndexTQ(int channel, bool isT, int totbin)
 	int index = channel*12 + 6*(isT ? 0 : 1) + totbin;
 	if(index>=TQtableSize)index=TQtableSize-1;
 	if(index<0)index=0;
-	assert(index >= 0);
-	assert(index < TQtableSize);
+	//assert(index >= 0);
+	//assert(index < TQtableSize);
 	
 	
 	return index;
@@ -114,11 +114,14 @@ int P2::getIndexTQ(int channel, bool isT, int totbin)
 
 long P2::getIndexTOT(int channel, float tot)
 {
+	if(tot<0) return long(channel*1024); 
 	long index = channel*1024 + int(tot/0.5);
+	
 	if(index>=totTableSize)index=totTableSize-1;
 	if(index<0)index=0;
-	assert(index >= 0);
-	assert(index < totTableSize);
+	
+	//	assert(index >= 0);
+	//assert(index < totTableSize);
 	
 	return index;
 }
@@ -265,6 +268,7 @@ float P2::getEnergy(int channel, float tot)
 	if(useEnergyCal){
 		if(ToTe1.channel==channel) energy= ToTe.energy+(ToTe1.energy-ToTe.energy)/0.5*(tot-ToTe.tot);
 		else energy= ToTe.energy;
+		//		if(energy>1000)printf("ToTe.energy=%f tot=%f energy=%f\n",ToTe.energy, tot, energy );
 	}
 	else energy=tot;
 

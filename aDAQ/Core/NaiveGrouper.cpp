@@ -6,11 +6,11 @@ using namespace DAQ::Common;
 using namespace DAQ::Core;
 using namespace std;
 
-NaiveGrouper::NaiveGrouper(float radius, double timeWindow1, float minEnergy,
+NaiveGrouper::NaiveGrouper(float radius, double timeWindow1, float minEnergy, float maxEnergy, int maxHits,
 			EventSink<GammaPhoton> *sink) :
-			radius2(radius*radius), timeWindow1((long long)(timeWindow1*1E12)), minEnergy(minEnergy),
-			OverlappedEventHandler<Hit, GammaPhoton>(sink, false)
+	radius2(radius*radius), timeWindow1((long long)(timeWindow1*1E12)), minEnergy(minEnergy), maxEnergy(maxEnergy), maxHits(maxHits), OverlappedEventHandler<Hit, GammaPhoton>(sink, false)
 {
+	if(maxHits> GammaPhoton::maxHits)maxHits=GammaPhoton::maxHits;
 	for(int i = 0; i < GammaPhoton::maxHits; i++)
 		nHits[i] = 0;
 	nHitsOverflow = 0;
@@ -24,7 +24,7 @@ void NaiveGrouper::report()
 {
 	u_int32_t nPhotons = 0;
 	u_int32_t nTotalHits = 0;
-	for(int i = 0; i < GammaPhoton::maxHits; i++) {
+	for(int i = 0; i < maxHits; i++) {
 		nPhotons += nHits[i];
 		nTotalHits += nHits[i] * (i+1);
 	}
@@ -33,10 +33,10 @@ void NaiveGrouper::report()
 	fprintf(stderr, ">> NaiveGrouper report\n");
 	fprintf(stderr, " photons passed\n");
 	fprintf(stderr, "  %10u total\n", nPhotons);
-	for(int i = 0; i < GammaPhoton::maxHits; i++) {
+	for(int i = 0; i < maxHits; i++) {
 		fprintf(stderr, "  %10u (%4.1f%%) with %d hits\n", nHits[i], 100.0*nHits[i]/nPhotons, i+1);
 	}
-	fprintf(stderr, "  %10u (%4.1f%%) with more than %d hits\n", nHitsOverflow, 100.0*nHitsOverflow/nPhotons, GammaPhoton::maxHits);
+	fprintf(stderr, "  %10u (%4.1f%%) with more than %d hits\n", nHitsOverflow, 100.0*nHitsOverflow/nPhotons, maxHits);
 	fprintf(stderr, "  %4.1f average hits/photon\n", float(nTotalHits)/float(nPhotons));
 			
 	OverlappedEventHandler<Hit, GammaPhoton>::report();
@@ -51,8 +51,8 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
-	u_int32_t lHits[GammaPhoton::maxHits];	
-	for(int i = 0; i < GammaPhoton::maxHits; i++)
+	u_int32_t lHits[maxHits];	
+	for(int i = 0; i < maxHits; i++)
 		lHits[i] = 0;
 	u_int32_t lHitsOverflow = 0;
 
@@ -63,7 +63,7 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		Hit &hit = inBuffer->get(i);
 		taken[i] = true;
 			
-		Hit * hits[GammaPhoton::maxHits];
+		Hit * hits[maxHits];
 		hits[0] = &hit;
 		int nHits = 1;
 				
@@ -81,7 +81,7 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 			
 			if((d2 <= radius2) && (tAbs(hit.time - hit2.time) <= timeWindow1)) {
 				taken[j] = true;
-				if(nHits < GammaPhoton::maxHits) {
+				if(nHits < maxHits) {
 					hits[nHits] = &hit2;
 				}
 				nHits++;
@@ -91,7 +91,7 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 			
 		}
 		
-		if(nHits > GammaPhoton::maxHits) continue;				
+		if(nHits > maxHits) continue;				
 		
 		// Buble sorting..
 		bool sorted = false;
@@ -122,15 +122,15 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		photon.missingEnergy = 0;
 		photon.nMissing = 0;
 		
-		if(photon.energy < minEnergy) continue;
-	
+		if((photon.energy < minEnergy) || (photon.energy > maxEnergy)) continue;
+		
 
 
 		outBuffer->pushWriteSlot();
 		lHits[photon.nHits-1]++;
 	}
 
-	for(int i = 0; i < GammaPhoton::maxHits; i++)
+	for(int i = 0; i < maxHits; i++)
 		atomicAdd(nHits[i], lHits[i]);
 	atomicAdd(nHitsOverflow, lHitsOverflow);
 	
