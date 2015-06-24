@@ -146,9 +146,11 @@ int main(int argc, char *argv[])
 		{ NULL, 0, 0, 0 }
 	};
 	char rawV[128];
-	sprintf(rawV,"3");
-	int optionIndex = -1;
-	int nOptArgs=0;
+	rawV[0]='3';
+	char * setupFileName=argv[1];
+	char *inputFilePrefix = argv[2];
+	char *outputFileName = argv[3];
+
 	
 	float gWindow = 100E-9; // s
 	int maxHits=16;
@@ -156,7 +158,13 @@ int main(int argc, char *argv[])
 	float maxEnergy = 500; // keV or ns (if energy=tot)
 
 
-	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
+	int nOptArgs=0;
+	while(1) {
+		
+		int optionIndex = 0;
+		int c =getopt_long(argc, argv, "",longOptions, &optionIndex);
+		if(c==-1) break;
+
 		if(optionIndex==0){
 			displayHelp(argv[0]);
 			return(1);
@@ -204,7 +212,7 @@ int main(int argc, char *argv[])
 	}
 
 
-	char *inputFilePrefix = argv[2];
+   
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
 	if(rawV[0]=='3')
@@ -213,15 +221,15 @@ int main(int argc, char *argv[])
 		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
 
 	TOFPET::P2 *P2 = new TOFPET::P2(SYSTEM_NCRYSTALS);
-	if (strcmp(argv[1], "none") == 0) {
+	if (strcmp(setupFileName, "none") == 0) {
 		P2->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		P2->loadFiles(argv[1], true, false,0,0);
+		P2->loadFiles(setupFileName, true, false,0,0);
 	}
 	
-	TFile *lmFile = new TFile(argv[3], "RECREATE");
+	TFile *lmFile = new TFile(outputFileName, "RECREATE");
 	TTree *lmData = new TTree("lmData", "Event List", 2);
 	int bs = 512*1024;
 	lmData->Branch("step1", &eventStep1, bs);
@@ -264,7 +272,7 @@ int main(int argc, char *argv[])
 				printf("BIG FAT WARNING: no calibration file\n");
 			} 
 			else{
-				P2->loadFiles(argv[1], true, true,eventStep1,eventStep2);
+				P2->loadFiles(setupFileName, true, true,eventStep1,eventStep2);
 			}
 		}
 		
