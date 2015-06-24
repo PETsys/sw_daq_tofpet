@@ -4,6 +4,8 @@
 	TH1 * hCounts = new TH1F("counts1", "Counts", 128, 0, 128);
 
 	TCanvas *c = new TCanvas();
+	TF1 *mygauss = new TF1("mygauss", "[0]*exp(-0.5*((x-[1])/[2])**2)", -0.5, 0.5);
+	mygauss->SetParNames("C", "\mu", "\sigma");
 
 	Int_t nPoints = 0;
 	for(Int_t asic = 0; asic < 64; asic += 1) {
@@ -21,11 +23,15 @@
 				hT->Add((TH1 *) _file0->Get(hName), 1);
 			}
 			
-			Float_t max_i = hT->GetMaximumBin();
-			Float_t max_t = hT->GetBinCenter(max_i);
-			hT->Fit("gaus", "", "", max_t - 0.5, max_t + 0.5);
+			Int_t max_i = hT->GetMaximumBin();
+			Double_t max_t = hT->GetBinCenter(max_i);
+			Double_t max_y = hT->GetBinContent(max_i);
+			mygauss->SetParameter(0, max_y);	mygauss->SetParLimits(0, max_y*0.80, max_y*1.20);
+			mygauss->SetParameter(1, max_t);	mygauss->SetParLimits(1, max_t-0.1, max_t+0.1);
+			mygauss->SetParameter(2, 1.0/128);	mygauss->SetParLimits(2, 1.0/256, 1.0);
+			hT->Fit("mygauss", "", "", -0.5, 0.5);
 			
-			TF1 * gaussianFit = hT->GetFunction("gaus");
+			TF1 * gaussianFit = hT->GetFunction("mygauss");
 			if(gaussianFit == NULL) continue;
 			Float_t sigma = gaussianFit->GetParameter(2);
 			Float_t sigmaError = gaussianFit->GetParError(2);
@@ -67,6 +73,7 @@
 	TH1 * hSummary = new TH1F("summary2", "summary", 1000, 0, 500E-12);
 	TH1 * hCounts = new TH1F("counts2", "Counts", 128, 0, 128);
 	TGraph *gLeakage = new TGraph(4*128);
+
 	
 	nPoints = 0;
 	for(Int_t asic = 0; asic < 64; asic += 1) {
@@ -83,11 +90,15 @@
 				hT->Add((TH1 *) _file0->Get(hName), 1);
 			}
 			
-			Float_t max_i = hT->GetMaximumBin();
-			Float_t max_t = hT->GetBinCenter(max_i);
-			hT->Fit("gaus", "", "", max_t - 0.5, max_t + 0.5);
-			
-			TF1 * gaussianFit = hT->GetFunction("gaus");
+			Int_t max_i = hT->GetMaximumBin();
+			Double_t max_t = hT->GetBinCenter(max_i);
+			Double_t max_y = hT->GetBinContent(max_i);
+			mygauss->SetParameter(0, max_y);	mygauss->SetParLimits(0, max_y*0.80, max_y*1.20);
+			mygauss->SetParameter(1, max_t);	mygauss->SetParLimits(1, max_t-0.1, max_t+0.1);
+			mygauss->SetParameter(2, 1.0/128);	mygauss->SetParLimits(2, 1.0/256, 1.0);
+			hT->Fit("mygauss", "", "", -0.5, 0.5);
+
+			TF1 * gaussianFit = hT->GetFunction("mygauss");
 			if(gaussianFit == NULL) continue;
 			Float_t sigma = gaussianFit->GetParameter(2);
 			Float_t sigmaError = gaussianFit->GetParError(2);
