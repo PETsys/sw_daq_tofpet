@@ -28,6 +28,7 @@ static unsigned 	eventDeltaT;
 static long long	eventTime;
 static unsigned short	eventChannel;
 static float		eventToT;
+static float		eventEnergy;
 static double		eventChannelIdleTime;
 static unsigned short	eventTac;
 static double		eventTacIdleTime;
@@ -79,6 +80,7 @@ public:
 				eventTime = hit.time;
 				eventChannel = hit.raw.top.channelID;
 				eventToT = 1E-3*(hit.raw.top.timeEnd - hit.raw.top.time);
+				eventEnergy = hit.raw.top.energy;
 				eventTac = hit.raw.top.raw.d.tofpet.tac;
 				eventChannelIdleTime = hit.raw.top.raw.channelIdleTime * T * 1E-12;
 				eventTacIdleTime = hit.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
@@ -240,6 +242,7 @@ int main(int argc, char *argv[])
 	lmData->Branch("time", &eventTime, bs);
 	lmData->Branch("channel", &eventChannel, bs);
 	lmData->Branch("tot", &eventToT, bs);
+	lmData->Branch("Energy", &eventEnergy, bs);
 	lmData->Branch("tac", &eventTac, bs);
 	lmData->Branch("channelIdleTime", &eventChannelIdleTime, bs);
 	lmData->Branch("tacIdleTime", &eventTacIdleTime, bs);

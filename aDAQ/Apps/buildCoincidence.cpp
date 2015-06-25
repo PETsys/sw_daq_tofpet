@@ -27,6 +27,7 @@ static unsigned 	event1DeltaT;
 static long long	event1Time;
 static unsigned short	event1Channel;
 static float		event1ToT;
+static float        event1Energy;   
 static double		event1ChannelIdleTime;
 static unsigned short	event1Tac;
 static double		event1TacIdleTime;
@@ -45,6 +46,7 @@ static unsigned 	event2DeltaT;
 static long long	event2Time;
 static unsigned short	event2Channel;
 static float		event2ToT;
+static float        event2Energy; 
 static double		event2ChannelIdleTime;
 static unsigned short	event2Tac;
 static double		event2TacIdleTime;
@@ -116,6 +118,7 @@ public:
 						event1Time = hit1.time;
 						event1Channel = hit1.raw.top.channelID;
 						event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
+						event1Energy=hit1.raw.top.energy;
 						event1Tac = hit1.raw.top.raw.d.tofpet.tac;
 						event1ChannelIdleTime = hit1.raw.top.raw.channelIdleTime * T * 1E-12;
 						event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
@@ -133,6 +136,7 @@ public:
 						event2Time = hit2.time;
 						event2Channel = hit2.raw.top.channelID;
 						event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
+						event2Energy=hit2.raw.top.energy;
 						event2Tac = hit2.raw.top.raw.d.tofpet.tac;
 						event2ChannelIdleTime = hit2.raw.top.raw.channelIdleTime * T * 1E-12;
 						event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
@@ -364,6 +368,7 @@ int main(int argc, char *argv[])
 		lmData->Branch("time1", &event1Time, bs);
 		lmData->Branch("channel1", &event1Channel, bs);
 		lmData->Branch("tot1", &event1ToT, bs);
+		lmData->Branch("energy1", &event1Energy, bs);
 		lmData->Branch("tac1", &event1Tac, bs);
 		lmData->Branch("channelIdleTime1", &event1ChannelIdleTime, bs);
 		lmData->Branch("tacIdleTime1", &event1TacIdleTime, bs);
@@ -381,6 +386,7 @@ int main(int argc, char *argv[])
 		lmData->Branch("time2", &event2Time, bs);
 		lmData->Branch("channel2", &event2Channel, bs);
 		lmData->Branch("tot2", &event2ToT, bs);
+		lmData->Branch("energy2", &event2Energy, bs);
 		lmData->Branch("tac2", &event2Tac, bs);
 		lmData->Branch("channelIdleTime2", &event2ChannelIdleTime, bs);
 		lmData->Branch("tacIdleTime2", &event2TacIdleTime, bs);
