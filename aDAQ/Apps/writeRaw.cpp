@@ -94,8 +94,11 @@ int main(int argc, char *argv[])
 					));
 			}
 			else {
+				// Round up cWindow and minToT for use in CoincidenceFilter
+				float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD) + 1) * SYSTEM_PERIOD;
+				float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
 				sink =	new CoarseSorter(
-					new CoincidenceFilter(Common::getCrystalMapFileName(), cWindow, minToT,
+					new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
 					new RawPulseWriterHandler(writer,
 					new NullSink<RawPulse>()
 					)));

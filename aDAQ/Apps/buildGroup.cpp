@@ -227,13 +227,14 @@ int main(int argc, char *argv[])
 		
 		float gWindow = 100E-9; // s
 		float gRadius = 20; // mm
-		float minToT = 150; // ns
+		float minToT = 150E-0; // s
 		
+		float minEnergy = minToT * 1E9; // In the abscense of energy calibration, energy values are just ToT converted to ns
 		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
 				new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(gRadius, gWindow, minToT,
+				new NaiveGrouper(gRadius, gWindow, minEnergy,
 				new EventWriter(lmData, gWindow, 16
 
 		))))));

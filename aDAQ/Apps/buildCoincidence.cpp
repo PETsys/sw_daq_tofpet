@@ -290,14 +290,19 @@ int main(int argc, char *argv[])
 		float cWindow = 20E-9; // s
 		float gWindow = 100E-9; // s
 		float gRadius = 20; // mm 
-		float minToT = 150; // ns
+		float minToT = 150E-9; // s
 		
+		// Round up cWindow and minToT for use in CoincidenceFilter
+		float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD) + 1) * SYSTEM_PERIOD;
+		float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
+		
+		float minEnergy = minToT * 1E9; // In the abscense of energy calibration, energy values are just ToT converted to ns
 		DAQ::TOFPET::RawReaderV3 *reader = new DAQ::TOFPET::RawReaderV3(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
-				new CoincidenceFilter(Common::getCrystalMapFileName(), 1.25 * cWindow, 0.75 * minToT * 1E-9,
+				new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
 				new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(gRadius, gWindow, minToT,
+				new NaiveGrouper(gRadius, gWindow, minEnergy,
 				new CoincidenceGrouper(cWindow,
 				new EventWriter(lmData, gWindow, 1
 
