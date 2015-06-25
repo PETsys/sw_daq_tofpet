@@ -1,6 +1,7 @@
 #ifndef __TOFPET__RAWV3_HPP__DEFINED__
 #define __TOFPET__RAWV3_HPP__DEFINED__
 #include <Common/Task.hpp>
+#include <TOFPET/Raw.hpp>
 #include <Core/EventSourceSink.hpp>
 #include <Core/Event.hpp>
 #include <Core/RawPulseWriter.hpp>
@@ -15,7 +16,7 @@ namespace DAQ { namespace TOFPET {
 	using namespace ::DAQ::Core;
 	using namespace std;
 
-	typedef __uint128_t RawEventV3;
+		typedef __uint128_t RawEventV3;
 	/*
 	 * frameID	: 36 bit
 	 * asicID	: 14 bit
@@ -30,7 +31,7 @@ namespace DAQ { namespace TOFPET {
 	 */
 	
 	
-	class RawWriterV3 : public AbstractRawPulseWriter {
+	class RawWriterV3 : public RawWriter {
 	public:
 		RawWriterV3(char *fileNamePrefix);
 		virtual ~RawWriterV3();
@@ -46,9 +47,9 @@ namespace DAQ { namespace TOFPET {
 	};
 
 	
-	class RawScannerV3 {
-	public:
-		RawScannerV3(FILE *indexFile);
+	class RawScannerV3 : public RawScanner{
+		public:
+		RawScannerV3(char *indexFilePrefix);
 		~RawScannerV3();
 		
 		int getNSteps();
@@ -60,15 +61,15 @@ namespace DAQ { namespace TOFPET {
 			unsigned long long eventsBegin;
 			unsigned long long eventsEnd;
 		};
-		
+		FILE * indexFile;
 		vector<Step> steps;
 		
 	};
 	
-	class RawReaderV3 : public ThreadedTask, public EventSource<RawPulse> {
+	class RawReaderV3 : public RawReader, public EventSource<RawPulse> {
 	
 	public:
-		RawReaderV3(FILE *dataFile, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink);
+		RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink);
 		~RawReaderV3();
 		
 		virtual void run();

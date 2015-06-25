@@ -16,9 +16,12 @@ using namespace DAQ::TOFPET;
 static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 static const unsigned maxEventsPerFrame = 16*1024;
 
-RawReaderV2::RawReaderV2(FILE *dataFile, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink)
-	: EventSource<RawPulse>(sink), dataFile(dataFile), T(T)
+RawReaderV2::RawReaderV2(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink)
+	: EventSource<RawPulse>(sink), T(T)
 {
+	char dataFileName[512];
+	sprintf(dataFileName, "%s.raw2", dataFilePrefix);
+	dataFile = fopen(dataFileName, "rb");
 	this->eventsBegin = eventsBegin;
 	this->eventsEnd = eventsEnd;
 	start();
@@ -26,6 +29,7 @@ RawReaderV2::RawReaderV2(FILE *dataFile, float T, unsigned long long eventsBegin
 
 RawReaderV2::~RawReaderV2()
 {
+	fclose(dataFile);
 }
 
 
@@ -208,7 +212,7 @@ void RawReaderV2::run()
 	sink->report();
 }
 
-RawScannerV2::RawScannerV2(FILE *indexFile) :
+RawScannerV2::RawScannerV2(char *indexFilePrefix):
 	steps(vector<Step>())
 {
 	float step1;
@@ -216,7 +220,10 @@ RawScannerV2::RawScannerV2(FILE *indexFile) :
 	unsigned long stepBegin;
 	unsigned long stepEnd;
 
-	
+	char indexFileName[512];
+	sprintf(indexFileName, "%s.idx2", indexFilePrefix);
+	indexFile = fopen(indexFileName, "rb");
+
 	while(fscanf(indexFile, "%f %f %llu %llu\n", &step1, &step2, &stepBegin, &stepEnd) == 4) {
 		Step step = { step1, step2, stepBegin, stepEnd };
 		steps.push_back(step);
@@ -225,6 +232,7 @@ RawScannerV2::RawScannerV2(FILE *indexFile) :
 
 RawScannerV2::~RawScannerV2()
 {
+	fclose(indexFile);
 }
 
 int RawScannerV2::getNSteps()

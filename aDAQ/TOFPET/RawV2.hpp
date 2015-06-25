@@ -1,6 +1,7 @@
 #ifndef __TOFPET__RAWV2_HPP__DEFINED__
 #define __TOFPET__RAWV2_HPP__DEFINED__
 #include <Common/Task.hpp>
+#include <TOFPET/Raw.hpp>
 #include <Core/EventSourceSink.hpp>
 #include <Core/Event.hpp>
 #include <Core/RawPulseWriter.hpp>
@@ -28,7 +29,7 @@ namespace DAQ { namespace TOFPET {
 		int64_t tacIdleTime;
 	};
 	
-	class RawWriterV2 : public AbstractRawPulseWriter {
+	class RawWriterV2 : public RawWriter{
 	public:
 		RawWriterV2(char *fileNamePrefix);
 		virtual ~RawWriterV2();
@@ -44,9 +45,9 @@ namespace DAQ { namespace TOFPET {
 	};
 
 	
-	class RawScannerV2 {
+	class RawScannerV2 : public RawScanner{
 	public:
-		RawScannerV2(FILE *indexFile);
+		RawScannerV2(char *indexFilePrefix);
 		~RawScannerV2();
 		
 		int getNSteps();
@@ -58,15 +59,15 @@ namespace DAQ { namespace TOFPET {
 			unsigned long long eventsBegin;
 			unsigned long long eventsEnd;
 		};
-		
+		FILE * indexFile;
 		vector<Step> steps;
 		
 	};
 	
-	class RawReaderV2 : public ThreadedTask, public EventSource<RawPulse> {
+	class RawReaderV2 : public RawReader, public EventSource<RawPulse>{
 	
 	public:
-		RawReaderV2(FILE *dataFile, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink);
+		RawReaderV2(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink);
 		~RawReaderV2();
 		
 		virtual void run();

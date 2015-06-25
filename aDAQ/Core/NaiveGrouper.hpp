@@ -10,7 +10,7 @@ namespace DAQ { namespace Core {
 	
 	class NaiveGrouper : public OverlappedEventHandler<Hit, GammaPhoton> {
 	public:
-		NaiveGrouper(float radius, double timeWindow1, float minEnergy,
+		NaiveGrouper(float radius, double timeWindow1, float minEnergy, float maxEnergy, int maxHits,
 			EventSink<GammaPhoton> *sink);
 		~NaiveGrouper();
 		
@@ -23,9 +23,11 @@ namespace DAQ { namespace Core {
 		float radius2;
 		long long timeWindow1;
 		float minEnergy;
-		
+		float maxEnergy;
+		int maxHits;
 		u_int32_t nHits[GammaPhoton::maxHits];
 		u_int32_t nHitsOverflow;
+		/// put nax hits as option and change buildCoincidence and buildGroup
 	}; 
 	
 }}
