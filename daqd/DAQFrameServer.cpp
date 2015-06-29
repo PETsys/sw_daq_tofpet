@@ -166,11 +166,9 @@ void *DAQFrameServer::doWork()
 		
 		DataFrame *dataFrame = devNull;
 		if (m->acquisitionMode != 0) {
-			// Wait until we have space in the data frame queue to write this frame
+			// Get a free frame from the queue, if possible
+			// If not, just carry on with the devNull frame
 			pthread_mutex_lock(&m->lock);
-			while(!die && (m->acquisitionMode != 0) && isFull(m->dataFrameWritePointer, m->dataFrameReadPointer)) {
-				pthread_cond_wait(&m->condCleanDataFrame, &m->lock);
-			}
 			if(!isFull(m->dataFrameWritePointer, m->dataFrameReadPointer)) {
 				dataFrame = &dataFrameSharedMemory[m->dataFrameWritePointer % MaxDataFrameQueueSize];
 			}
