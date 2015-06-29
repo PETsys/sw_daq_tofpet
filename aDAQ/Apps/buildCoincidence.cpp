@@ -68,23 +68,15 @@ using namespace std;
 
 
 
-class EventWriter : public EventSink<Coincidence> {
+class EventWriterRoot : public EventSink<Coincidence> {
 public:
-	EventWriter(TTree *lmTree, float maxDeltaT, int maxN)
+	EventWriterRoot(TTree *lmTree, float maxDeltaT, int maxN)
 	: lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN)
 	{
-		useROOT=true;
 	};
-	
-	EventWriter(FILE *listFile, float maxDeltaT, int maxN, float angle, float ctr)
-		: listFile(listFile), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), angle(angle), ctr(ctr)
-	{
-		useROOT=false;
-	};
+   
 
-
-	~EventWriter() {
-		
+	~EventWriterRoot() {		
 	};
 
 	void pushEvents(EventBuffer<Coincidence> *buffer) {
@@ -111,51 +103,47 @@ public:
 					float dt2 = hit2.time - t0_1;
 					if(dt2 > maxDeltaT) continue;
 					
-					if(useROOT){
-						event1J = j1;
-						event1N = c.photons[0].nHits;
-						event1DeltaT = dt1;
-						event1Time = hit1.time;
-						event1Channel = hit1.raw.top.channelID;
-						event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
-						event1Energy=hit1.raw.top.energy;
-						event1Tac = hit1.raw.top.raw.d.tofpet.tac;
-						event1ChannelIdleTime = hit1.raw.top.raw.channelIdleTime * T * 1E-12;
-						event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-						event1TQT = hit1.raw.top.tofpet_TQT;
-						event1TQE = hit1.raw.top.tofpet_TQE;
-						event1X = hit1.x;
-						event1Y = hit1.y;
-						event1Z = hit1.z;
-						event1Xi = hit1.xi;
-						event1Yi = hit1.yi;			
+				
+					event1J = j1;
+					event1N = c.photons[0].nHits;
+					event1DeltaT = dt1;
+					event1Time = hit1.time;
+					event1Channel = hit1.raw.top.channelID;
+					event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
+					event1Energy=hit1.raw.top.energy;
+					event1Tac = hit1.raw.top.raw.d.tofpet.tac;
+					event1ChannelIdleTime = hit1.raw.top.raw.channelIdleTime * T * 1E-12;
+					event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = hit1.raw.top.tofpet_TQT;
+					event1TQE = hit1.raw.top.tofpet_TQE;
+					event1X = hit1.x;
+					event1Y = hit1.y;
+					event1Z = hit1.z;
+					event1Xi = hit1.xi;
+					event1Yi = hit1.yi;			
 						
-						event2J = j2;
-						event2N = c.photons[1].nHits;
-						event2DeltaT = dt2;
-						event2Time = hit2.time;
-						event2Channel = hit2.raw.top.channelID;
-						event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
-						event2Energy=hit2.raw.top.energy;
-						event2Tac = hit2.raw.top.raw.d.tofpet.tac;
-						event2ChannelIdleTime = hit2.raw.top.raw.channelIdleTime * T * 1E-12;
-						event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-						event2TQT = hit2.raw.top.tofpet_TQT;
-						event2TQE = hit2.raw.top.tofpet_TQE;
-						event2X = hit2.x;
-						event2Y = hit2.y;
-						event2Z = hit2.z;
-						event2Xi = hit2.xi;
-						event2Yi = hit2.yi;					
+					event2J = j2;
+					event2N = c.photons[1].nHits;
+					event2DeltaT = dt2;
+					event2Time = hit2.time;
+					event2Channel = hit2.raw.top.channelID;
+					event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
+					event2Energy=hit2.raw.top.energy;
+					event2Tac = hit2.raw.top.raw.d.tofpet.tac;
+					event2ChannelIdleTime = hit2.raw.top.raw.channelIdleTime * T * 1E-12;
+					event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = hit2.raw.top.tofpet_TQT;
+					event2TQE = hit2.raw.top.tofpet_TQE;
+					event2X = hit2.x;
+					event2Y = hit2.y;
+					event2Z = hit2.z;
+					event2Xi = hit2.xi;
+					event2Yi = hit2.yi;					
 						
-						lmTree->Fill();
-					}
-					else{
-						//if(j1!=0 || j2!=0)continue;
-						long long time = hit1.time + hit2.time;
-						long long deltaTime=hit1.time - hit2.time;
-						fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw.top.energy, hit2.raw.top.energy, c.photons[0].nHits, c.photons[1].nHits, float(1e-12*deltaTime), ctr); 
-					}
+					lmTree->Fill();
+				   
+					
+				
 
 				}
 					
@@ -173,11 +161,74 @@ private:
 	TTree *lmTree;
 	long long maxDeltaT;
 	int maxN;	
-	bool useROOT;
+};
+
+class EventWriterList : public EventSink<Coincidence> {
+public:
+	
+	EventWriterList(FILE *listFile, float maxDeltaT, int maxN, float angle, float ctr)
+		: listFile(listFile), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), angle(angle), ctr(ctr)
+	{
+	};
+
+
+	~EventWriterList() {
+		
+	};
+
+	void pushEvents(EventBuffer<Coincidence> *buffer) {
+		if(buffer == NULL) return;	
+		
+		unsigned nEvents = buffer->getSize();
+		for(unsigned i = 0; i < nEvents; i++) {
+			Coincidence &c = buffer->get(i);
+			
+			for(int j1 = 0; (j1 < c.photons[0].nHits) && (j1 < maxN); j1 ++) {
+				long long t0_1 = c.photons[0].hits[0].time;		
+				
+				for(int j2 = 0; (j2 < c.photons[1].nHits) && (j2 < maxN); j2++) {
+					long long t0_2 = c.photons[1].hits[0].time;
+		
+					Hit &hit1 = c.photons[0].hits[j1];
+					Hit &hit2 = c.photons[1].hits[j2];
+					
+					long long T = hit1.raw.top.raw.T;
+					
+					float dt1 = hit1.time - t0_1;
+					if(dt1 > maxDeltaT) continue;
+					
+					float dt2 = hit2.time - t0_1;
+					if(dt2 > maxDeltaT) continue;
+   
+					//if(j1!=0 || j2!=0)continue;
+					long long time = hit1.time + hit2.time;
+					long long deltaTime=hit1.time - hit2.time;
+					fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw.top.energy, hit2.raw.top.energy, c.photons[0].nHits, c.photons[1].nHits, float(1e-12*deltaTime), ctr); 
+					
+
+				}
+					
+			}
+			
+		}
+		
+		delete buffer;
+	};
+	
+	void pushT0(double t0) { };
+	void finish() { };
+	void report() { };
+private: 
+	long long maxDeltaT;
+	int maxN;	
 	FILE *listFile;
 	float angle;
 	float ctr;
 };
+
+
+
+
 
 void displayHelp(char * program)
 {
@@ -436,10 +487,10 @@ int main(int argc, char *argv[])
 
 		EventSink<Coincidence> * writer = NULL;
 		if(useROOT == false) {
-			writer = new EventWriter(outListFile, gWindow, 1, acqAngle, ctrEstimate);
+			writer = new EventWriterList(outListFile, gWindow, 1, acqAngle, ctrEstimate);
 		}
 		else {
-			writer = new EventWriter(lmData, gWindow, maxHitsRoot);
+			writer = new EventWriterRoot(lmData, gWindow, maxHitsRoot);
 		}
 
 
