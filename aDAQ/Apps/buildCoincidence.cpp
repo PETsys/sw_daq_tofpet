@@ -430,8 +430,6 @@ int main(int argc, char *argv[])
 		
 	
 		float gRadius = 20; // mm 
-		float minToT = 150E-9; // s
-		
 		// Round up cWindow and minToT for use in CoincidenceFilter
 		float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD) + 1) * SYSTEM_PERIOD;
 		float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
