@@ -437,9 +437,9 @@ int main(int argc, char *argv[])
 		float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
 
 		EventSink<Coincidence> * writer = NULL;
-                if(useROOT == false) {
-                        writer = new EventWriter(outListFile, gWindow, 1, acqAngle, ctrEstimate);
-                }
+		if(useROOT == false) {
+			writer = new EventWriter(outListFile, gWindow, 1, acqAngle, ctrEstimate);
+		}
 		else {
 			writer = new EventWriter(lmData, gWindow, maxHitsRoot);
 		}
