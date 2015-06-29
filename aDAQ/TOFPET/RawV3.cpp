@@ -84,8 +84,6 @@ void RawReaderV3::run()
 			uint64_t channelIdleTime = ((r >> 15) & 0x7FFF) * 8192;
 			uint64_t tacIdleTime = ((r >> 0) & 0x7FFF) * 8192;
 			
-			if(eCoarse < (tCoarse - 256)) eCoarse += 1024;
-
 // Carefull with the float/double/integer conversions here..
 			p.T = T * 1E12;
 			p.time = (1024LL * frameID + tCoarse) * p.T;
@@ -101,7 +99,14 @@ void RawReaderV3::run()
 			p.d.tofpet.efine = eFine;
 			p.channelIdleTime = channelIdleTime;
 			p.d.tofpet.tacIdleTime = tacIdleTime;
-		
+// 			fprintf(stderr, "%4d %d >> %4d %4d %4d %4d \n",
+// 				p.channelID, p.d.tofpet.tac,
+// 				p.d.tofpet.tcoarse,
+// 				p.d.tofpet.ecoarse,
+// 				p.d.tofpet.tfine,
+// 				p.d.tofpet.efine
+// 				);
+
 			if(p.time > tMax)
 				tMax = p.time;
 		
