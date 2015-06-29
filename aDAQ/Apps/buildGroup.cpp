@@ -1,5 +1,6 @@
 #include <TFile.h>
 #include <TNtuple.h>
+#include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <Core/PulseFilter.hpp>
@@ -27,6 +28,7 @@ static unsigned 	eventDeltaT;
 static long long	eventTime;
 static unsigned short	eventChannel;
 static float		eventToT;
+static float		eventEnergy;
 static double		eventChannelIdleTime;
 static unsigned short	eventTac;
 static double		eventTacIdleTime;
@@ -78,6 +80,7 @@ public:
 				eventTime = hit.time;
 				eventChannel = hit.raw.top.channelID;
 				eventToT = 1E-3*(hit.raw.top.timeEnd - hit.raw.top.time);
+				eventEnergy = hit.raw.top.energy;
 				eventTac = hit.raw.top.raw.d.tofpet.tac;
 				eventChannelIdleTime = hit.raw.top.raw.channelIdleTime * T * 1E-12;
 				eventTacIdleTime = hit.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
@@ -115,8 +118,13 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
+	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
+	fprintf(stderr,  "  --minEnergy=MINENERGY\t\tThe minimum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n");
+	fprintf(stderr,  "  --maxEnergy=MAXENERGY\t\tThe maximum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n");
+	fprintf(stderr,  "  --gWindow=gWINDOW\t\tMaximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n");
+	fprintf(stderr,  "  --gMaxHits=gMAXHITS\t\tMaximum number of hits inside a given multi-hit group (default is 16)\n");
 	fprintf(stderr, "\npositional arguments:\n");
-	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration files (required) and tq correction files (optional)\n");
+	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
 	fprintf(stderr, "  output_file \t\t\t ROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
 };
@@ -131,13 +139,61 @@ int main(int argc, char *argv[])
 
 
 	static struct option longOptions[] = {
-		{ "help", no_argument, 0, 0 }
+		{ "help", no_argument, 0, 0 },
+		{ "raw_version", optional_argument,0,0 },
+		{ "minEnergy", optional_argument,0,0 },
+		{ "maxEnergy", optional_argument,0,0 },
+		{ "gWindow", optional_argument,0,0 },
+		{ "gMaxHits", optional_argument,0,0 },
+		{ NULL, 0, 0, 0 }
 	};
-	int optionIndex = -1;
-	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
+	char rawV[128];
+	rawV[0]='3';
+	char * setupFileName=argv[1];
+	char *inputFilePrefix = argv[2];
+	char *outputFileName = argv[3];
+
+	
+	float gWindow = 100E-9; // s
+	int maxHits=16;
+	float minEnergy = 150; // keV or ns (if energy=tot)
+	float maxEnergy = 500; // keV or ns (if energy=tot)
+
+
+	int nOptArgs=0;
+	while(1) {
+		
+		int optionIndex = 0;
+		int c =getopt_long(argc, argv, "",longOptions, &optionIndex);
+		if(c==-1) break;
+
 		if(optionIndex==0){
 			displayHelp(argv[0]);
 			return(1);
+		}
+		if(optionIndex==1){
+			nOptArgs++;
+			sprintf(rawV,optarg);
+			if(rawV[0]!='2' && rawV[0]!='3'){
+				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2 or 3\n", argv[0]);
+				return(1);
+			}
+		}
+		else if(optionIndex==2){
+			nOptArgs++;
+			minEnergy=atof(optarg);
+		}
+		else if(optionIndex==3){
+			nOptArgs++;
+			maxEnergy=atof(optarg);
+		}
+		else if(optionIndex==4){
+			nOptArgs++;
+			gWindow=atof(optarg);
+		}
+		else if(optionIndex==5){
+			nOptArgs++;
+			maxHits=atoi(optarg);
 		}
 		else{
 			displayUsage(argv[0]);
@@ -146,39 +202,36 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc < 4){
+	if(argc - nOptArgs < 4){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc > 4){
+	if(argc - nOptArgs < 4){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
 		return(1);
 	}
 
 
-	char *inputFilePrefix = argv[2];
+   
 
-	char dataFileName[512];
-	char indexFileName[512];
-	sprintf(dataFileName, "%s.raw2", inputFilePrefix);
-	sprintf(indexFileName, "%s.idx2", inputFilePrefix);
-	FILE *inputDataFile = fopen(dataFileName, "rb");
-	FILE *inputIndexFile = fopen(indexFileName, "r");
-	
-	DAQ::TOFPET::RawScannerV2 * scanner = new DAQ::TOFPET::RawScannerV2(inputIndexFile);
-	
-	TOFPET::P2 *P2 = new TOFPET::P2(4096);
-	if (strcmp(argv[1], "none") == 0) {
+	DAQ::TOFPET::RawScanner *scanner = NULL;
+	if(rawV[0]=='3')
+		scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
+	else
+		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
+
+	TOFPET::P2 *P2 = new TOFPET::P2(SYSTEM_NCRYSTALS);
+	if (strcmp(setupFileName, "none") == 0) {
 		P2->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		P2->loadFiles(argv[1], true, false,0,0);
+		P2->loadFiles(setupFileName, true, false,0,0);
 	}
 	
-	TFile *lmFile = new TFile(argv[3], "RECREATE");
+	TFile *lmFile = new TFile(outputFileName, "RECREATE");
 	TTree *lmData = new TTree("lmData", "Event List", 2);
 	int bs = 512*1024;
 	lmData->Branch("step1", &eventStep1, bs);
@@ -189,6 +242,7 @@ int main(int argc, char *argv[])
 	lmData->Branch("time", &eventTime, bs);
 	lmData->Branch("channel", &eventChannel, bs);
 	lmData->Branch("tot", &eventToT, bs);
+	lmData->Branch("Energy", &eventEnergy, bs);
 	lmData->Branch("tac", &eventTac, bs);
 	lmData->Branch("channelIdleTime", &eventChannelIdleTime, bs);
 	lmData->Branch("tacIdleTime", &eventTacIdleTime, bs);
@@ -221,23 +275,26 @@ int main(int argc, char *argv[])
 				printf("BIG FAT WARNING: no calibration file\n");
 			} 
 			else{
-				P2->loadFiles(argv[1], true, true,eventStep1,eventStep2);
+				P2->loadFiles(setupFileName, true, true,eventStep1,eventStep2);
 			}
 		}
 		
-		float gWindow = 100E-9; // s
+	
 		float gRadius = 20; // mm
-		float minToT = 150; // ns
-		
-		DAQ::TOFPET::RawReaderV2 *reader = new DAQ::TOFPET::RawReaderV2(inputDataFile, SYSTEM_PERIOD,  eventsBegin, eventsEnd, 
-				new P2Extract(P2, false, 0.0, 0.20,
+
+		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(gRadius, gWindow, minToT,
-				new EventWriter(lmData, gWindow, 16
+				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
+				new EventWriter(lmData, gWindow, maxHits 
+								)))));
 
-		))))));
-		
+		DAQ::TOFPET::RawReader *reader=NULL;
+	
+		if(rawV[0]=='3') 
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+		else 
+		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 		reader->wait();
 		delete reader;
 		
@@ -248,10 +305,8 @@ int main(int argc, char *argv[])
 		lmFile->Write();
 		
 	}
-	
+	delete scanner;
 	lmFile->Close();
-	fclose(inputDataFile);
-	fclose(inputIndexFile);
 	return 0;
 	
 }

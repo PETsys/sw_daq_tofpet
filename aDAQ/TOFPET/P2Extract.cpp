@@ -76,7 +76,11 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	// 				     eCoarse, 
 	// 				     coarseToT*raw.T/1000.0);
 
-	pulse.energy = 1E-3*(pulse.timeEnd - pulse.time);
+	//pulse.energy = 1E-3*(pulse.timeEnd - pulse.time);
+    pulse.energy = lut->getEnergy(raw.channelID, 1E-3*(pulse.timeEnd - pulse.time));
+
+   	//printf("tot=%f energy = %f\n", 1E-3*(pulse.timeEnd - pulse.time), pulse.energy);
+
 
 	pulse.tofpet_TQT = lut->getQ(raw.channelID, raw.d.tofpet.tac, true, tfine, tacIdleTime, coarseToT*raw.T/1000);
 	pulse.tofpet_TQE = lut->getQ(raw.channelID, raw.d.tofpet.tac, false, efine, tacIdleTime, coarseToT*raw.T/1000);

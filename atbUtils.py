@@ -114,3 +114,39 @@ def loadBaseline(boardConfig, asicStart, asicEnd, fileName):
 		
 	f.close()
 
+def loadFEBD_HVDAC_Calibration(boardConfig, portID, slaveID, fileName):
+        loadHVDACParams(boardConfig, portID*64, (portID+1)*64, fileName)
+        
+
+def loadModuleAsicConfiguration(boardConfig, portID, slaveID, slotID, moduleName, suffix="", useBaseline=True):
+        fileName="%s/asic%s.config" % (moduleName, suffix)
+        loadAsicConfig(boardConfig, portID*16+slotID*2, portID*16+slotID*2+2, fileName, invert=False)
+        if useBaseline:
+                fileName="%s/asic%s.baseline" % (moduleName, suffix)
+                loadBaseline(boardConfig, portID*16+slotID*2, portID*16+slotID*2+2, fileName)
+
+
+def loadModuleHVBias(boardConfig, portID, slaveID, slotID, moduleName, hvChannelMapName, suffix="",offset=0.0):
+        print "Loading %s/hvbias%s.config for ASICS [%d .. %d[" % (moduleName,suffix,portID*16+slotID*2, portID*16+slotID*2+2)
+        fileName= "%s/hvbias%s.config" % (moduleName, suffix)
+        f = open(fileName, "r")
+        r = re.compile('[ \t\n\r:]+')
+
+        fMap = open(hvChannelMapName, "r")
+        rMap = re.compile('[ \t\n\r:]+')
+        for i in range(8):
+                l = f.readline()
+                block, v, x = r.split(l)
+                v = float(v)
+                mppcSlot=int(block)
+                for k in range(64):
+                        l = fMap.readline()
+                        hvCh, F, J ,x = r.split(l)
+                        hvCh=int(hvCh)
+                        F=int(F)
+                        J=int(J)
+                        if(F-1==slotID and J==mppcSlot):
+                                boardConfig.hvBias[64*portID+hvCh] = v + offset
+                                #print "Setting HVDAC channel %d with %f Volts : Mppc connected in DAQ port %d, FEBD slot F%d and FEBA J%d" % (64*portID+hvCh, v, portID, F, J)
+                                fMap.seek(0, 0)
+                                break
