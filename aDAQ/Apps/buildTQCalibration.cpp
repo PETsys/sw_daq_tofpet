@@ -8,6 +8,9 @@
 #include <TGraph.h>
 #include <TOFPET/RawV2.hpp>
 #include <TOFPET/RawV3.hpp>
+#include <ENDOTOFPET/Raw.hpp>
+#include <ENDOTOFPET/Extract.hpp>
+#include <STICv3/sticv3Handler.hpp>
 #include <TOFPET/Sanity.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <TOFPET/P2.hpp>
@@ -157,7 +160,9 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
+#ifndef __ENDOTOFPET__	
 	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
+#endif
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
@@ -178,8 +183,11 @@ int main(int argc, char *argv[])
 		{ "raw_version", optional_argument,0,0 }
 	};
 
+#ifndef __ENDOTOFPET__
 	char rawV[128];
-	sprintf(rawV,"3");
+	rawV[0]='3';
+#endif
+
 	int optionIndex = -1;
 	int nOptArgs=0;
 	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
@@ -188,6 +196,7 @@ int main(int argc, char *argv[])
 			return(1);
 			
 		}
+#ifndef __ENDOTOFPET__	
 		if(optionIndex==1){
 			nOptArgs++;
 			sprintf(rawV,optarg);
@@ -195,7 +204,8 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2 or 3\n", argv[0]);
 				return(1);
 			}
-		}		
+		}	
+#endif	
 		else{
 			displayUsage(argv[0]);
 			fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
@@ -217,18 +227,22 @@ int main(int argc, char *argv[])
 	char *inputFilePrefix = argv[2];
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
+#ifndef __ENDOTOFPET__ 
 	if(rawV[0]=='3')
 		scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
-	else
+	else if(rawV[0]=='2')
 		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
-	
-	TOFPET::P2 *lut = new TOFPET::P2(SYSTEM_NCRYSTALS);
+#else 
+	scanner = new DAQ::ENDOTOFPET::RawScannerE(inputFilePrefix);
+#endif
+
+	TOFPET::P2 *P2 = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(argv[1], "none") == 0) {
-		lut->setAll(2.0);
+		P2->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		lut->loadFiles(argv[1], false, false, 0, 0);
+		P2->loadFiles(argv[1], false, false, 0, 0);
 	}
 	
 
@@ -254,15 +268,24 @@ int main(int argc, char *argv[])
 		}
 		f = fopen(filename_tq, "w");
 
-		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
-				new P2Extract(lut, false, 0.0, 0.20,
-				new TQCorrWriter(f, lut
-        )));
 		DAQ::TOFPET::RawReader *reader=NULL;
+#ifndef __ENDOTOFPET__	
+		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
+				new P2Extract(P2, false, 0.0, 0.20,
+				new TQCorrWriter(f, P2
+        )));
+
 		if(rawV[0]=='3') 
 			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
-		else 
+		else if(rawV[0]=='2')
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+#else
+		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
+				new Sanity(100E-9,								 
+				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
+				new TQCorrWriter(f, P2							 
+				))));
+#endif
 	
 		reader->wait();
 		delete reader;

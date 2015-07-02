@@ -56,6 +56,9 @@ int main(int argc, char *argv[])
 	if(outputType == 'T') {
 		writer = new TOFPET::RawWriterV3(outputFilePrefix);
 	}
+	else if(outputType == 'E') {
+		writer = new ENDOTOFPET::RawWriterE(outputFilePrefix, 0);
+	}
 	else {
 		writer = new NullRawPulseWriter();
 	}
@@ -241,3 +244,4 @@ int main(int argc, char *argv[])
 	
 	return 0;
 }
+

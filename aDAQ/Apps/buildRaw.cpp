@@ -3,6 +3,9 @@
 #include <Common/Constants.hpp>
 #include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
+#include <ENDOTOFPET/Raw.hpp>
+#include <ENDOTOFPET/Extract.hpp>
+#include <STICv3/sticv3Handler.hpp>
 #include <Core/OverlappedEventHandler.hpp>
 #include <assert.h>
 #include <math.h>
@@ -67,7 +70,9 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
+#ifndef __ENDOTOFPET__	
 	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
+#endif
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
 	fprintf(stderr, "  output_file \t\t\t ROOT output file containing raw (not calibrated) single events TTree\n");
@@ -86,9 +91,10 @@ int main(int argc, char *argv[])
 		{ "help", no_argument, 0, 0 },
 		{ "raw_version", optional_argument,0,0 }
 	};
-
+#ifndef __ENDOTOFPET__
 	char rawV[128];
-	sprintf(rawV,"3");
+	rawV[0]='3';
+#endif
 	int optionIndex = -1;
 	int nOptArgs=0;
 	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
@@ -97,6 +103,7 @@ int main(int argc, char *argv[])
 			return(1);
 			
 		}
+#ifndef __ENDOTOFPET__
 		if(optionIndex==1){
 			nOptArgs++;
 			sprintf(rawV,optarg);
@@ -104,7 +111,8 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2 or 3\n", argv[0]);
 				return(1);
 			}
-		}		
+		}
+#endif		
 		else{
 			displayUsage(argv[0]);
 			fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
@@ -125,11 +133,14 @@ int main(int argc, char *argv[])
 	char *inputFilePrefix = argv[1];
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
+#ifndef __ENDOTOFPET__ 
 	if(rawV[0]=='3')
 		scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
-	else
+	else if(rawV[0]=='2')
 		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
-	
+#else 
+	scanner = new DAQ::ENDOTOFPET::RawScannerE(inputFilePrefix);
+#endif
 	
 	TFile *hFile = new TFile(argv[2], "RECREATE");
 	TNtuple *data = new TNtuple("data", "Event List", "step1:step2:channel:tac:tcoarse:tfine:ecoarse:efine:channelIdleTime:tacIdleTime");
@@ -143,17 +154,19 @@ int main(int argc, char *argv[])
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
 		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
 		
+		DAQ::TOFPET::RawReader *reader=NULL;
 
 		EventSink<RawPulse> * pipeSink = new EventReport(data, step1, step2,
 						                 new NullSink<RawPulse>());
 
-		DAQ::TOFPET::RawReader *reader=NULL;
-	
+#ifndef __ENDOTOFPET__
 		if(rawV[0]=='3') 
 			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
-		else 
+		else if(rawV[0]=='2')
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
-
+#else
+		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+#endif
 		
 		reader->wait();
 		delete reader;

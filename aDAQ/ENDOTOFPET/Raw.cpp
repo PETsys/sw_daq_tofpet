@@ -1,12 +1,11 @@
 #include "Raw.hpp"
-
 #include <algorithm>
 #include <functional>
 #include <math.h>
 #include <set>
 #include <limits.h>
 #include <iostream>
-
+#include <assert.h>
 #include <Common/Constants.hpp>
 
 using namespace std;
@@ -16,13 +15,18 @@ using namespace DAQ::Common;
 
 static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 
-RawReader::RawReader(FILE *dataFile, float T, EventSink<RawPulse> *sink)
+RawReaderE::RawReaderE(char *dataFilePrefix, float T,  unsigned long long eventsBegin, unsigned long long eventsEnd,EventSink<RawPulse> *sink)
 	: EventSource<RawPulse>(sink), dataFile(dataFile), T(T)
 {
+	char dataFileName[512];
+	sprintf(dataFileName, "%s.rawE", dataFilePrefix);
+	dataFile = fopen(dataFileName, "rb");
+	this->eventsBegin = eventsBegin;
+	this->eventsEnd = eventsEnd;
 	start();
 }
 
-RawReader::~RawReader()
+RawReaderE::~RawReaderE()
 {
 }
 
@@ -35,7 +39,7 @@ static bool operator< (SortEntry lhs, SortEntry rhs) { return lhs.tCoarse < rhs.
 
 
 
-void RawReader::run()
+void RawReaderE::run()
 {
 
 	unsigned nWraps = 0;
@@ -49,8 +53,8 @@ void RawReader::run()
 	
 	sink->pushT0(0);
 	
-	long long minFrameID = LLONG_MAX;
-	long long maxFrameID = LLONG_MIN;
+	fprintf(stderr, "Reading %llu to %llu\n", eventsBegin, eventsEnd);
+
 	uint8_t code;
 	
 	long long events=0;
@@ -114,8 +118,6 @@ void RawReader::run()
 
 				//printf("DBG T frameID = %20lld tCoarse = %6u time = %20lld\n", CurrentFrameID, rawEvent.tCoarse, p.time);
 
-				if(CurrentFrameID < minFrameID) minFrameID = CurrentFrameID;
-				if(CurrentFrameID > maxFrameID) maxFrameID = CurrentFrameID;
 				
 				if(p.channelID >= SYSTEM_NCHANNELS)
 					  continue;
@@ -184,8 +186,7 @@ void RawReader::run()
 				
 				//printf("DBG S frameID = %20lld tCoarse = %6u time = %20lld\n", CurrentFrameID, tCoarse >> 2, p.time);
 		
-				if(CurrentFrameID < minFrameID) minFrameID = CurrentFrameID;
-				if(CurrentFrameID > maxFrameID) maxFrameID = CurrentFrameID;
+	  
 				
 				if(p.channelID >= SYSTEM_NCHANNELS)
 					  continue;
@@ -220,11 +221,141 @@ void RawReader::run()
 	
 	sink->finish();
 	
-	fprintf(stderr, "RawReaderV2 report\n");
-	fprintf(stderr, "\t%16lld minFrameID\n", minFrameID);
-	fprintf(stderr, "\t%16lld maxFrameID\n", maxFrameID);
+	//fprintf(stderr, "RawReaderE report\n");
+	//fprintf(stderr, "\t%16lld minFrameID\n", minFrameID);
+	//fprintf(stderr, "\t%16lld maxFrameID\n", maxFrameID);
 	sink->report();
+}
+
+RawScannerE::RawScannerE(char *indexFilePrefix) :
+	steps(vector<Step>())
+{
+	float step1;
+	float step2;
+	unsigned long stepBegin;
+	unsigned long stepEnd;
+	
+	char indexFileName[512];
+	sprintf(indexFileName, "%s.idxE", indexFilePrefix);
+	indexFile = fopen(indexFileName, "rb");
+	
+	while(fscanf(indexFile, "%f %f %llu %llu\n", &step1, &step2, &stepBegin, &stepEnd) == 4) {
+		Step step = { step1, step2, stepBegin, stepEnd };
+		steps.push_back(step);
+	}
+}
+
+RawScannerE::~RawScannerE()
+{
+	fclose(indexFile);
+}
+
+int RawScannerE::getNSteps()
+{
+	return steps.size();
+}
+
+
+void RawScannerE::getStep(int stepIndex, float &step1, float &step2, unsigned long long &eventsBegin, unsigned long long &eventsEnd)
+{
+	Step &step = steps[stepIndex];
+	step1 = step.step1;
+	step2 = step.step2;
+	eventsBegin = step.eventsBegin;
+	eventsEnd = step.eventsEnd;
 }
 
 
 
+
+RawWriterE::RawWriterE(char *fileNamePrefix, long long acqStartTime)
+{
+	char dataFileName[512];
+	char indexFileName[512];
+	
+
+	sprintf(dataFileName, "%s.rawE", fileNamePrefix);
+	sprintf(indexFileName, "%s.idxE", fileNamePrefix);
+	outputDataFile = fopen(dataFileName, "wb");
+	outputIndexFile = fopen(indexFileName, "w");
+	DAQ::ENDOTOFPET::StartTime StartTimeOut = {
+			                0x00,
+							acqStartTime,
+	};
+	fwrite(&StartTimeOut, sizeof(StartTimeOut), 1, outputDataFile);
+	assert(outputDataFile != NULL);
+	assert(outputIndexFile != NULL);
+	stepBegin = 0;
+	stepEnd=0;
+	currentFrameID=0;
+}
+
+RawWriterE::~RawWriterE()
+{
+ 	fclose(outputDataFile);
+ 	fclose(outputIndexFile);
+}
+
+void RawWriterE::openStep(float step1, float step2)
+{
+	this->step1 = 0;
+	this->step2 = 0;
+	//stepBegin = ftell(outputDataFile) / sizeof(DAQ::TOFPET::RawEventV3);
+}
+
+void RawWriterE::closeStep()
+{
+
+	fprintf(outputIndexFile, "%f %f %ld %ld\n", step1, step2, stepBegin, stepEnd);
+	fflush(outputDataFile);
+	fflush(outputIndexFile);
+}
+
+void RawWriterE::addEvent(RawPulse &p)
+{
+	uint64_t frameID = p.time / (1024L * p.T);
+
+	if(frameID > currentFrameID){
+			DAQ::ENDOTOFPET::FrameHeader FrHeaderOut = {
+				0x01,
+				frameID,
+				0,
+			};				
+			fwrite(&FrHeaderOut, sizeof(DAQ::ENDOTOFPET::FrameHeader), 1, outputDataFile);
+			currentFrameID=frameID;
+	}	
+	
+	if (p.feType == RawPulse::TOFPET) {
+			DAQ::ENDOTOFPET::RawTOFPET eventOut = {
+			0x02,
+			p.d.tofpet.tac,
+			p.channelID,
+			p.d.tofpet.tcoarse,
+			p.d.tofpet.ecoarse,
+			p.d.tofpet.tfine,
+			p.d.tofpet.efine,
+			p.d.tofpet.tacIdleTime,
+			p.channelIdleTime
+		};
+		
+		fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);	     
+	}
+	
+	else if (p.feType == RawPulse::STIC) {					\
+		DAQ::ENDOTOFPET::RawSTICv3 eventOut = {
+			0x03,
+			p.channelID,
+			p.d.stic.tcoarse,
+			p.d.stic.ecoarse,
+			p.d.stic.tfine,
+			p.d.stic.efine,
+			p.d.stic.tBadHit,
+			p.d.stic.eBadHit,
+			p.channelIdleTime};
+		
+		fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);	     
+	}
+
+	stepEnd++;
+
+}

@@ -4,6 +4,9 @@
 #include <Common/Utils.hpp>
 #include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
+#include <ENDOTOFPET/Raw.hpp>
+#include <ENDOTOFPET/Extract.hpp>
+#include <STICv3/sticv3Handler.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <Core/PulseFilter.hpp>
 #include <Core/SingleReadoutGrouper.hpp>
@@ -235,7 +238,9 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
-	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
+#ifndef __ENDOTOFPET__	
+	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2, 3 (default)\n");
+#endif
 	fprintf(stderr,  "  --output_type=OUTPUT_TYPE\t The type of output requested: LIST or ROOT (default)\n");
 	fprintf(stderr,  "  --angle=ANGLE\t\t\t The reference angle of acquisition (in radians)\n");
 	fprintf(stderr,  "  --ctr=CTR\t\t\t Coincidence time resolution estimate for the detector, 1 sigma (in picoseconds)\n");
@@ -278,9 +283,10 @@ int main(int argc, char *argv[])
 		{ "gMaxHitsRoot", optional_argument,0,0 },
 		{ NULL, 0, 0, 0 }
 	};
-
+#ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
+#endif
 	bool useROOT=true;
 	float acqAngle=0;
 	float ctrEstimate;
@@ -313,14 +319,16 @@ int main(int argc, char *argv[])
 			return(1);
 			
 		}
+#ifndef __ENDOTOFPET__	
 		else if(optionIndex==1){
 			nOptArgs++;
 			sprintf(rawV,optarg);
 			if(rawV[0]!='2' && rawV[0]!='3'){
-				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2 or 3\n", argv[0]);
+				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2, 3\n", argv[0]);
 				return(1);
 			}
 		}
+#endif
 		else if(optionIndex==2){
 			nOptArgs++;
 			if(strcmp(optarg, "LIST")==0)useROOT=false;
@@ -391,12 +399,15 @@ int main(int argc, char *argv[])
 
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
+#ifndef __ENDOTOFPET__ 
 	if(rawV[0]=='3')
 		scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
-	else
+	else if(rawV[0]=='2')
 		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
-
-					
+#else 
+	scanner = new DAQ::ENDOTOFPET::RawScannerE(inputFilePrefix);
+#endif
+			
 	DAQ::TOFPET::P2 *P2 = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(setupFileName, "none") == 0) {
 		P2->setAll(2.0);
@@ -492,29 +503,34 @@ int main(int argc, char *argv[])
 		else {
 			writer = new EventWriterRoot(lmData, gWindow, maxHitsRoot);
 		}
+		DAQ::TOFPET::RawReader *reader=NULL;
 
-
-		EventSink<RawPulse> * pipeSink = new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
+#ifndef __ENDOTOFPET__	
+		EventSink<RawPulse> * pipeSink= new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
 				new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
 				new CoincidenceGrouper(cWindow,
 				writer
-				))))));
-		
-	
-		
-
-		DAQ::TOFPET::RawReader *reader=NULL;
+			    ))))));
 	
 		if(rawV[0]=='3') 
 			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
-		else 
+	    else if(rawV[0]=='2')
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+#else
+			reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
+				new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
+				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
+				new SingleReadoutGrouper(
+				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
+				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
+				new CoincidenceGrouper(cWindow,
+				writer
+			)))))));
 		
-
-	
+#endif		
 		reader->wait();
 		delete reader;
 		if(useROOT){

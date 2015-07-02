@@ -1,15 +1,14 @@
 #ifndef __DAQ_STICV3__STICV3HANDLER_HPP__DEFINED__
 #define __DAQ_STICV3__STICV3HANDLER_HPP__DEFINED__
-
-#include <Core/Event.hpp> // This one will surely be needed...
-
+#include <Core/Event.hpp> 
+#include <Common/Instrumentation.hpp>
 
 //Template for a sticv3handler class
 
 namespace DAQ { namespace STICv3 {
 	using namespace std;
-		//	using namespace DAQ::Common;
-		using namespace DAQ::Core;
+	using namespace DAQ::Common;
+	using namespace DAQ::Core;
 	
 	class Sticv3Handler{
 	public:
@@ -22,7 +21,8 @@ namespace DAQ { namespace STICv3 {
 
 
 	private:
-		
+		u_int32_t nPassed;
+		u_int32_t nEvent;
 		//whatever variables you may need
 		
 	};
