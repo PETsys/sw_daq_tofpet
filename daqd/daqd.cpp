@@ -12,15 +12,20 @@
 #include <sys/stat.h>
 #include <map>
 #include "UDPFrameServer.hpp"
-#ifdef __DTFLY__
-#include "DAQFrameServer.hpp"
-#endif
 #include "FrameServer.hpp"
 #include "Protocol.hpp"
 #include "Client.hpp"
 #include <boost/lexical_cast.hpp>
 #include <string.h>
 #include <getopt.h>
+
+#ifdef __DTFLY__
+#include "DtFlyP.hpp"
+#endif
+
+#ifdef __PFP_KX7__
+#include "PFP_KX7.hpp"
+#endif
 
 using namespace DAQd;
 
@@ -99,12 +104,21 @@ int main(int argc, char *argv[])
 				feTypeHasBeenSet = true;
 			}
 			else if (strcmp((char *)optarg, "DTFLY") == 0) {
-#ifdef	__DTFLY__
+#ifdef __DTFLY__
 				daqType = 1;
-				feTypeHasBeenSet = true;
 #else
 				fprintf(stderr, "ERROR: This was built without DTFLY support.\n");
 				fprintf(stderr, "Recompile, adding DTFLY=1 to make command to enable DTFLY support\n");
+				return -1;
+#endif 
+			}
+			else if (strcmp((char *)optarg, "PFP_KX7") == 0) {
+#ifdef __PFP_KX7__
+				daqType = 2;
+				feTypeHasBeenSet = 1;
+#else
+				fprintf(stderr, "ERROR: This was built without PFP_KX7 support.\n");
+				fprintf(stderr, "Recompile, adding PFP_KX7=1 to make command to enable DTFLY support\n");
 				return -1;
 #endif 
 			}
@@ -140,6 +154,7 @@ int main(int argc, char *argv[])
  	globalUserStop = false;					
 	signal(SIGTERM, catchUserStop);
 	signal(SIGINT, catchUserStop);
+	
 
 	int listeningSocket = createListeningSocket(socketName);
 	if(listeningSocket < 0)
@@ -150,11 +165,17 @@ int main(int argc, char *argv[])
 	if (daqType == 0) {
 		globalFrameServer = new UDPFrameServer(debugLevel);
 	}
-#ifdef __DTFLY__	
+#ifdef __DTFLY__ 
 	else if (daqType == 1) {		
-		globalFrameServer = new DAQFrameServer(5, feType, debugLevel);
+		globalFrameServer = new DAQFrameServer(new DtFlyP(), 5, feType, debugLevel);
 	}
 #endif
+#ifdef __PFP_KX7__
+	else if (daqType == 2) {		
+		globalFrameServer = new DAQFrameServer(new PFP_KX7(), 0, NULL, debugLevel);
+	}
+#endif
+	
 
 	pollSocket(listeningSocket, globalFrameServer);	
 	close(listeningSocket);	

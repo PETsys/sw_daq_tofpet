@@ -9,7 +9,7 @@ CPPFLAGS := $(CPPFLAGS) -I.
 
 CPPFLAGS := $(CPPFLAGS)
 
-LIBS := $(LIBS) $(GLIBS) -L$(shell root-config --libdir --libs) $(shell root-config --auxlibs) -lMinuit -lboost_filesystem 
+LIBS := $(LIBS) $(GLIBS) -L$(shell root-config --libdir --libs) $(shell root-config --auxlibs) -lMinuit -lboost_system -lboost_filesystem 
 CPPFLAGS := $(CPPFLAGS) -I$(shell root-config --incdir)
 
 CPPFLAGS := $(CPPFLAGS) -I../daqd/

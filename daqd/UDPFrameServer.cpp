@@ -60,7 +60,7 @@ UDPFrameServer::UDPFrameServer(int debugLevel)
 
 UDPFrameServer::~UDPFrameServer()
 {
-
+	stopWorker();
 }
 
 

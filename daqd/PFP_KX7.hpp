@@ -1,28 +1,28 @@
-#ifndef __DTFLYP_HPP__DEFINED__
-#define __DTFLYP_HPP__DEFINED__
+#ifndef __PFP_KX7_HPP__DEFINED__
+#define __PFP_KX7_HPP__DEFINED__
 
 #include <stdint.h>
 #include <queue>
 #include <pthread.h>
 #include <boost/crc.hpp>
+#include "boost/date_time/posix_time/posix_time.hpp"
 #include "DAQFrameServer.hpp"
 
-namespace DTFLY {
-typedef unsigned long DWORD;
-typedef unsigned long long UINT64;
-
 extern "C" {
-#include "dtfly_p_etpu_defs.h"
+#include <pfp_api_monitor.h>
 }
-
-}
+#ifdef LINUX
+	#include <fcntl.h>
+	#include <errno.h>
+#else
+	#include <conio.h>
+#endif
 
 namespace DAQd {
-
-class DtFlyP : public AbstractDAQCard {
+class PFP_KX7 : public AbstractDAQCard {
 public:
-	  DtFlyP();
-	  ~DtFlyP();
+	  PFP_KX7();
+	  ~PFP_KX7();
 	  int getWords(uint64_t *buffer, int count);
 	  void stopWorker();
 	  void startWorker();
@@ -37,6 +37,21 @@ public:
 	  static const int ENOCARD = -10000;
 
 private:
+	static const int BaseAddrReg		= 0x00280000;
+	static const int DMACptSizeReg		= 256;
+	static const int ConfigReg		= 288;
+	static const int txWrPointerReg		= 320;
+	static const int DMAConfigReg		= 352;
+	static const int txRdPointerReg		= 384;
+	static const int rxWrPointerReg		= 448;
+	static const int rxRdPointerReg		= 512;
+	static const int acqStatusPointerReg	= 576;
+	static const int statusReg		= 640;
+
+	WD_DMA *DMA_Point	= NULL;
+	PVOID DMA_Buffer	= NULL;
+	WDC_DEVICE_HANDLE Card;
+
 	int getWords_(uint64_t *buffer, int count);
 	int WriteAndCheck(int reg, uint32_t *data, int count);
 	int ReadAndCheck(int reg, uint32_t *data, int count);
@@ -50,7 +65,7 @@ private:
 	pthread_cond_t condCleanBuffer;
 	pthread_cond_t condDirtyBuffer;
 	
-	DTFLY::SBufferInit dmaBuffer;
+//	DTFLY::SBufferInit dmaBuffer;
 
 	
 	uint64_t *wordBuffer;
@@ -63,10 +78,10 @@ private:
 	static void *runWorker(void *arg);
 
 	pthread_mutex_t hwLock;
+	boost::posix_time::ptime lastCommandTime;
 
 	//FILE *logFile;
 
 };
-
 }
 #endif

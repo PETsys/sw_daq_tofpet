@@ -12,6 +12,7 @@ static const uint16_t commandSetDataFrameReadPointer = 0x04;
 static const uint16_t commandToFrontEnd = 0x05;
 static const uint16_t commandGetPortUp = 0x06;
 static const uint16_t commandGetPortCounts = 0x07;
+static const uint16_t commandQuit = 0x08;
 
 }
 #endif
