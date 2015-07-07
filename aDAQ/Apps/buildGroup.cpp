@@ -124,6 +124,7 @@ void displayHelp(char * program)
 	fprintf(stderr,  "  --gWindow=gWINDOW\t\tMaximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n");
 	fprintf(stderr,  "  --gMaxHits=gMAXHITS\t\tMaximum number of hits inside a given multi-hit group (default is 16)\n");
 	fprintf(stderr,  "  --gMaxHitsRoot=gMAXHITSROOT\tMaximum number of hits inside a given multi-hit group to be written to ROOT output file (default is 16)\n");
+	fprintf(stderr,  "  --gMaxHitsRoot=gMAXHITSROOT\t\tMaximum number of hits inside a given multi-hit group to be written to ROOT output file (default is 16)\n");
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  setup_file \t\t\tFile containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix\t\tPath to raw data files prefix\n");
