@@ -117,17 +117,17 @@ void displayHelp(char * program)
 {
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
-	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
-	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
+	fprintf(stderr,  "  --help \t\t\tShow this help message and exit \n");
+	fprintf(stderr,  "  --raw_version=RAW_VERSION\tThe version of the raw file to be processed: 2 or 3 (default) \n");
 	fprintf(stderr,  "  --minEnergy=MINENERGY\t\tThe minimum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n");
 	fprintf(stderr,  "  --maxEnergy=MAXENERGY\t\tThe maximum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n");
 	fprintf(stderr,  "  --gWindow=gWINDOW\t\tMaximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n");
 	fprintf(stderr,  "  --gMaxHits=gMAXHITS\t\tMaximum number of hits inside a given multi-hit group (default is 16)\n");
-	fprintf(stderr,  "  --gMaxHitsRoot=gMAXHITSROOT\t\tMaximum number of hits inside a given multi-hit group to be written to ROOT output file (default is 16)\n");
+	fprintf(stderr,  "  --gMaxHitsRoot=gMAXHITSROOT\tMaximum number of hits inside a given multi-hit group to be written to ROOT output file (default is 16)\n");
 	fprintf(stderr, "\npositional arguments:\n");
-	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
-	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
-	fprintf(stderr, "  output_file \t\t\t ROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
+	fprintf(stderr, "  setup_file \t\t\tFile containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
+	fprintf(stderr, "  rawfiles_prefix\t\tPath to raw data files prefix\n");
+	fprintf(stderr, "  output_file \t\t\tROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
 };
 
 void displayUsage( char * program)
