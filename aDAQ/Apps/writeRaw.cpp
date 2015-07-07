@@ -231,7 +231,11 @@ int main(int argc, char *argv[])
 					stepGoodFrames, stepEvents, 
 					float(stepEvents)/stepGoodFrames,
 					stepMaxFrame); fflush(stderr);
-			fprintf(stderr, "writeRaw:: %d frames received had missing data; %d of these had no data\n", stepLostFrames, stepLostFrames0); fflush(stderr);
+			fprintf(stderr, "writeRaw:: %d (%5.1f%%) frames received had missing data; %d (%5.1f%%) of had no data at all\n", 
+					stepLostFrames, 100.0 * stepLostFrames / stepGoodFrames,
+					stepLostFrames0, 100.0 * stepLostFrames0 / stepGoodFrames
+					); 
+			fflush(stderr);
 			stepGoodFrames = 0;
 			stepEvents = 0;
 			stepMaxFrame = 0;
