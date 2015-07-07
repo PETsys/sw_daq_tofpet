@@ -2,9 +2,6 @@
 #include <TNtuple.h>
 #include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
-#include <ENDOTOFPET/Raw.hpp>
-#include <ENDOTOFPET/Extract.hpp>
-#include <STICv3/sticv3Handler.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <Core/PulseFilter.hpp>
 #include <Core/SingleReadoutGrouper.hpp>
@@ -120,18 +117,17 @@ void displayHelp(char * program)
 {
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
-	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
-#ifndef __ENDOTOFPET__	
-	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
-#endif
+	fprintf(stderr,  "  --help \t\t\tShow this help message and exit \n");
+	fprintf(stderr,  "  --raw_version=RAW_VERSION\tThe version of the raw file to be processed: 2 or 3 (default) \n");
 	fprintf(stderr,  "  --minEnergy=MINENERGY\t\tThe minimum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n");
 	fprintf(stderr,  "  --maxEnergy=MAXENERGY\t\tThe maximum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n");
 	fprintf(stderr,  "  --gWindow=gWINDOW\t\tMaximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n");
 	fprintf(stderr,  "  --gMaxHits=gMAXHITS\t\tMaximum number of hits inside a given multi-hit group (default is 16)\n");
+	fprintf(stderr,  "  --gMaxHitsRoot=gMAXHITSROOT\tMaximum number of hits inside a given multi-hit group to be written to ROOT output file (default is 16)\n");
 	fprintf(stderr, "\npositional arguments:\n");
-	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
-	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
-	fprintf(stderr, "  output_file \t\t\t ROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
+	fprintf(stderr, "  setup_file \t\t\tFile containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
+	fprintf(stderr, "  rawfiles_prefix\t\tPath to raw data files prefix\n");
+	fprintf(stderr, "  output_file \t\t\tROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
 };
 
 void displayUsage( char * program)
@@ -150,22 +146,21 @@ int main(int argc, char *argv[])
 		{ "maxEnergy", optional_argument,0,0 },
 		{ "gWindow", optional_argument,0,0 },
 		{ "gMaxHits", optional_argument,0,0 },
+		{ "gMaxHitsRoot", optional_argument,0,0 },
 		{ NULL, 0, 0, 0 }
 	};
-#ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
-#endif
-
 	char * setupFileName=argv[1];
 	char *inputFilePrefix = argv[2];
 	char *outputFileName = argv[3];
+
 	
 	float gWindow = 100E-9; // s
-	int maxHits=16;
 	float minEnergy = 150; // keV or ns (if energy=tot)
 	float maxEnergy = 500; // keV or ns (if energy=tot)
-
+	int gMaxHits=16;
+	int gMaxHitsRoot=16;
 
 	int nOptArgs=0;
 	while(1) {
@@ -178,7 +173,6 @@ int main(int argc, char *argv[])
 			displayHelp(argv[0]);
 			return(1);
 		}
-#ifndef __ENDOTOFPET__
 		if(optionIndex==1){
 			nOptArgs++;
 			sprintf(rawV,optarg);
@@ -187,7 +181,6 @@ int main(int argc, char *argv[])
 				return(1);
 			}
 		}
-#endif
 		else if(optionIndex==2){
 			nOptArgs++;
 			minEnergy=atof(optarg);
@@ -202,7 +195,11 @@ int main(int argc, char *argv[])
 		}
 		else if(optionIndex==5){
 			nOptArgs++;
-			maxHits=atoi(optarg);
+			gMaxHits=atoi(optarg);
+		}
+		else if(optionIndex==6){
+			nOptArgs++;
+			gMaxHitsRoot=atoi(optarg);
 		}
 		else{
 			displayUsage(argv[0]);
@@ -222,17 +219,15 @@ int main(int argc, char *argv[])
 		return(1);
 	}
 
+
+   
+
 	DAQ::TOFPET::RawScanner *scanner = NULL;
-#ifndef __ENDOTOFPET__ 
 	if(rawV[0]=='3')
 		scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
-	else if(rawV[0]=='2')
+	else
 		scanner = new DAQ::TOFPET::RawScannerV2(inputFilePrefix);
-#else 
-	scanner = new DAQ::ENDOTOFPET::RawScannerE(inputFilePrefix);
-#endif
-	
-   
+
 	TOFPET::P2 *P2 = new TOFPET::P2(SYSTEM_NCRYSTALS);
 	if (strcmp(setupFileName, "none") == 0) {
 		P2->setAll(2.0);
@@ -293,31 +288,19 @@ int main(int argc, char *argv[])
 	
 		float gRadius = 20; // mm
 
-		DAQ::TOFPET::RawReader *reader=NULL;
-
-#ifndef __ENDOTOFPET__
 		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
-				new EventWriter(lmData, gWindow, maxHits 
+				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, gMaxHits,
+				new EventWriter(lmData, gWindow, gMaxHitsRoot 
 								)))));
+
+		DAQ::TOFPET::RawReader *reader=NULL;
 	
 		if(rawV[0]=='3') 
 			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
-		else if(rawV[0]=='2')
+		else 
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
-#else
-		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
-				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
-				new SingleReadoutGrouper(
-				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
-				new EventWriter(lmData, gWindow, maxHits 
-				))))));
-#endif
-
-
 		reader->wait();
 		delete reader;
 		
