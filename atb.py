@@ -300,8 +300,9 @@ class ATB:
 		#self.__shmmap = mmap.mmap(self.__shm.fd, self.__shm.size)
 		#os.close(self.__shm.fd)
 		self.config = None
-		self.__activeAsics = [ False for x in range(64) ]
-		self.__asicType = [ None for x in range(64) ]
+		self.__activeAsics = [ False for x in range(16*1024) ]
+		self.__asicType = [ None for x in range(16*1024) ]
+		self.__asicConfigCache = {}		
 		return None
 
 
@@ -623,6 +624,16 @@ class ATB:
 	
 		commandCode, isChannel, isRead, dataLength = commandInfo[command]
 
+		# Avoid re-uploading this configuration if it's already in the chip
+		cacheKey = (command, asicID, channel)
+		if not isRead:
+			try:
+				lastValue = self.__asicConfigCache[cacheKey]
+				if value == lastValue:
+					return (0, None)
+			except KeyError:
+				pass
+
 		byte0 = [ (commandCode << 4) + (asicID & 0x0F) ]
 		if isChannel:
 				
@@ -675,6 +686,7 @@ class ATB:
 			if readValue != value:
 				raise tofpet.ConfigurationErrorBadRead(febID, 0, asicID % 16, value, readValue)
 
+			self.__asicConfigCache[cacheKey] = bitarray(value)
 			return (status, None)
 
 
@@ -1166,8 +1178,8 @@ class ATB:
 			if (portID, slaveID) not in self.getActiveFEBDs():
 				continue
 
-			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
 			for localAsicID, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)): # Iterate on all possible ASIC in a FEB/D
+				asicType = self.__asicType[globalAsicID]
 				ac = self.config.asicConfig[globalAsicID]
 				asicOK = self.__activeAsics[globalAsicID]
 				if ac == None and asicOK == False:
