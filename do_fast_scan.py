@@ -9,6 +9,29 @@ import ROOT
 from rootdata import DataFile
 import serial
 import numpy as np
+import argparse
+
+parser = argparse.ArgumentParser(description='Acquires a set of data for 4 relative phases of the test pulse, either injecting it directly in the tdcs or/and in the front end. Output reports the time rms and tot by asic')
+
+
+parser.add_argument('OutputFile',
+                   help='output file (ROOT file). Contains histograms of data.')
+
+parser.add_argument('hvBias', type=float,
+                   help='The voltage to be set for the HV DACs. Relevant only to fetp mode. In tdca mode, it is set to 5V.')
+
+
+parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
+
+parser.add_argument('--channels', nargs='*', type=int, help='If set, only the selected channels will acquire data')
+
+parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp', 'both'], help='Defines where the test pulse is injected. Three modes are allowed: tdca, fetp and both. ')
+
+parser.add_argument('--tpDAC', type=int, default=32, help='The amplitude of the test pulse in DAC units (Default is 32 )')
+
+args = parser.parse_args()
+
+
 # Parameters
 T = 6.25E-9
 nominal_m = 128
@@ -51,14 +74,21 @@ defaultConfig=atbConfig
 uut.config=atbConfig
 uut.initialize()
 
-rootFileName="/tmp/hists.root"
+rootFileName=args.OutputFile
 rootFile = ROOT.TFile(rootFileName, "RECREATE");
 #rootData1 = DataFile( rootFile, "3")
 #rootData2 = DataFile( rootFile, "3B")
 
-activeChannels = [ x for x in range(0,64) ]
-activeAsics =  [0,1]#[ i for i,ac in enumerate(uut.config.asicConfig) ]
-activeAsics =  uut.getActiveTOFPETAsics()
+if args.channels == None:
+	activeChannels = [ x for x in range(0,64) ]
+else:
+	activeChannels= args.channels
+
+
+if args.asics == None:
+	activeAsics =  uut.getActiveTOFPETAsics()
+else:
+	activeAsics= args.asics
 
 
 for tAsic in activeAsics:
@@ -89,8 +119,9 @@ smallToT=np.zeros((2,maxAsics,64,4))
 
 TFineRMS=np.zeros((2,maxAsics,64,4))
 ToT=np.zeros((2,maxAsics,64,4))
-
-
+EFineRMS=np.zeros((2,maxAsics,64,4))
+TFineMean=np.zeros((2,maxAsics,64,4))
+EFineMean=np.zeros((2,maxAsics,64,4))
 #print activeAsics, minEventsA, minEventsB
 #hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
 
@@ -98,14 +129,38 @@ hTFine = [[[[ ROOT.TH1F("htFine_%03d_%02d_%1d_%1d" % (tAsic, tChannel, tac, fine
 hEFine = [[[[ ROOT.TH1F("heFine_%03d_%02d_%1d_%1d" % (tAsic, tChannel, tac, finephase), "E Fine", 1024, 0, 1014) for finephase in range(4)]for tac in range(4) ] for tChannel in range(64)] for tAsic in systemAsics ]
 hToT = [[[[ ROOT.TH1F("heToT_%03d_%02d_%1d_%1d" % (tAsic, tChannel, tac, finephase), "Coarse ToT", 1024, 0, 1014) for finephase in range(4)]for tac in range(4) ] for tChannel in range(64)] for tAsic in systemAsics ]
 
+nmodes=0
+if args.mode == "tdca" or args.mode == "fetp":
+    nmodes=1
+if args.mode == "both":
+    nmodes=2
+  
 
-for tdcaMode in [True,False]:
-    if tdcaMode:
+
+
+for iteration in range(nmodes):
+   
+
+    if (args.mode == "tdca" and iteration==0) or (args.mode == "both" and iteration==0):
         mode=0
-    else:
+        tdcaMode = True
+        vbias =  5
+        frameInterval = 0
+        pulseLow = False
+	
+
+    elif (args.mode == "fetp" and iteration ==0) or (args.mode == "both" and iteration ==1):
         mode=1
-    for  asic in range(len(activeAsics)):
-        print asic
+        tdcaMode = False
+        tpDAC = args.tpDAC
+        if args.hvBias == None:
+            vbias =  5
+        else:
+            vbias = args.hvBias
+        frameInterval = 16
+        pulseLow = True
+
+    for  asic in range(len(systemAsics)):
         for  channel in range(64):
             for  tac in range(4):
                 for  finephase in range(4):
@@ -138,16 +193,6 @@ for tdcaMode in [True,False]:
       #  smallToTTAC=[]
        # smallToT=[]
 
-        if tdcaMode:
-            vbias = 5
-            pulseLow = False
-            frameInterval = 0
-        else:
-            frameInterval = 16
-            tpDAC = 32
-            vbias = 5
-            pulseLow = True
-
         if vbias > 50: minEventsA *= 10
 
         for tChannel in activeChannels:
@@ -178,10 +223,10 @@ for tdcaMode in [True,False]:
                     atbConfig.asicConfig[tAsic].globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
 
 
-            uut.stop()
+            #uut.stop()
             uut.config = atbConfig
             uut.uploadConfig()
-            uut.start()
+            #uut.start()
             uut.setTestPulsePLL(tpLength, tpFrameInterval, tpFinePhase, pulseLow)
             uut.doSync()
 
@@ -205,19 +250,19 @@ for tdcaMode in [True,False]:
                 nReceivedFrames += 1
 
                 for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:
-                    nReceivedEvents += 1
-
-                    #if asic not in activeAsics or channel != tChannel:
-                    #   continue;
+                    if channel == tChannel:
+                        nReceivedEvents += 1
+                    #print channel
+                    
                     #    if tdcaMode==False:
                     #       print asic, tac, tCoarse, eCoarse, eCoarse-tCoarse,  6.25*(eCoarse-tCoarse)
-                    nAcceptedEvents += 1				
-                    nEvents += 1	
+                        nAcceptedEvents += 1				
+                        nEvents += 1	
                     #rootData1.addEvent(step1, step2, decodedFrame['id'], asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime)
 
-                    hTFine[asic][channel][tac][i].Fill(tFine)
-                    hEFine[asic][channel][tac][i].Fill(eFine)
-                    hToT[asic][channel][tac][i].Fill((eCoarse-tCoarse)*6.25)
+                        hTFine[asic][channel][tac][i].Fill(tFine)
+                        hEFine[asic][channel][tac][i].Fill(eFine)
+                        hToT[asic][channel][tac][i].Fill((eCoarse-tCoarse)*6.25)
 
          
             print "Channel %(tChannel)d: Got %(nReceivedEvents)d events in  %(nReceivedFrames)d frames, accepted %(nAcceptedEvents)d" % locals()
@@ -237,29 +282,29 @@ for tdcaMode in [True,False]:
                 if (hTFine[tAsic][tChannel][tac][0].GetEntries()==0 and hTFine[tAsic][tChannel][tac][1].GetEntries() == 0 and hTFine[tAsic][tChannel][tac][2].GetEntries()==0 and hTFine[tAsic][tChannel][tac][3].GetEntries() == 0):
                     deadChannels[mode][tAsic][tChannel][tac]=1
                     
-                tRMS=min(hTFine[tAsic][tChannel][tac][0].GetRMS(), hTFine[tAsic][tChannel][tac][1].GetRMS(), hTFine[tAsic][tChannel][tac][2].GetRMS(), hTFine[tAsic][tChannel][tac][3].GetRMS() ) 
-                tMean=min(hTFine[tAsic][tChannel][tac][0].GetMean(), hTFine[tAsic][tChannel][tac][1].GetMean(), hTFine[tAsic][tChannel][tac][2].GetMean(), hTFine[tAsic][tChannel][tac][3].GetMean() ) 
-               # eRMS=min(hEFine[tAsic][tChannel][tac][0].GetRMS(), hEFine[tAsic][tChannel][tac][1].GetRMS(), hEFine[tAsic][tChannel][tac][2].GetRMS(), hEFine[tAsic][tChannel][tac][3].GetRMS())
+                tRMS=min(hTFine[tAsic][tChannel][tac][0].GetRMS(), hTFine[tAsic][tChannel][tac][1].GetRMS(), hTFine[tAsic][tChannel][tac][2].GetRMS(), hTFine[tAsic][tChannel][tac][3].GetRMS() )
+                    
+                eRMS=min(hEFine[tAsic][tChannel][tac][0].GetRMS(), hEFine[tAsic][tChannel][tac][1].GetRMS(), hEFine[tAsic][tChannel][tac][2].GetRMS(), hEFine[tAsic][tChannel][tac][3].GetRMS() ) 
+               
                 coarseTOT=max(hToT[tAsic][tChannel][tac][0].GetMean(), hToT[tAsic][tChannel][tac][1].GetMean(), hToT[tAsic][tChannel][tac][2].GetMean(), hToT[tAsic][tChannel][tac][3].GetMean())
-                
-             
-                #print tAsic, tChannel, tac, tRMS, eRMS, hTFine[tAsic][tChannel][tac].Integral()
-               # if (tRMS > 1.1 and tfineflag):
-               #     nlargeTFine[mode][tAsic]+=1
-               #     largeTFineTAC[mode][tAsic][tChannel][tac]=1
-                TFineRMS[mode][tAsic][tChannel][tac]=tRMS
-               #     tfineflag=False
+               
+                tMean=hTFine[tAsic][tChannel][tac][0].GetMean()
+                for phase in [1,2,3]:
+                    if(abs(hTFine[tAsic][tChannel][tac][phase].GetMean()-320) < abs(tMean-320)):
+                        tMean= hTFine[tAsic][tChannel][tac][phase].GetMean()
+                       
+                eMean=hEFine[tAsic][tChannel][tac][0].GetMean()
+                for phase in [1,2,3]:
+                    if(abs(hEFine[tAsic][tChannel][tac][phase].GetMean()-320) < abs(eMean-320)):
+                        eMean= hEFine[tAsic][tChannel][tac][phase].GetMean()
 
-                #avERMS+=eRMS
-                #if (eRMS > 1 and efineflag):
-                #    nlargeEFine[mode][tAsic]+=1
-                #    largeEFineChannel[mode][tAsic][tChannel]=1
-                #    largeEFineRMS[mode][tAsic][tChannel]=eRMS
-                #    efineflag=False
-                
-                
-                #nsmallToT[mode][tAsic]+=1
-                #smallToTTAC[mode][tAsic][tChannel][tac]=1
+        
+                TFineRMS[mode][tAsic][tChannel][tac]=tRMS
+                TFineMean[mode][tAsic][tChannel][tac]=tMean
+
+                EFineRMS[mode][tAsic][tChannel][tac]=eRMS
+                EFineMean[mode][tAsic][tChannel][tac]=eMean
+       
                 ToT[mode][tAsic][tChannel][tac]=coarseTOT
                 #    totflag=False 
                     
@@ -267,225 +312,194 @@ for tdcaMode in [True,False]:
 
 for tAsic in activeAsics:
     nDeadTAC=0
-    nLargeRmsTAC=0
     nDeadFETP=0
+    nTTDCMean=0
+    nETDCMean=0
+    nTTDCRms=0
+    nETDCRms=0
+    nTFETPMean=0
+    nEFETPMean=0
     nMIRms=0
     nMIToT=0
     nNURms=0
     nNUToT=0
     print "\n\n############ Report for ASIC %d ############\n\n" % tAsic
     for tChannel in activeChannels:
-        #if any(deadChannels[0][tAsic][tChannel][:])==1:
-        #    print "Channel %d: DEAD on TDCA" % tChannel
-        #    nDeadTAC+=1
-        #    continue
-        #if any(largeTFineTAC[0][tAsic][tChannel][:])==1:
-        #    print "Channel %d: High RMS on TDCA" % tChannel
-        #    nLargeRmsTAC+=1
-        #    continue
-        if any(deadChannels[1][tAsic][tChannel][:])==1:
+	continue_flag=0    
+        if any(deadChannels[0][tAsic][tChannel][:])==1 and args.mode!="fetp":
+            print "Channel %d: DEAD on TDCA" % tChannel
+            nDeadTAC+=1
+            continue
+        
+        if any(deadChannels[1][tAsic][tChannel][:])==1 and args.mode!="tdca":
             print "Channel %d:  DEAD on FETP" % tChannel
             nDeadFETP+=1
             continue
- ###########################################################       
-        if (TFineRMS[1][tAsic][tChannel][0]> 1 and TFineRMS[1][tAsic][tChannel][0]<2 and ToT[1][tAsic][tChannel][0]> 50 and ToT[1][tAsic][tChannel][0]<80):
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][0], ToT[1][tAsic][tChannel][0])
-            nMIRms+=1
-            nMIToT+=1
-            continue
+
+        if args.mode!="fetp":
+            for i in range(4):
+                if TFineMean[0][tAsic][tChannel][i]<128 or TFineMean[0][tAsic][tChannel][i]>512:
+                    print "Channel %d:  Out of range Tfine on TDCA: %lf" % (tChannel,TFineMean[0][tAsic][tChannel][i])
+                    nTTDCMean+=1
+		    continue_flag=1
+                    break
+	    if(continue_flag):
+                continue
         
-        if (TFineRMS[1][tAsic][tChannel][1]> 1 and TFineRMS[1][tAsic][tChannel][1]<2 and ToT[1][tAsic][tChannel][1]> 50 and ToT[1][tAsic][tChannel][1]<80):
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][1], ToT[1][tAsic][tChannel][1])
-            nMIRms+=1
-            nMIToT+=1
-            continue
+            for i in range(4):
+                if EFineMean[0][tAsic][tChannel][i]<128 or EFineMean[0][tAsic][tChannel][i]>512:
+                    print "Channel %d:  Out of range Efine on TDCA: %lf" % (tChannel,EFineMean[0][tAsic][tChannel][i])
+                    nETDCMean+=1
+		    continue_flag=1
+                    break
+	    if(continue_flag):
+                continue
+	    
+        ###################################################
+	    for i in range(4):
+                if TFineRMS[0][tAsic][tChannel][i]>1:
+                    print "Channel %d:  High TFine RMS on TDCA: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[0][tAsic][tChannel][i])
+                    nTTDCRms+=1
+		    continue_flag=1
+                    break
+	    if(continue_flag):
+                continue
 
-        if (TFineRMS[1][tAsic][tChannel][2]> 1 and TFineRMS[1][tAsic][tChannel][2]<2 and ToT[1][tAsic][tChannel][2]> 50 and ToT[1][tAsic][tChannel][2]<80):
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][2], ToT[1][tAsic][tChannel][2])
-            nMIRms+=1
-            nMIToT+=1
-            continue
-
-        if (TFineRMS[1][tAsic][tChannel][3]> 1 and TFineRMS[1][tAsic][tChannel][3]<2 and ToT[1][tAsic][tChannel][3]> 50 and ToT[1][tAsic][tChannel][3]<80):
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][3], ToT[1][tAsic][tChannel][3])
-            nMIRms+=1
-            nMIToT+=1
-            continue
-
-#######################################################
-
-        if TFineRMS[1][tAsic][tChannel][0]> 1 and TFineRMS[1][tAsic][tChannel][0]<2 and ToT[1][tAsic][tChannel][0]<50:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][0], ToT[1][tAsic][tChannel][0])
-            nMIRms+=1
-            nNUToT+=1
-            continue
-        
-        if TFineRMS[1][tAsic][tChannel][1]> 1 and TFineRMS[1][tAsic][tChannel][1]<2 and ToT[1][tAsic][tChannel][1]<50:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][1], ToT[1][tAsic][tChannel][1])
-            nMIRms+=1
-            nNUToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][2]> 1 and TFineRMS[1][tAsic][tChannel][2]<2 and ToT[1][tAsic][tChannel][2]<50:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][2], ToT[1][tAsic][tChannel][2])
-            nMIRms+=1
-            nNUToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][3]> 1 and TFineRMS[1][tAsic][tChannel][3]<2 and ToT[1][tAsic][tChannel][3]<50:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][3], ToT[1][tAsic][tChannel][3])
-            nMIRms+=1
-            nNUToT+=1
-            continue
-          
-######################################################
-
-        if TFineRMS[1][tAsic][tChannel][0]>2 and ToT[1][tAsic][tChannel][0]> 50 and ToT[1][tAsic][tChannel][0]<80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][0], ToT[1][tAsic][tChannel][0])
-            nNURms+=1
-            nMIToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][1]>2 and ToT[1][tAsic][tChannel][1]> 50 and ToT[1][tAsic][tChannel][1]<80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][1], ToT[1][tAsic][tChannel][1])
-            nNURms+=1
-            nMIToT+=1
-            continue
-        
-        if TFineRMS[1][tAsic][tChannel][2]>2 and ToT[1][tAsic][tChannel][2]> 50 and ToT[1][tAsic][tChannel][2]<80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][2], ToT[1][tAsic][tChannel][2])
-            nNURms+=1
-            nMIToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][3]>2 and ToT[1][tAsic][tChannel][3]> 50 and ToT[1][tAsic][tChannel][3]<80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][3], ToT[1][tAsic][tChannel][3])
-            nNURms+=1
-            nMIToT+=1
-            continue
-
-###################################################
-        if TFineRMS[1][tAsic][tChannel][0]>2 and ToT[1][tAsic][tChannel][0]< 50:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][0], ToT[1][tAsic][tChannel][0])
-            nNURms+=1
-            nNUToT+=1
-            continue
-        
-        if TFineRMS[1][tAsic][tChannel][1]>2 and ToT[1][tAsic][tChannel][1]< 50:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][1], ToT[1][tAsic][tChannel][1])
-            nNURms+=1
-            nNUToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][2]>2 and ToT[1][tAsic][tChannel][2]< 50:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][2], ToT[1][tAsic][tChannel][2])
-            nNURms+=1
-            nNUToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][3]>2 and ToT[1][tAsic][tChannel][3]< 50:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][3], ToT[1][tAsic][tChannel][3])
-            nNURms+=1
-            nNUToT+=1
-            continue
-
-###################################################
-        if TFineRMS[1][tAsic][tChannel][0]>2 and ToT[1][tAsic][tChannel][0]>80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][0])
-            nNURms+=1
-            continue
-        
-        if TFineRMS[1][tAsic][tChannel][1]>2 and ToT[1][tAsic][tChannel][1]>80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][1])
-            nNURms+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][2]>2 and ToT[1][tAsic][tChannel][2]>80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][2])
-            nNURms+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][3]>2 and ToT[1][tAsic][tChannel][3]>80:
-            print "Channel %d:  High RMS: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][3])
-            nNURms+=1
-            continue
-        
-###################################################
-        if TFineRMS[1][tAsic][tChannel][0]>1 and TFineRMS[1][tAsic][tChannel][0]<2 and ToT[1][tAsic][tChannel][0]>80:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][0])
-            nMIRms+=1
-            continue
-        
-        if TFineRMS[1][tAsic][tChannel][1]>1 and TFineRMS[1][tAsic][tChannel][1]<2 and ToT[1][tAsic][tChannel][1]>80:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][1])
-            nMIRms+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][2]>1 and TFineRMS[1][tAsic][tChannel][2]<2 and ToT[1][tAsic][tChannel][2]>80:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][2])
-            nMIRms+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][3]>1 and TFineRMS[1][tAsic][tChannel][3]<2 and ToT[1][tAsic][tChannel][3]>80:
-            print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][3])
-            nMIRms+=1
-            continue
+        ###################################################
+	    for i in range(4):
+                if EFineRMS[0][tAsic][tChannel][i]>2:
+                    print "Channel %d:  High EFine RMS on TDCA: %lf (MANUAL INSPECTION)" % (tChannel,EFineRMS[0][tAsic][tChannel][i])
+                    nETDCRms+=1
+		    continue_flag=1
+                    break
+	    if(continue_flag):
+                continue
 
 
-###################################################
-        
-        if TFineRMS[1][tAsic][tChannel][0]<1 and ToT[1][tAsic][tChannel][0]< 50 :
-            print "Channel %d:  Low TOT: %lf (NOT USABLE)" % (tChannel, ToT[1][tAsic][tChannel][0])
-            nNUToT+=1
-            continue
-        
-        if TFineRMS[1][tAsic][tChannel][1]<1 and ToT[1][tAsic][tChannel][1]< 50:
-            print "Channel %d:  Low TOT: %lf (NOT USABLE)" % (tChannel, ToT[1][tAsic][tChannel][1])
-            nNUToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][2]<1 and ToT[1][tAsic][tChannel][2]< 50:
-            print "Channel %d:  Low TOT: %lf (NOT USABLE)" % (tChannel, ToT[1][tAsic][tChannel][2])
-            nNUToT+=1
+        if args.mode=="tdca":
+             continue
+      
+       ###################################################
+	for i in range(4):
+            if TFineMean[1][tAsic][tChannel][i]<128 or TFineMean[1][tAsic][tChannel][i]>512:
+                print "Channel %d:  Out of range Tfine on FETP: %lf" % (tChannel,TFineMean[1][tAsic][tChannel][i])
+                nTFETPMean+=1
+		continue_flag=1
+		break
+	if(continue_flag):
             continue
 
-        if TFineRMS[1][tAsic][tChannel][3]<1 and ToT[1][tAsic][tChannel][3]< 50:
-            print "Channel %d:  Low TOT: %lf (NOT USABLE)" % (tChannel,ToT[1][tAsic][tChannel][3])
-            nNUToT+=1
+	###################################################
+	for i in range(4):
+            if EFineMean[1][tAsic][tChannel][i]<128 or EFineMean[1][tAsic][tChannel][i]>512:
+                print "Channel %d:  Out of range Efine on FETP: %lf" % (tChannel,EFineMean[1][tAsic][tChannel][i])
+                nEFETPMean+=1
+		continue_flag=1
+		break
+	if(continue_flag):
             continue
 
-###################################################
-        
-        if TFineRMS[1][tAsic][tChannel][0]<1 and ToT[1][tAsic][tChannel][0]> 50 and ToT[1][tAsic][tChannel][0]< 80:
-            print "Channel %d:  Low TOT: %lf (MANUAL INSPECTION)" % (tChannel, ToT[1][tAsic][tChannel][0])
-            nMIToT+=1
-            continue
-        if TFineRMS[1][tAsic][tChannel][1]<1 and ToT[1][tAsic][tChannel][1]> 50 and ToT[1][tAsic][tChannel][1]< 80:
-            print "Channel %d:  Low TOT: %lf (MANUAL INSPECTION)" % (tChannel, ToT[1][tAsic][tChannel][1])
-            nMIToT+=1
-            continue
-
-        if TFineRMS[1][tAsic][tChannel][2]<1 and ToT[1][tAsic][tChannel][2]> 50 and ToT[1][tAsic][tChannel][2]< 80:
-            print "Channel %d:  Low TOT: %lf (MANUAL INSPECTION)" % (tChannel, ToT[1][tAsic][tChannel][2])
-            nMIToT+=1
-            continue
-        
-        if TFineRMS[1][tAsic][tChannel][3]<1 and ToT[1][tAsic][tChannel][3]> 50 and ToT[1][tAsic][tChannel][3]< 80:
-            print "Channel %d:  Low TOT: %lf (MANUAL INSPECTION)" % (tChannel, ToT[1][tAsic][tChannel][3])
-            nNUToT+=1
-            continue
-
+        ###################################################
+        for i in range(4):
+            if (TFineRMS[1][tAsic][tChannel][i]> 1 and TFineRMS[1][tAsic][tChannel][i]<2 and ToT[1][tAsic][tChannel][i]> 50 and ToT[1][tAsic][tChannel][i]<80):
+                print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][i], ToT[1][tAsic][tChannel][i])
+                nMIRms+=1
+		nMIToT+=1
+		continue_flag=1
+		break
+	if(continue_flag):
+            continue      
        
+        ###################################################
+	for i in range(4):
+            if TFineRMS[1][tAsic][tChannel][i]> 1 and TFineRMS[1][tAsic][tChannel][i]<2 and ToT[1][tAsic][tChannel][i]<50:
+                print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][i], ToT[1][tAsic][tChannel][i])
+	        nMIRms+=1
+	        nNUToT+=1
+		continue_flag=1
+		break
+	if(continue_flag):
+            continue 
+          
+        ###################################################
+	for i in range(4):
+            if TFineRMS[1][tAsic][tChannel][i]>2 and ToT[1][tAsic][tChannel][i]> 50 and ToT[1][tAsic][tChannel][i]<80:
+                print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][i], ToT[1][tAsic][tChannel][i])
+                nNURms+=1
+                nMIToT+=1
+		continue_flag=1
+		break
+	if(continue_flag):
+            continue 
 
+        ###################################################
+	for i in range(4):
+            if TFineRMS[1][tAsic][tChannel][i]>2 and ToT[1][tAsic][tChannel][i]< 50:
+                print "Channel %d:  High RMS: %lf (NOT USABLE)  and Low TOT: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][i], ToT[1][tAsic][tChannel][i])
+                nNURms+=1
+                nNUToT+=1
+		continue_flag=1
+		break
+	if(continue_flag):
+            continue 
 
-    print "\nSummary\n:"
-    print "Dead on TDC : %d\n" %  nDeadTAC
-    print "Dead on FETP : %d\n" %  nDeadFETP
-    print "High RMS on TDC: %d\n" %  nLargeRmsTAC
-    print "Manual inspection due to high RMS: %d\n" %   nMIRms
-    print "Not usable due to high RMS: %d\n" %  nNURms 
-    print "Manual inspection due to low ToT: %d\n" %  nMIToT 
-    print "Not usable due to low ToT: %d\n" %   nNUToT
+       ###################################################
+	for i in range(4):
+            if TFineRMS[1][tAsic][tChannel][i]>2 and ToT[1][tAsic][tChannel][i]>80:
+                print "Channel %d:  High RMS: %lf (NOT USABLE)" % (tChannel,TFineRMS[1][tAsic][tChannel][i])
+                nNURms+=1
+		continue_flag=1
+		break
+	if(continue_flag):
+            continue 
+        
+       ###################################################
+        for i in range(4):
+            if TFineRMS[1][tAsic][tChannel][i]>1 and TFineRMS[1][tAsic][tChannel][i]<2 and ToT[1][tAsic][tChannel][i]>80:
+                print "Channel %d:  High RMS: %lf (MANUAL INSPECTION)" % (tChannel,TFineRMS[1][tAsic][tChannel][i])
+                nMIRms+=1
+		continue_flag=1
+		break
+	if(continue_flag):
+            continue
+
+      ###################################################
+        for i in range(4):
+            if TFineRMS[1][tAsic][tChannel][i]<1 and ToT[1][tAsic][tChannel][i]< 50 :
+                print "Channel %d:  Low TOT: %lf (NOT USABLE)" % (tChannel, ToT[1][tAsic][tChannel][i])
+                nNUToT+=1
+		continue_flag=1
+		break
+	if(continue_flag):
+            continue
+
+      ###################################################
+        for i in range(4):
+            if TFineRMS[1][tAsic][tChannel][i]<1 and ToT[1][tAsic][tChannel][i]> 50 and ToT[1][tAsic][tChannel][i]< 80:
+                print "Channel %d:  Low TOT: %lf (MANUAL INSPECTION)" % (tChannel, ToT[1][tAsic][tChannel][i])
+                nMIToT+=1
+		continue_flag=1
+		break
+        
+     
+
+    print "\nSummary:"
+    if(args.mode!="fetp"):
+        print "Dead on TDCA : %d" %  nDeadTAC
+    if(args.mode!="tdca"):
+        print "Dead on FETP : %d" %  nDeadFETP
+    if(args.mode!="fetp"):
+        print "Out of range tFine on TDCA: %d" %  nTTDCMean
+        print "Out of range eFine on TDCA: %d" %  nETDCMean
+        print "High tFine RMS TDCA: %d" %  nTTDCRms
+        print "High eFine RMS TDCA: %d" %  nETDCRms
+    if(args.mode!="tdca"):
+        print "Out of range tFine on FETP: %d" % nTFETPMean
+        print "Out of range eFine on FETP: %d" % nEFETPMean
+        print "Manual inspection due to high tFine RMS: %d" %   nMIRms
+        print "Not usable due to high tFine RMS: %d" %  nNURms 
+        print "Manual inspection due to low ToT: %d" %  nMIToT 
+        print "Not usable due to low ToT: %d" %   nNUToT
 
 
 rootFile.Write()
