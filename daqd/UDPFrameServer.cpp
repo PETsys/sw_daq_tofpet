@@ -106,7 +106,6 @@ void *UDPFrameServer::doWork()
 			pthread_mutex_lock(&m->lock);
 			m->replyQueue.push(reply);
 			pthread_mutex_unlock(&m->lock);
-			pthread_cond_signal(&m->condReplyQueue);
 		}
 		else if(rxBuffer[0] == 0xA5) {
 			if(m->debugLevel > 2) printf("Worker:: Found a data frame with %d bytes\n", r);
@@ -148,7 +147,7 @@ void *UDPFrameServer::doWork()
 			printf("Worker: found an unknown frame (0x%02X) with %d bytes\n", unsigned(rxBuffer[0]), r);
 			
 		}
-		
+		pthread_cond_signal(&m->condReplyQueue);
 			
 		
 		
