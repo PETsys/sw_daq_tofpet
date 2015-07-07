@@ -644,7 +644,9 @@ class ATB:
 
 		febID = asicID / 16
 		reply = self.sendCommand(febID, 0, 0x00, cmd)
+		if len(reply) < 2: raise tofpet.ConfigurationErrorBadReply(2, len(reply))
 		status = reply[1]
+			
 
 		if status == 0xE3:
 			raise tofpet.ConfigurationErrorBadAck(febID, 0, asicID % 16, 0)
@@ -657,6 +659,10 @@ class ATB:
 
 		if isRead:
 			#print [ "%02X" % x for x in reply ]
+			expectedBytes = ceil(dataLength/8)
+			if len(reply) < (2+expectedBytes): 
+				print len(reply), (2+expectedBytes)
+				raise tofpet.ConfigurationErrorBadReply(2+expectedBytes, len(reply))
 			reply = str(reply[2:])
 			data = bitarray()
 			data.frombytes(reply)
@@ -1195,10 +1201,14 @@ class ATB:
 	def __uploadConfigTOFPET(self, asic, ac):
 		#stdout.write("Configuring ASIC %3d " % asic); stdout.flush()
 		# Force parameters!
+		# Enable "veto" to reset TDC during configuration, to ensure more consistent results
+		ac.globalConfig.setValue("veto_en", 1)
 		for n, cc in enumerate(ac.channelConfig):
+			# Enable deadtime to reduce insane events
 			cc.setValue("deadtime", 3);
-			 # Clamp thresholds to ensure we're in the valid range
 
+
+			 # Clamp thresholds to ensure we're in the valid range
 			thresholdClamp = 15
 			if cc.getValue("vth_T") < thresholdClamp:
 				cc.setValue("vth_T", thresholdClamp)
