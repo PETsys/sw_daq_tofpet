@@ -169,8 +169,8 @@ private:
 class EventWriterList : public EventSink<Coincidence> {
 public:
 	
-	EventWriterList(FILE *listFile, float maxDeltaT, int maxN, float angle, float ctr)
-		: listFile(listFile), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), angle(angle), ctr(ctr)
+	EventWriterList(FILE *listFile, float angle, float ctr)
+		: listFile(listFile), angle(angle), ctr(ctr)
 	{
 	};
 
@@ -186,35 +186,29 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Coincidence &c = buffer->get(i);
 			
-			for(int j1 = 0; (j1 < c.photons[0].nHits) && (j1 < maxN); j1 ++) {
-				long long t0_1 = c.photons[0].hits[0].time;		
+			long long t0_1 = c.photons[0].hits[0].time;		
 				
-				for(int j2 = 0; (j2 < c.photons[1].nHits) && (j2 < maxN); j2++) {
-					long long t0_2 = c.photons[1].hits[0].time;
+			long long t0_2 = c.photons[1].hits[0].time;
 		
-					Hit &hit1 = c.photons[0].hits[j1];
-					Hit &hit2 = c.photons[1].hits[j2];
-					
-					long long T = hit1.raw.top.raw.T;
-					
-					float dt1 = hit1.time - t0_1;
-					if(dt1 > maxDeltaT) continue;
-					
-					float dt2 = hit2.time - t0_1;
-					if(dt2 > maxDeltaT) continue;
-   
-					//if(j1!=0 || j2!=0)continue;
-					long long time = hit1.time + hit2.time;
-					long long deltaTime=hit1.time - hit2.time;
-					fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw.top.energy, hit2.raw.top.energy, c.photons[0].nHits, c.photons[1].nHits, float(1e-12*deltaTime), ctr); 
+			Hit &hit1 = c.photons[0].hits[0];
+			Hit &hit2 = c.photons[1].hits[0];
+			
+			long long T = hit1.raw.top.raw.T;
+			
+			//float dt1 = hit1.time - t0_1;
+			//if(dt1 > maxDeltaT) continue;
+			
+			//float dt2 = hit2.time - t0_1;
+			//if(dt2 > maxDeltaT) continue;
+			
+			//if(j1!=0 || j2!=0)continue;
+			long long time = hit1.time + hit2.time;
+			long long deltaTime=hit1.time - hit2.time;
+			fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw.top.energy, hit2.raw.top.energy, c.photons[0].nHits, c.photons[1].nHits, float(1e-12*deltaTime), ctr); 
 					
 
-				}
-					
-			}
-			
 		}
-		
+				  	
 		delete buffer;
 	};
 	
@@ -229,7 +223,59 @@ private:
 	float ctr;
 };
 
+#ifdef __ENDOTOFPET__	
+class EventWriterListE : public EventSink<Coincidence> {
+public:
+	EventWriterListE(FILE *listFile)
+	: listFile(listFile) {
+	};
+	
+	~EventWriterListE() {
+		
+	};
 
+	void pushEvents(EventBuffer<Coincidence> *buffer) {
+		if(buffer == NULL) return;	
+		
+		unsigned nEvents = buffer->getSize();
+		for(unsigned i = 0; i < nEvents; i++) {
+			Coincidence &c = buffer->get(i);
+
+			
+			
+			Hit &hit1 = c.photons[0].hits[0];
+			Hit &hit2 = c.photons[1].hits[0];
+
+			long long T = hit1.raw.top.raw.T;
+
+			int xi1 = hit1.xi;	// External plate
+			int yi1 = hit1.yi;
+			int xi2 = hit2.xi % 4;	// Probe
+			int yi2 = hit2.yi % 4;
+					
+			int absIndex = xi1 + 64 * yi1 + 64 * 64 * xi2 + 64*64*4 * yi2;
+					//if(absIndex == 45070) printf("DBG %4d %4d %4d %4d %8d\n", xi1, yi1, xi2, yi2, absIndex);
+					
+			fprintf(listFile, "%d\t%lf\t%le\t%f\t%f\t%f\t%f\n",
+					absIndex,						
+					double(hit1.time) * 1E-12,
+					double(hit1.time - hit2.time)*1E-12,
+					hit1.energy,
+					hit2.energy,
+					0, 
+					0
+					);						
+		}
+		delete buffer;
+	};
+	
+	void pushT0(double t0) { };
+	void finish() { };
+	void report() { };
+private: 
+	FILE *listFile;
+};
+#endif
 
 
 
@@ -497,9 +543,15 @@ int main(int argc, char *argv[])
 		float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
 
 		EventSink<Coincidence> * writer = NULL;
+#ifndef __ENDOTOFPET__	
 		if(useROOT == false) {
-			writer = new EventWriterList(outListFile, gWindow, 1, acqAngle, ctrEstimate);
+			writer = new EventWriterList(outListFile, acqAngle, ctrEstimate);
 		}
+#else
+		if(useROOT == false) {
+			writer = new EventWriterListE(outListFile);
+		}
+#endif
 		else {
 			writer = new EventWriterRoot(lmData, gWindow, maxHitsRoot);
 		}
