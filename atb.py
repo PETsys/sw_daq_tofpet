@@ -308,26 +308,27 @@ class ATB:
 
         ## Starts the data acquisition
 	# @param mode If set to 1, only data frames  with at least one event are transmitted. If set to 2, all data frames are transmitted. If set to 0, the data transmission is stopped
-	def start(self, mode=2):
+	def start(self, mode=2, daqOnly=False):
 		nTry = 0
 		while True:
 			try:
-				return self.__start(mode)
+				return self.__start(mode, daqOnly)
 			except ErrorAsicPresenceChanged as e:
 				nTry = nTry + 1;
 				if nTry > 5: raise e
 				print "WARNING: ", e, ", retrying..."
 
-	def __start(self, mode=2):
-		# First, generate a "sync" in the FEB/D (or ML605) itself
-		for portID, slaveID in self.getActiveFEBDs():
-			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+	def __start(self, mode, daqOnly):
+		if not daqOnly:
+			# First, generate a "sync" in the FEB/D (or ML605) itself
+			for portID, slaveID in self.getActiveFEBDs():
+				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
-		#sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
+			#sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
 
-		for portID, slaveID in self.getActiveFEBDs(): 
-			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
-			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+			for portID, slaveID in self.getActiveFEBDs(): 
+				self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
+				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
 		# Now, start the DAQ!
 		mode = 2 # Do not send mode 1 to daqd!
@@ -338,21 +339,22 @@ class ATB:
 		self.__socket.send(data)
 		sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
 
-		# Check the status from all the ASICs
-		for portID, slaveID in self.getActiveFEBDs():
-			nLocalAsics = len(self.getGlobalAsicIDsForFEBD(portID, slaveID))
-			
-			deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
-			decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
+		if not daqOnly:
+			# Check the status from all the ASICs
+			for portID, slaveID in self.getActiveFEBDs():
+				nLocalAsics = len(self.getGlobalAsicIDsForFEBD(portID, slaveID))
+				
+				deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
+				decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
 
-			deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
-			decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+				deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+				decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
 
-			for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
-				localOK = deserializerStatus[i] and decoderStatus[i] 
-				globalOK = self.__activeAsics[globalAsicID]
-				if localOK != globalOK:
-					raise ErrorAsicPresenceChanged(portID, slaveID, i)
+				for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
+					localOK = deserializerStatus[i] and decoderStatus[i] 
+					globalOK = self.__activeAsics[globalAsicID]
+					if localOK != globalOK:
+						raise ErrorAsicPresenceChanged(portID, slaveID, i)
 
 		return None
        
@@ -518,6 +520,35 @@ class ATB:
 
 		return r
 
+	def printDataFrame(self, nonEmpty=False):
+		timeout = 0.5
+		t0 = time()
+		r = False
+		while (r == False) and ((time() - t0) < timeout):
+			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+#			print "WR/RD pointers = %08x %08x" % (wrPointer, rdPointer)
+			bs = self.__dshm.getSizeInFrames()
+			while (wrPointer != rdPointer) and (r == False):
+				index = rdPointer % bs
+				rdPointer = (rdPointer + 1) % (2 * bs)
+
+				nEvents = self.__dshm.getNEvents(index)
+				if nEvents == 0 and nonEmpty == True:
+					continue;
+
+				r = True
+				frameID = self.__dshm.getFrameID(index)
+				frameSize = self.__dshm.getFrameSize(index)
+				print "DATA FRAME FOUND"
+				print "ID = %12d SIZE = %4d words" % (frameID, frameSize)
+				print "BEGIN CONTENT"
+				for n in range(frameSize):
+					print "WORD %4d %016x" % (n, self.__dshm.getFrameWord(index, n))
+				print "END CONTENT"
+
+			self.__setDataFrameReadPointer(rdPointer)
+
+		return r
 	
 	## Sends a command to the FPGA
 	# @param portID  DAQ port ID where the FEB/D is connected

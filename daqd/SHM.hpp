@@ -30,6 +30,18 @@ public:
 	unsigned long long  getSizeInFrames() { 
 		return MaxDataFrameQueueSize;
 	};
+	
+	int getFrameSize(int index) {
+		DataFrame *dataFrame = &shm[index];
+		uint64_t eventWord = dataFrame->data[0];
+		return (eventWord >> 36) & 0x7FFF;
+	};
+	
+	unsigned long long getFrameWord(int index, int n) {
+		DataFrame *dataFrame = &shm[index];
+		uint64_t eventWord = dataFrame->data[n];
+		return eventWord;
+	};
 
 	unsigned long long getFrameID(int index) {
 		DataFrame *dataFrame = &shm[index];
