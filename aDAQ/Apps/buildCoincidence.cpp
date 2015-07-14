@@ -386,11 +386,13 @@ void displayHelp(char * program)
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
 #ifndef __ENDOTOFPET__	
-	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2, 3 (default)\n");
+	fprintf(stderr,  "  --onlineMode\t Use this flag to process data in real time during acquisition\n");
+	fprintf(stderr,  "  --acqDeltaTime=ACQDELTATIME\t If online mode is chosen, this variable defines how much data time (in seconds) to process (default is -1 which selects all data for the current step)\n");
+	fprintf(stderr,  "  --rawVersion=RAWVERSION\t The version of the raw file to be processed: 2, 3 (default)\n");
 #endif
 	fprintf(stderr,  "  --output_type=OUTPUT_TYPE\t The type of output requested: ROOT (default), LIST or BOTH\n");
-	fprintf(stderr,  "  --angle=ANGLE\t\t\t The reference angle of acquisition (in radians)\n");
-	fprintf(stderr,  "  --ctr=CTR\t\t\t Coincidence time resolution estimate for the detector, 1 sigma (in picoseconds)\n");
+	fprintf(stderr,  "  --angle=ANGLE\t\t\t The reference angle of acquisition (in radians). Only relevant for LIST mode output\n");
+	fprintf(stderr,  "  --ctr=CTR\t\t\t Coincidence time resolution estimate for the detector, 1 sigma (in picoseconds). Only relevant for LIST mode output\n");
 	fprintf(stderr,  "  --cWindow=CWINDOW\t\t Maximum delta time (in seconds) for two events to be considered in coincidence (default is 20E-9s)\n");
 	fprintf(stderr,  "  --minTot=MINTOT\t\t The minimum TOT (in ns) to be considered for a preliminary coincidence filtering. Default is 100 ns\n");
 	fprintf(stderr,  "  --minEnergy=MINENERGY\t\t The minimum energy (in keV) of an event to be considered a valid coincidence. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n");
@@ -416,7 +418,9 @@ int main(int argc, char *argv[])
 
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
-		{ "raw_version", optional_argument,0,0 },
+		{ "onlineMode", no_argument,0,0 },
+		{ "acqDeltaTime", optional_argument,0,0 },
+		{ "rawVersion", optional_argument,0,0 },
 		{ "output_type", optional_argument,0,0 },
 		{ "angle", optional_argument,0,0 },
 		{ "ctr", optional_argument,0,0 },
@@ -433,6 +437,8 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
+	bool onlineMode=false;
+	float readBackTime=-1;
 #endif
 	bool useROOT=true;
 	bool useLIST=false;
@@ -471,6 +477,14 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__	
 		else if(optionIndex==1){
 			nOptArgs++;
+			onlineMode=true;
+		}
+		else if(optionIndex==2){
+			nOptArgs++;
+			readBackTime=atof(optarg);
+		}
+		else if(optionIndex==3){
+			nOptArgs++;
 			sprintf(rawV,optarg);
 			if(rawV[0]!='2' && rawV[0]!='3'){
 				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2, 3\n", argv[0]);
@@ -478,7 +492,7 @@ int main(int argc, char *argv[])
 			}
 		}
 #endif
-		else if(optionIndex==2){
+		else if(optionIndex==4){
 			nOptArgs++;
 			if(strcmp(optarg, "LIST")==0){
 				useROOT=false;
@@ -497,43 +511,43 @@ int main(int argc, char *argv[])
 				return(1);
 			}
 		}
-		else if(optionIndex==3){
+		else if(optionIndex==5){
 			nOptArgs++;
 			acqAngle=atof(optarg);
 		}
-		else if(optionIndex==4){
+		else if(optionIndex==6){
 			nOptArgs++;
 			ctrEstimate=1.0e-12*atof(optarg);
 		}
-		else if(optionIndex==5){
+		else if(optionIndex==7){
 			nOptArgs++;
 			cWindow=atof(optarg);
 		}
-		else if(optionIndex==6){
+		else if(optionIndex==8){
 			nOptArgs++;
 			minToT=atof(optarg);
 		}
-		else if(optionIndex==7){
+		else if(optionIndex==9){
 			nOptArgs++;
 			minEnergy=atof(optarg);
 		}
-		else if(optionIndex==8){
+		else if(optionIndex==10){
 			nOptArgs++;
 			maxEnergy=atof(optarg);
 		}
-		else if(optionIndex==9){
+		else if(optionIndex==11){
 			nOptArgs++;
 			gWindow=atof(optarg);
 		}
-		else if(optionIndex==10){
+		else if(optionIndex==12){
 			nOptArgs++;
 			maxHits=atoi(optarg);
 		}
-		else if(optionIndex==11){
+		else if(optionIndex==13){
 			nOptArgs++;
 			gWindowRoot=atof(optarg);
 		}
-		else if(optionIndex==12){
+		else if(optionIndex==14){
 			nOptArgs++;
 			maxHitsRoot=atoi(optarg);
 		}
@@ -637,12 +651,14 @@ int main(int argc, char *argv[])
 	stepBegin = 0;
 	stepEnd = 0;
 	int N = scanner->getNSteps();
-	
 	for(int step = 0; step < N; step++) {
 		unsigned long long eventsBegin;
 		unsigned long long eventsEnd;
-		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
-		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
+		if(onlineMode)step=N-1;
+	
+		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);	
+
+		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 		if(N!=1){
 			if (strcmp(setupFileName, "none") == 0) {
 				P2->setAll(2.0);
@@ -692,7 +708,7 @@ int main(int argc, char *argv[])
 			    ))))));
 	
 		if(rawV[0]=='3') 
-			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , readBackTime, onlineMode, pipeSink);
 	    else if(rawV[0]=='2')
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 #else

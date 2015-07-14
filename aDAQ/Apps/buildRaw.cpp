@@ -71,16 +71,18 @@ void displayHelp(char * program)
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
 #ifndef __ENDOTOFPET__	
+	fprintf(stderr,  "  --onlineMode\t Use this flag to process data in real time during acquisition\n");
+	fprintf(stderr,  "  --acqDeltaTime=ACQDELTATIME\t If online mode is chosen, this variable defines how much data time (in seconds) to process (default is -1 which selects all data for the current step)\n");
 	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
 #endif
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
-	fprintf(stderr, "  output_file \t\t\t ROOT output file containing raw (not calibrated) single events TTree\n");
+	fprintf(stderr, "  output_file_prefix \t\t Output file containing raw event data (extension .root will be created automatically)\n");
 };
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s rawfiles_prefix output_file.root\n", program);
+	fprintf(stderr, "usage: %s rawfiles_prefix output_file_prefix\n", program);
 };
 
 int main(int argc, char *argv[])
@@ -89,22 +91,41 @@ int main(int argc, char *argv[])
 
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
+		{ "onlineMode", no_argument,0,0 },
+		{ "acqDeltaTime", optional_argument,0,0 },
 		{ "raw_version", optional_argument,0,0 }
 	};
 #ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
+	bool onlineMode=false;
+	float readBackTime=-1;
 #endif
-	int optionIndex = -1;
+	
+	char *inputFilePrefix = argv[1];
+	char *outputFilePrefix = argv[2];
+	char outputFileName[256];
+
 	int nOptArgs=0;
-	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
+	while(1) {
+		int optionIndex = 0;
+		int c =getopt_long(argc, argv, "",longOptions, &optionIndex);
+		if(c==-1) break;
 		if(optionIndex==0){
 			displayHelp(argv[0]);
 			return(1);
 			
 		}
 #ifndef __ENDOTOFPET__
-		if(optionIndex==1){
+		else if(optionIndex==1){
+			nOptArgs++;
+			onlineMode=true;
+		}
+		else if(optionIndex==2){
+			nOptArgs++;
+			readBackTime=atof(optarg);
+		}
+		if(optionIndex==3){
 			nOptArgs++;
 			sprintf(rawV,optarg);
 			if(rawV[0]!='2' && rawV[0]!='3'){
@@ -130,7 +151,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
 		return(1);
 	}
-	char *inputFilePrefix = argv[1];
+
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
 #ifndef __ENDOTOFPET__ 
@@ -141,8 +162,9 @@ int main(int argc, char *argv[])
 #else 
 	scanner = new DAQ::ENDOTOFPET::RawScannerE(inputFilePrefix);
 #endif
-	
-	TFile *hFile = new TFile(argv[2], "RECREATE");
+
+	sprintf(outputFileName,"%s.root",outputFilePrefix);
+	TFile *hFile = new TFile(outputFileName, "RECREATE");
 	TNtuple *data = new TNtuple("data", "Event List", "step1:step2:channel:tac:tcoarse:tfine:ecoarse:efine:channelIdleTime:tacIdleTime");
 	
 	int N = scanner->getNSteps();
@@ -151,8 +173,9 @@ int main(int argc, char *argv[])
 		Float_t step2;
 		unsigned long long eventsBegin;
 		unsigned long long eventsEnd;
+		if(onlineMode)step=N-1;
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
-		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
+		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
 		
 		DAQ::TOFPET::RawReader *reader=NULL;
 
@@ -161,7 +184,7 @@ int main(int argc, char *argv[])
 
 #ifndef __ENDOTOFPET__
 		if(rawV[0]=='3') 
-			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, readBackTime,  onlineMode, pipeSink);
 		else if(rawV[0]=='2')
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 #else
