@@ -16,6 +16,8 @@ parser.add_argument('--cWindow', type=float, default=0, help='If set, defines th
 
 parser.add_argument('--minToT', type=float, default=150, help='Sets the minimum ToT (in ns) for coincidence based preliminary selection of events (default is 150)')
 
+parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
+
 args = parser.parse_args()
 
 
@@ -41,9 +43,9 @@ uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig()
 uut.openAcquisition(dataFilePrefix, cWindow*1E-9, minToT*1E-9, writer="TOFPET")
 uut.initialize()
-uut.config.writeParams(dataFilePrefix)
 # Set all HV DAC channels 
 uut.setAllHVDAC(67.50)
+uut.config.writeParams(dataFilePrefix, args.comments)
 
 for step1 in [0]:
 	for step2 in [0]:
