@@ -60,9 +60,8 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
    
 	pulse.raw = raw;		
 	// WARNING: rounding sensitive!
-	pulse.time = raw.time + (long long)((f_T * raw.T));
-	pulse.timeEnd = raw.timeEnd + (long long)((f_E * raw.T));
-
+	pulse.time = raw.time + (long long)((f_T * raw.T)+ lut->timeOffset[raw.channelID]);
+	pulse.timeEnd = raw.timeEnd + (long long)((f_E * raw.T)+ lut->timeOffset[raw.channelID]);
 
 	pulse.region = raw.region;
 	pulse.channelID = raw.channelID;
