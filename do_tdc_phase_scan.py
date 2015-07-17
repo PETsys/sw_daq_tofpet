@@ -14,8 +14,8 @@ import argparse
 parser = argparse.ArgumentParser(description='Acquires a set of data for several relative phases of the test pulse, either injecting it directly in the tdcs or in the front end')
 
 
-parser.add_argument('OutputFile',
-                   help='output file (ROOT file).')
+parser.add_argument('OutputFilePrefix',
+                   help='Prefix for the output files. One pair of .root and .params files will be created')
 
 parser.add_argument('hvBias', type=float,
                    help='The voltage to be set for the HV DACs')
@@ -23,11 +23,11 @@ parser.add_argument('hvBias', type=float,
 
 parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
 
-parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp'], help='Defines where the test pulse is injected. Two modes are allowed: tdca and fetp. ')
+parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp'], help='Defines where the test pulse is injected. Two modes are allowed: tdca and fetp ')
 
-parser.add_argument('--tpDAC', type=int, default=0, help='The amplitude of the test pulse in DAC units (Default is 32 ). When running in fetp mode, this value needs to be set.')
+parser.add_argument('--tpDAC', type=int, default=0, help='The amplitude of the test pulse in DAC units (Default is 32 ). When running in fetp mode, this value needs to be set')
 
-
+parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
 
 
 args = parser.parse_args()
@@ -62,7 +62,7 @@ Nmax = 8
 tpLength = 128
 
 
-rootFileName = args.OutputFile
+rootFileName = "%s.root" % args.OutputFilePrefix
 assert isdir(dirname(rootFileName))
 
 
@@ -123,11 +123,16 @@ minEventsB *= len(activeAsics)
 
 hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
 
+atbConfig = loadLocalConfig(useBaseline=False)
+for c, v in enumerate(atbConfig.hvBias):
+  atbConfig.hvBias[c] = vbias
+
+uut.config = atbConfig
+uut.config.writeParams(args.OutputFilePrefix, args.comments)
 
 for tChannel in activeChannels:
 	atbConfig = loadLocalConfig(useBaseline=False)
 	for c, v in enumerate(atbConfig.hvBias):
-		if v is None: continue
 		atbConfig.hvBias[c] = vbias
 
 

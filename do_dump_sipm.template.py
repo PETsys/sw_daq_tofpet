@@ -10,7 +10,7 @@ parser.add_argument('acqTime', type=float,
                    help='acquisition time (in seconds)')
 
 parser.add_argument('OutputFilePrefix',
-                   help='output file prefix (files with .raw2 and .idx suffixes will be created)')
+                   help='output file prefix (files with .raw3 and .idx3 suffixes will be created)')
 
 parser.add_argument('--cWindow', type=float, default=0, help='If set, defines the coincidence time window (in seconds) for preliminary selection of events (default is 0, accepting all events)')
 
