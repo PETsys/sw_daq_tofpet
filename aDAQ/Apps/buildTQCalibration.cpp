@@ -290,7 +290,7 @@ int main(int argc, char *argv[])
 		DAQ::TOFPET::RawReader *reader=NULL;
 #ifndef __ENDOTOFPET__	
 		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
-				new P2Extract(P2, false, 0.0, 0.20,
+				new P2Extract(P2, false, 0.0, 0.20, true,
 				new TQCorrWriter(f, P2
         )));
 

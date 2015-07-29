@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
 	
 		float gRadius = 20; // mm
 
-		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20,
+		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20, true,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, gMaxHits,

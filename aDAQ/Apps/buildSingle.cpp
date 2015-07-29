@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
 
 #ifndef __ENDOTOFPET__	
 		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
-				new P2Extract(P2, false, 0.0, 0.20,
+				new P2Extract(P2, false, 0.0, 0.20, false,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new EventWriter(lmData

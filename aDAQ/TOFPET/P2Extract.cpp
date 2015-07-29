@@ -7,8 +7,8 @@ using namespace DAQ::Common;
 using namespace DAQ::Core;
 using namespace DAQ::TOFPET;
 
-P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTolerance, float eDenormalTolerance, EventSink<Pulse> *sink) : 
-	lut(lut), killZeroToT(killZeroToT), tDenormalTolerance(tDenormalTolerance), eDenormalTolerance(eDenormalTolerance),
+P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTolerance, float eDenormalTolerance, bool killDenormal, EventSink<Pulse> *sink) : 
+	lut(lut), killZeroToT(killZeroToT), tDenormalTolerance(tDenormalTolerance), eDenormalTolerance(eDenormalTolerance), killDenormal(killDenormal),
 	OverlappedEventHandler<RawPulse, Pulse>(sink)
 {
 	nEvent = 0;
@@ -88,12 +88,12 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	if(pulse.tofpet_TQT < (1.0 - tDenormalTolerance) || pulse.tofpet_TQT > (3.0 + tDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;
-		return false;
+		if(killDenormal) return false;
 	}
 	if(pulse.tofpet_TQE < (1.0 - eDenormalTolerance) || pulse.tofpet_TQE > (3.0 + eDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;
-		return false;
+		if(killDenormal) return false;
 	}
 
 	atomicAdd(nPassed, 1); 

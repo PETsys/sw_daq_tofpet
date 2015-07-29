@@ -699,7 +699,7 @@ int main(int argc, char *argv[])
 
 #ifndef __ENDOTOFPET__	
 		EventSink<RawPulse> * pipeSink= new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
-				new P2Extract(P2, false, 0.0, 0.20,
+				new P2Extract(P2, false, 0.0, 0.20, true,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,

@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
 		}
 
 		
-		EventSink<RawPulse> * pipeSink = 		new P2Extract(lut, false, 0.0, 0.20,
+		EventSink<RawPulse> * pipeSink = 		new P2Extract(lut, false, 0.0, 0.20, false,
 				new EventWriter(lmFile, step1, step2
 		));
 
