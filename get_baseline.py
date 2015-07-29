@@ -34,7 +34,7 @@ def readBaselineProposal(fileName):
     data.append(sig)
     return data
 
-def dump_noise(root_file, uut, targetAsics, targetChannels, targetHVBias):
+def dump_noise(root_file, uut, targetAsics, targetChannels, targetHVBias, comments):
   
     prefix, ext = splitext(root_file)
 
@@ -48,7 +48,7 @@ def dump_noise(root_file, uut, targetAsics, targetChannels, targetHVBias):
     rootFile = ROOT.TFile(root_file, "RECREATE")
     ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")
 
-    uut.config.writeParams(root_file)
+    uut.config.writeParams(prefix, comments)
     N = 30
     
     step1=targetHVBias
@@ -143,8 +143,8 @@ def dump_noise(root_file, uut, targetAsics, targetChannels, targetHVBias):
 
 parser = argparse.ArgumentParser(description='Performs a number of threshold dark counts scan and computes the effective baseline for each, while ajusting the postamp parameter until the obtained baseline for all channels is in a good ADC range for the all the selected ASICS')
 
-parser.add_argument('OutputFile',
-                   help='output file (ROOT file). Auxiliary file containing the data obtained in all scans and used to compute the baselines')
+parser.add_argument('OutputFilePrefix',
+                   help='Prefix for the output files. One pair of .root and .params files will be created per iteration as well as a .log file containing a short repport of all iterations.')
 
 
 parser.add_argument('nIter', type=int,
@@ -157,21 +157,23 @@ parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selec
 
 parser.add_argument('--postamp', nargs='*', type=int, help='If set, this argument takes the postamp values from which to start the initial scan (the values should be ordered per asic ID)')
 
+parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
+
 args = parser.parse_args()
 
         
 T = 6.25E-9
-root_file = args.OutputFile
+
 n_iter=args.nIter
 
-dir_path=os.path.dirname(root_file)
-basename=os.path.basename(root_file)
+dir_path=os.path.dirname(args.OutputFilePrefix)
+basename=os.path.basename(args.OutputFilePrefix)
 os.system("mkdir -p %s/pdf" %  dir_path)
 
 base_prefix, base_ext= splitext(basename)
-prefix, ext = splitext(root_file)
 
-log_filename= "%s.log" % prefix
+
+log_filename= "%s.log" % args.OutputFilePrefix
 log_f = open(log_filename, 'w+')
 
 atbConfig = loadLocalConfig(useBaseline=False)  
@@ -227,7 +229,7 @@ while it<=n_iter:
  
     uut.doSync(False)
     
-    root_filename= "%s%d%s" % (prefix,it,ext)
+    root_filename= "%s_%d.root" % (args.OutputFilePrefix,it)
 
 
     print "\nPerforming threshold scan with:"
@@ -235,10 +237,10 @@ while it<=n_iter:
         print "postamp[%d]=%d" % (asic,postamp[asic])
     print "\n"
 
-    check=dump_noise(root_filename,uut, activeAsics, targetChannels, args.hvBias)
+    check=dump_noise(root_filename,uut, activeAsics, targetChannels, args.hvBias, args.comments)
  
     os.system("root -l %s \"draw_threshold_scan.C(%s,true)\"" % (root_filename,maxAsics))
-    prefix, ext = splitext(root_file)
+ 
    
     pdf_filename= "%s/pdf/%s_%d.pdf" % (dir_path,base_prefix, it)
     os.system("cp /tmp/baseline_dummy.pdf %s" % pdf_filename)
@@ -268,11 +270,11 @@ while it<=n_iter:
 
         success[j]=False
         if  (average_th==0):
-            proposal=-3
+            proposal=-4
         elif ( (average_th>56 and (np.amax(th)-np.amin(th))< 9) or ( average_th>52 and (np.amax(th)-np.amin(th)) > 9)):
-            proposal=-1
-        elif (average_th>60 or nr_dead>6):
             proposal=-2
+        elif (average_th>60 or nr_dead>6):
+            proposal=-3
         elif ((average_th<47) or (np.amin(th)<45 and np.amin(th)!=0)):
             proposal=1
         elif (average_th<46):

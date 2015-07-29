@@ -166,6 +166,109 @@ private:
 	int maxN;	
 };
 
+class EventWriterRootList : public EventSink<Coincidence> {
+public:
+	EventWriterRootList(TTree *lmTree, float maxDeltaT, int maxN, FILE *listFile, float angle, float ctr)
+		: lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), listFile(listFile), angle(angle), ctr(ctr)
+	{
+	};
+   
+
+	~EventWriterRootList() {		
+	};
+
+	void pushEvents(EventBuffer<Coincidence> *buffer) {
+		if(buffer == NULL) return;	
+		
+		unsigned nEvents = buffer->getSize();
+		for(unsigned i = 0; i < nEvents; i++) {
+			Coincidence &c = buffer->get(i);
+			
+			for(int j1 = 0; (j1 < c.photons[0].nHits) && (j1 < maxN); j1 ++) {
+				long long t0_1 = c.photons[0].hits[0].time;		
+				
+				for(int j2 = 0; (j2 < c.photons[1].nHits) && (j2 < maxN); j2++) {
+					long long t0_2 = c.photons[1].hits[0].time;
+		
+					Hit &hit1 = c.photons[0].hits[j1];
+					Hit &hit2 = c.photons[1].hits[j2];
+					
+					long long T = hit1.raw.top.raw.T;
+					
+					if(j1==0 && j2==0){
+						long long time = hit1.time + hit2.time;
+						long long deltaTime=hit1.time - hit2.time;
+						fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw.top.energy, hit2.raw.top.energy, c.photons[0].nHits, c.photons[1].nHits, float(1e-12*deltaTime), ctr); 
+					}
+
+					float dt1 = hit1.time - t0_1;
+					if(dt1 > maxDeltaT) continue;
+					
+					float dt2 = hit2.time - t0_1;
+					if(dt2 > maxDeltaT) continue;
+					
+				
+					event1J = j1;
+					event1N = c.photons[0].nHits;
+					event1DeltaT = dt1;
+					event1Time = hit1.time;
+					event1Channel = hit1.raw.top.channelID;
+					event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
+					event1Energy=hit1.raw.top.energy;
+					event1Tac = hit1.raw.top.raw.d.tofpet.tac;
+					event1ChannelIdleTime = hit1.raw.top.raw.channelIdleTime * T * 1E-12;
+					event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = hit1.raw.top.tofpet_TQT;
+					event1TQE = hit1.raw.top.tofpet_TQE;
+					event1X = hit1.x;
+					event1Y = hit1.y;
+					event1Z = hit1.z;
+					event1Xi = hit1.xi;
+					event1Yi = hit1.yi;			
+						
+					event2J = j2;
+					event2N = c.photons[1].nHits;
+					event2DeltaT = dt2;
+					event2Time = hit2.time;
+					event2Channel = hit2.raw.top.channelID;
+					event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
+					event2Energy=hit2.raw.top.energy;
+					event2Tac = hit2.raw.top.raw.d.tofpet.tac;
+					event2ChannelIdleTime = hit2.raw.top.raw.channelIdleTime * T * 1E-12;
+					event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = hit2.raw.top.tofpet_TQT;
+					event2TQE = hit2.raw.top.tofpet_TQE;
+					event2X = hit2.x;
+					event2Y = hit2.y;
+					event2Z = hit2.z;
+					event2Xi = hit2.xi;
+					event2Yi = hit2.yi;					
+						
+					lmTree->Fill();
+				   
+				}
+					
+			}
+			
+		}
+		
+		delete buffer;
+	};
+	
+	void pushT0(double t0) { };
+	void finish() { };
+	void report() { };
+private: 
+	TTree *lmTree;
+	long long maxDeltaT;
+	int maxN;	
+	FILE *listFile;
+	float angle;
+	float ctr;
+};
+
+
+
 class EventWriterList : public EventSink<Coincidence> {
 public:
 	
@@ -216,8 +319,6 @@ public:
 	void finish() { };
 	void report() { };
 private: 
-	long long maxDeltaT;
-	int maxN;	
 	FILE *listFile;
 	float angle;
 	float ctr;
@@ -281,15 +382,17 @@ private:
 
 void displayHelp(char * program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
+	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file_prefix\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
 #ifndef __ENDOTOFPET__	
-	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2, 3 (default)\n");
+	fprintf(stderr,  "  --onlineMode\t Use this flag to process data in real time during acquisition\n");
+	fprintf(stderr,  "  --acqDeltaTime=ACQDELTATIME\t If online mode is chosen, this variable defines how much data time (in seconds) to process (default is -1 which selects all data for the current step)\n");
+	fprintf(stderr,  "  --rawVersion=RAWVERSION\t The version of the raw file to be processed: 2, 3 (default)\n");
 #endif
-	fprintf(stderr,  "  --output_type=OUTPUT_TYPE\t The type of output requested: LIST or ROOT (default)\n");
-	fprintf(stderr,  "  --angle=ANGLE\t\t\t The reference angle of acquisition (in radians)\n");
-	fprintf(stderr,  "  --ctr=CTR\t\t\t Coincidence time resolution estimate for the detector, 1 sigma (in picoseconds)\n");
+	fprintf(stderr,  "  --output_type=OUTPUT_TYPE\t The type of output requested: ROOT (default), LIST or BOTH\n");
+	fprintf(stderr,  "  --angle=ANGLE\t\t\t The reference angle of acquisition (in radians). Only relevant for LIST mode output\n");
+	fprintf(stderr,  "  --ctr=CTR\t\t\t Coincidence time resolution estimate for the detector, 1 sigma (in picoseconds). Only relevant for LIST mode output\n");
 	fprintf(stderr,  "  --cWindow=CWINDOW\t\t Maximum delta time (in seconds) for two events to be considered in coincidence (default is 20E-9s)\n");
 	fprintf(stderr,  "  --minTot=MINTOT\t\t The minimum TOT (in ns) to be considered for a preliminary coincidence filtering. Default is 100 ns\n");
 	fprintf(stderr,  "  --minEnergy=MINENERGY\t\t The minimum energy (in keV) of an event to be considered a valid coincidence. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n");
@@ -300,13 +403,13 @@ void displayHelp(char * program)
 	fprintf(stderr,  "  --gMaxHitsRoot=gMAXHITSROOT\t Maximum number of hits inside a given multi-hit group to be written to ROOT output file (default is 1)\n");
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
-	fprintf(stderr, "  rawfiles_prefix \t\t Path to raw data files prefix\n");
-	fprintf(stderr, "  output_file \t\t\t Output file containing coincidence events (Listmode text file or ROOT file)\n");
+	fprintf(stderr, "  rawfiles_prefix \t\t Raw data files prefix\n");
+	fprintf(stderr, "  output_file_prefix \t\t Output file containing coincidence event data (extensions .root or/and .list will be created automatically)\n");
 };
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file.root\n", program);
+	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file_prefix\n", program);
 };
 
 int main(int argc, char *argv[])
@@ -315,7 +418,9 @@ int main(int argc, char *argv[])
 
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
-		{ "raw_version", optional_argument,0,0 },
+		{ "onlineMode", no_argument,0,0 },
+		{ "acqDeltaTime", optional_argument,0,0 },
+		{ "rawVersion", optional_argument,0,0 },
 		{ "output_type", optional_argument,0,0 },
 		{ "angle", optional_argument,0,0 },
 		{ "ctr", optional_argument,0,0 },
@@ -332,8 +437,11 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
+	bool onlineMode=false;
+	float readBackTime=-1;
 #endif
 	bool useROOT=true;
+	bool useLIST=false;
 	float acqAngle=0;
 	float ctrEstimate;
 	FILE * outListFile;
@@ -341,7 +449,8 @@ int main(int argc, char *argv[])
 	TTree *lmData, *lmIndex;
 	char * setupFileName=argv[1];
 	char *inputFilePrefix = argv[2];
-	char *outputFileName = argv[3];
+	char *outputFilePrefix = argv[3];
+	char outputFileName[256];
 	
 	
 	float cWindow = 20E-9; // s
@@ -368,6 +477,14 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__	
 		else if(optionIndex==1){
 			nOptArgs++;
+			onlineMode=true;
+		}
+		else if(optionIndex==2){
+			nOptArgs++;
+			readBackTime=atof(optarg);
+		}
+		else if(optionIndex==3){
+			nOptArgs++;
 			sprintf(rawV,optarg);
 			if(rawV[0]!='2' && rawV[0]!='3'){
 				fprintf(stderr, "\n%s: error: Raw version not valid! Please choose 2, 3\n", argv[0]);
@@ -375,52 +492,62 @@ int main(int argc, char *argv[])
 			}
 		}
 #endif
-		else if(optionIndex==2){
+		else if(optionIndex==4){
 			nOptArgs++;
-			if(strcmp(optarg, "LIST")==0)useROOT=false;
-			else if(strcmp(optarg, "ROOT")==0)useROOT=true;
+			if(strcmp(optarg, "LIST")==0){
+				useROOT=false;
+				useLIST=true;
+			}
+			else if(strcmp(optarg, "ROOT")==0){
+				useROOT=true;
+				useLIST=false;
+			}
+			else if(strcmp(optarg, "BOTH")==0){
+				useROOT=true;
+				useLIST=true;
+			}
 			else{
-				fprintf(stderr, "\n%s: error: Output type not valid! Please choose LIST or ROOT\n", argv[0]);
+				fprintf(stderr, "\n%s: error: Output type not valid! Please choose LIST, ROOT or BOTH\n", argv[0]);
 				return(1);
 			}
 		}
-		else if(optionIndex==3){
+		else if(optionIndex==5){
 			nOptArgs++;
 			acqAngle=atof(optarg);
 		}
-		else if(optionIndex==4){
+		else if(optionIndex==6){
 			nOptArgs++;
 			ctrEstimate=1.0e-12*atof(optarg);
 		}
-		else if(optionIndex==5){
+		else if(optionIndex==7){
 			nOptArgs++;
 			cWindow=atof(optarg);
 		}
-		else if(optionIndex==6){
+		else if(optionIndex==8){
 			nOptArgs++;
 			minToT=atof(optarg);
 		}
-		else if(optionIndex==7){
+		else if(optionIndex==9){
 			nOptArgs++;
 			minEnergy=atof(optarg);
 		}
-		else if(optionIndex==8){
+		else if(optionIndex==10){
 			nOptArgs++;
 			maxEnergy=atof(optarg);
 		}
-		else if(optionIndex==9){
+		else if(optionIndex==11){
 			nOptArgs++;
 			gWindow=atof(optarg);
 		}
-		else if(optionIndex==10){
+		else if(optionIndex==12){
 			nOptArgs++;
 			maxHits=atoi(optarg);
 		}
-		else if(optionIndex==11){
+		else if(optionIndex==13){
 			nOptArgs++;
 			gWindowRoot=atof(optarg);
 		}
-		else if(optionIndex==12){
+		else if(optionIndex==14){
 			nOptArgs++;
 			maxHitsRoot=atoi(optarg);
 		}
@@ -464,6 +591,7 @@ int main(int argc, char *argv[])
 	}
 
 	if(useROOT){
+		sprintf(outputFileName,"%s.root",outputFilePrefix);
 		lmFile = new TFile(outputFileName, "RECREATE");
 		lmData = new TTree("lmData", "Event List", 2);
 		int bs = 512*1024;
@@ -512,7 +640,10 @@ int main(int argc, char *argv[])
 		lmIndex->Branch("stepBegin", &stepBegin, bs);
 		lmIndex->Branch("stepEnd", &stepEnd, bs);
 	}
-	else{
+	
+	if(useLIST){		
+		sprintf(outputFileName,"%s.list",outputFilePrefix);
+		
 		outListFile = fopen(outputFileName, "w");
 	}
 		
@@ -520,12 +651,14 @@ int main(int argc, char *argv[])
 	stepBegin = 0;
 	stepEnd = 0;
 	int N = scanner->getNSteps();
-	
 	for(int step = 0; step < N; step++) {
 		unsigned long long eventsBegin;
 		unsigned long long eventsEnd;
-		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
-		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
+		if(onlineMode)step=N-1;
+	
+		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);	
+
+		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 		if(N!=1){
 			if (strcmp(setupFileName, "none") == 0) {
 				P2->setAll(2.0);
@@ -543,6 +676,7 @@ int main(int argc, char *argv[])
 		float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
 
 		EventSink<Coincidence> * writer = NULL;
+
 #ifndef __ENDOTOFPET__	
 		if(useROOT == false) {
 			writer = new EventWriterList(outListFile, acqAngle, ctrEstimate);
@@ -552,9 +686,15 @@ int main(int argc, char *argv[])
 			writer = new EventWriterListE(outListFile);
 		}
 #endif
-		else {
+		else if(useLIST==false) {
 			writer = new EventWriterRoot(lmData, gWindow, maxHitsRoot);
 		}
+		else{
+			writer = new EventWriterRootList(lmData, gWindow, maxHitsRoot, outListFile, acqAngle, ctrEstimate);
+		}
+
+
+
 		DAQ::TOFPET::RawReader *reader=NULL;
 
 #ifndef __ENDOTOFPET__	
@@ -568,7 +708,7 @@ int main(int argc, char *argv[])
 			    ))))));
 	
 		if(rawV[0]=='3') 
-			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , readBackTime, onlineMode, pipeSink);
 	    else if(rawV[0]=='2')
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 #else

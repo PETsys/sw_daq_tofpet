@@ -52,7 +52,7 @@ class BoardConfig:
         
         ## Writes formatted text file with all parameters and additional information regarding the state of the system  
         # @param prefix Prefix of the file name to be written (it will have the suffix .params)
-        def writeParams(self, prefix):
+        def writeParams(self, prefix, comments):
           activeAsicsIDs = [ i for i, ac in enumerate(self.asicConfig) if isinstance(ac, tofpet.AsicConfig) ]
           minAsicID = min(activeAsicsIDs);
     
@@ -60,9 +60,18 @@ class BoardConfig:
           
           global_params= self.asicConfig[minAsicID].globalConfig.getKeys()
           channel_params= self.asicConfig[minAsicID].channelConfig[0].getKeys()
+	  
           
 
           f = open(prefix+'.params', 'w')
+	  
+	  f.write("--------------------\n")
+          f.write("----  COMMENTS  ----\n")
+          f.write("--------------------\n\n")
+	  f.write(comments)
+
+	  f.write("\n\n")
+
           f.write("--------------------\n")
           f.write("-- DEFAULT PARAMS --\n")
           f.write("--------------------\n\n")
@@ -86,8 +95,8 @@ class BoardConfig:
           f.write("\n") 
           f.write("Channel{\n")    
     
-          check=True
           for i,key in enumerate(channel_params):
+            check=True  
             for ac in self.asicConfig:
               if not isinstance(ac, tofpet.AsicConfig): continue
               if not check:
@@ -102,7 +111,9 @@ class BoardConfig:
                   break    
             if check:
               f.write('\t"%s" : %d\n' % (key, value))
-            
+	
+
+
           f.write("\t}\n\n")  
           f.write("------------------------\n")
           f.write("-- NON-DEFAULT PARAMS --\n")    
@@ -111,7 +122,7 @@ class BoardConfig:
           for ac in self.asicConfig:
             if not isinstance(ac, tofpet.AsicConfig): continue
         
-            f.write("\maxASIC%d.Global{\n"%ac_ind)  
+            f.write("ASIC%d.Global{\n"%ac_ind)  
             for i,key in enumerate(global_params):
               value= ac.globalConfig.getValue(key)
               value_d= defaultAsicConfig.globalConfig.getValue(key)
@@ -158,6 +169,7 @@ class BoardConfig:
                 baseline= ac.channelConfig[ch].getBaseline()
                 f.write("\tBASELINE : %d\n"%baseline)
                 f.write("\t}\n")
+	      f.write("\n")
             ac_ind+=1
 
 
@@ -179,9 +191,9 @@ class BoardConfig:
           f.write("-- HV BIAS --\n")
           f.write("-------------\n\n")
 
-	  for entry in self.hvBias:
+	  for i,entry in enumerate(self.hvBias):
             if entry!= None:
-              f.write("%f"%entry)
+              f.write("%d\t%f"%(i,entry))
 	      f.write("\n")
           f.close()
 

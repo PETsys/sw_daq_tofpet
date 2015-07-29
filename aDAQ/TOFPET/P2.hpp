@@ -19,16 +19,19 @@ namespace DAQ { namespace TOFPET {
 		bool isNormal(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT);
 		float getT(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT);
 		float getEnergy(int channel, float tot);
-		void loadFile(int start, int end, const char *fileName);
+		void loadTDCFile(int start, int end, const char *fileName);
 		void loadTQFile(int start, int end, const char *fileName);
 		void loadTOTFile(int start, int end, const char *fileName);
+		void loadOffsetFile(int start, int end, const char *fileName);
 		void storeFile(int start, int end, const char *fileName);
 		void loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float step1, float step2 );
 		
 		void setAll(float v);
 
 		float *nBins_tqT;   
-		float *nBins_tqE;   
+		float *nBins_tqE;  
+		
+		float *timeOffset;
 	private:
 		int  nChannels;
 		int getIndex(int channel, int tac, bool isT);

@@ -118,6 +118,8 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\tShow this help message and exit \n");
+	fprintf(stderr,  "  --onlineMode\t Use this flag to process data in real time during acquisition\n");
+	fprintf(stderr,  "  --acqDeltaTime=ACQDELTATIME\t If online mode is chosen, this variable defines how much data time (in seconds) to process (default is -1 which selects all data for the current step)\n");
 	fprintf(stderr,  "  --raw_version=RAW_VERSION\tThe version of the raw file to be processed: 2 or 3 (default) \n");
 	fprintf(stderr,  "  --minEnergy=MINENERGY\t\tThe minimum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n");
 	fprintf(stderr,  "  --maxEnergy=MAXENERGY\t\tThe maximum energy (in keV) of an event to be considered valid. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n");
@@ -127,12 +129,12 @@ void displayHelp(char * program)
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  setup_file \t\t\tFile containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
 	fprintf(stderr, "  rawfiles_prefix\t\tPath to raw data files prefix\n");
-	fprintf(stderr, "  output_file \t\t\tROOT output file containing events clustered around a radius of 25mm and a time window of 100 ns\n");
+	fprintf(stderr, "  output_file_prefix \t\t Output file containing grouped event data (extension .root will be created automatically)\n");
 };
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file.root\n", program);
+	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file_prefix\n", program);
 };
 
 int main(int argc, char *argv[])
@@ -141,6 +143,8 @@ int main(int argc, char *argv[])
 
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
+		{ "onlineMode", no_argument,0,0 },
+		{ "acqDeltaTime", optional_argument,0,0 },
 		{ "raw_version", optional_argument,0,0 },
 		{ "minEnergy", optional_argument,0,0 },
 		{ "maxEnergy", optional_argument,0,0 },
@@ -149,12 +153,15 @@ int main(int argc, char *argv[])
 		{ "gMaxHitsRoot", optional_argument,0,0 },
 		{ NULL, 0, 0, 0 }
 	};
+
 	char rawV[128];
 	rawV[0]='3';
+	bool onlineMode=false;
+	float readBackTime=-1;
 	char * setupFileName=argv[1];
 	char *inputFilePrefix = argv[2];
-	char *outputFileName = argv[3];
-
+	char *outputFilePrefix = argv[3];
+	char outputFileName[256];
 	
 	float gWindow = 100E-9; // s
 	float minEnergy = 150; // keV or ns (if energy=tot)
@@ -173,7 +180,15 @@ int main(int argc, char *argv[])
 			displayHelp(argv[0]);
 			return(1);
 		}
-		if(optionIndex==1){
+		else if(optionIndex==1){
+			nOptArgs++;
+			onlineMode=true;
+		}
+		else if(optionIndex==2){
+			nOptArgs++;
+			readBackTime=atof(optarg);
+		}
+		else if(optionIndex==3){
 			nOptArgs++;
 			sprintf(rawV,optarg);
 			if(rawV[0]!='2' && rawV[0]!='3'){
@@ -181,23 +196,23 @@ int main(int argc, char *argv[])
 				return(1);
 			}
 		}
-		else if(optionIndex==2){
+		else if(optionIndex==4){
 			nOptArgs++;
 			minEnergy=atof(optarg);
 		}
-		else if(optionIndex==3){
+		else if(optionIndex==5){
 			nOptArgs++;
 			maxEnergy=atof(optarg);
 		}
-		else if(optionIndex==4){
+		else if(optionIndex==6){
 			nOptArgs++;
 			gWindow=atof(optarg);
 		}
-		else if(optionIndex==5){
+		else if(optionIndex==7){
 			nOptArgs++;
 			gMaxHits=atoi(optarg);
 		}
-		else if(optionIndex==6){
+		else if(optionIndex==8){
 			nOptArgs++;
 			gMaxHitsRoot=atoi(optarg);
 		}
@@ -237,6 +252,7 @@ int main(int argc, char *argv[])
 		P2->loadFiles(setupFileName, true, false,0,0);
 	}
 	
+	sprintf(outputFileName,"%s.root",outputFilePrefix);
 	TFile *lmFile = new TFile(outputFileName, "RECREATE");
 	TTree *lmData = new TTree("lmData", "Event List", 2);
 	int bs = 512*1024;
@@ -273,8 +289,9 @@ int main(int argc, char *argv[])
 	for(int step = 0; step < N; step++) {
 		unsigned long long eventsBegin;
 		unsigned long long eventsEnd;
+		if(onlineMode)step=N-1;
 		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
-		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
+		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 		if(N!=1){
 			if (strcmp(argv[1], "none") == 0) {
 				P2->setAll(2.0);
@@ -298,7 +315,7 @@ int main(int argc, char *argv[])
 		DAQ::TOFPET::RawReader *reader=NULL;
 	
 		if(rawV[0]=='3') 
-			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, readBackTime, onlineMode,pipeSink);
 		else 
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 		reader->wait();

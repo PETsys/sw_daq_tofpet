@@ -33,7 +33,7 @@ parser.add_argument('--channel_start', type=int, default=0, help='If set, the ch
 
 parser.add_argument('--channel_step', type=int, default=6, help='If set, the scan will be performed for one in every channel_step (default = 6). If only interested in one channel per ASIC, set this to 64.')
 
-
+parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
 
 args = parser.parse_args()
 
@@ -65,7 +65,7 @@ baseConfig = loadLocalConfig(useBaseline=False)
 uut.config = baseConfig
 uut.initialize()
 uut.openAcquisition(dataFilePrefix, cWindow, writer="writeRaw")
-uut.config.writeParams(dataFilePrefix)
+uut.config.writeParams(dataFilePrefix, args.comments)
 
 
 if args.asics == None:

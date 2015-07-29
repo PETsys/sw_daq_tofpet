@@ -28,6 +28,7 @@ P2::P2(int nChannels)
 	table = new TAC[tableSize];
 	TQtable = new TQ[TQtableSize];
 	ToTtable = new ToTcal[totTableSize];
+	timeOffset = new float[nChannels];
 
 	nBins_tqT= new float[nChannels];
 	nBins_tqE= new float[nChannels];
@@ -47,6 +48,8 @@ P2::P2(int nChannels)
 		table[i].leakage.a1 = 0;
 		table[i].leakage.a2 = 0;
 	}
+
+
 	defaultQ = 0;
 	for(int i = 0; i < TQtableSize; i++) {
 		TQtable[i].nbins=0;
@@ -59,12 +62,13 @@ P2::P2(int nChannels)
 	
 	for(int i = 0; i < nChannels; i++) {
 	 	for(int j = 0; j < 1024; j++) {
-			ToTtable[i*1024+j].channel=i;
-	 		ToTtable[i*1024+j].tot=j*0.5;
-	 		ToTtable[i*1024+j].energy=j*0.5;
+			ToTtable[i*1024+j].channel=0;
+	 		ToTtable[i*1024+j].tot=0;
+	 		ToTtable[i*1024+j].energy=0;
 	 	}
 	}
-
+	
+	for(int i = 0; i < nChannels; i++) timeOffset[i]=0;
 }
 
 P2::~P2()
@@ -72,7 +76,7 @@ P2::~P2()
 	delete [] table;
 	delete [] TQtable;
 	delete [] ToTtable;
-
+	delete [] timeOffset;
 }
 
 
@@ -304,7 +308,7 @@ void P2::storeFile(int start, int end, const char *fName)
 	
 }
 
-void P2::loadFile(int start, int end, const char *fName)
+void P2::loadTDCFile(int start, int end, const char *fName)
 {
 	FILE *f = fopen(fName, "r");
 	int channel;
@@ -359,15 +363,31 @@ void P2::loadTQFile(int start, int end, const char *fTQName)
 void P2::loadTOTFile(int start, int end, const char *totFileName)
 {
 	FILE *f = fopen(totFileName, "r");
-	ToTcal totCale;
-	while(fscanf(f, "%d\t%f\t%f\n",&totCale.channel, &totCale.tot, &totCale.energy) == 3 ){
-		long totIndex=getIndexTOT(start+totCale.channel,totCale.tot);
-		}
+	int col1;
+	float col2;
+	float col3;
+	while(fscanf(f, "%d\t%f\t%f\n",&col1, &col2, &col3) == 3 ){
+		long totIndex=getIndexTOT(start+col1,col2);
+		ToTcal &totCale = ToTtable[totIndex];
+		totCale.channel=col1;
+		totCale.tot=col2;
+		totCale.energy=col3;
+	}
 	fclose(f);
 	
 }
 
-
+void P2::loadOffsetFile(int start, int end, const char *offsetFileName)
+{
+	FILE *f = fopen(offsetFileName, "r");
+	int col1;
+	float col2;
+	while(fscanf(f, "%d\t%f\n",&col1, &col2) == 2){
+		timeOffset[start+col1]=col2;
+	}
+	fclose(f);
+	
+}
 
 void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float step1, float step2)
 {
@@ -385,9 +405,12 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 	char totFileName[1024];
 	char totFilePath[1024];
 
+	char offsetFileName[1024];
+	char offsetFilePath[1024];
+
 	char suffix[1024];
 	int start, end;
-	while(fscanf(mapFile, "%d %d %s %s %s\n", &start, &end, lutFileName, tqFileName, totFileName) == 5) {
+	while(fscanf(mapFile, "%d %d %s %s %s %s\n", &start, &end, lutFileName, tqFileName, totFileName, offsetFileName) == 6) {
 
 	    if(strcmp(tqFileName, "none")!=0){			
 		    if(multistep==true){
@@ -411,6 +434,15 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 			    sprintf(totFilePath, "%s", totFileName);
 		    }
 	    }
+		if(strcmp(offsetFileName, "none")!=0){			
+		    if(offsetFileName[0] != '/') {
+			    sprintf(offsetFilePath, "%s/%s", baseName, offsetFileName );
+		    }
+		    else {
+			    sprintf(offsetFilePath, "%s", offsetFileName);
+		    }
+	    }
+		
 
 	    if(lutFileName[0] != '/') {
 		    sprintf(lutFilePath, "%s/%s", baseName, lutFileName );
@@ -418,34 +450,29 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 	    else {
 		    sprintf(lutFilePath, "%s", lutFileName);
 	    }
-
-	    if(strcmp(tqFileName, "none")!=0 and loadTQ==true and strcmp(totFileName, "none")!=0){
-			printf("P2:: loading TDC, TQ and TOT calibrations...\n");
-		    printf("P2:: loading '%s', '%s' and '%s' into [%d..%d[\n", lutFilePath, tqFilePath ,totFilePath, start, end);
-		    loadTQFile(start, end, tqFilePath);
-			loadTOTFile(start, end, totFilePath);
-		    do_TQcorr = true;
-			useEnergyCal=true;
+		
+	    if(strcmp(lutFileName, "none")!=0){
+			printf("P2:: loading TDC calibrations...\n");
+		    printf("P2:: loading '%s' into [%d..%d[\n", lutFilePath, start, end);
+		    loadTDCFile(start, end, lutFilePath);
 	    }
-		else if(strcmp(totFileName, "none")!=0 and strcmp(tqFileName, "none")==0){
-			printf("P2:: loading TDC and TOT calibrations...\n");
-		    printf("P2:: loading '%s' and '%s' into [%d..%d[\n", lutFilePath, totFilePath, start, end);
+		if(strcmp(tqFileName, "none")!=0 and loadTQ==true){
+			printf("P2:: loading TQ calibrations...\n");
+		    printf("P2:: loading '%s' into [%d..%d[\n", tqFilePath, start, end);
+		    loadTQFile(start, end, tqFilePath);
+			do_TQcorr = true;
+	    }
+		if(strcmp(totFileName, "none")!=0){
+			printf("P2:: loading Energy calibrations...\n");
+		    printf("P2:: loading '%s' into [%d..%d[\n", totFilePath, start, end);
 		    loadTOTFile(start, end, totFilePath);
 			useEnergyCal=true;
 	    }
-		else if(strcmp(tqFileName, "none")!=0 and loadTQ==true and strcmp(totFileName, "none")==0){
-			printf("P2:: loading TDC and TQ calibrations...\n");
-		    printf("P2:: loading '%s' and '%s' into [%d..%d[\n", lutFilePath, tqFilePath, start, end);
-		    loadTQFile(start, end, tqFilePath);
-		    do_TQcorr = true;
-	    }
-	    else{
-			printf("P2:: loading TDC calibrations...\n");
-		    printf("P2:: loading '%s' into [%d..%d[\n", lutFilePath, start, end);
-	    }
-	  
-	    loadFile(start, end, lutFilePath);		
-	       
+		if(strcmp(offsetFileName, "none")!=0){
+			printf("P2:: loading timeOffset calibrations...\n");
+		    printf("P2:: loading '%s' into [%d..%d[\n",  offsetFilePath, start, end);
+		    loadOffsetFile(start, end, offsetFilePath);
+		}	       
 	}
 
 	fclose(mapFile);
