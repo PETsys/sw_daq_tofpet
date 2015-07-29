@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <string.h>
 #include <iostream>
+#include <boost/regex.hpp>
+
 using namespace std;
 using namespace DAQ::Common;
 using namespace DAQ::TOFPET;
@@ -389,6 +391,17 @@ void P2::loadOffsetFile(int start, int end, const char *offsetFileName)
 	
 }
 
+
+static void copySubMatch(char *dst, const char *start, const char *end) 
+{
+	while(start != end) {
+		*dst = *start;
+		start++;
+		dst++;
+	}
+	*dst = '\0';
+}
+
 void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float step1, float step2)
 {
 	FILE * mapFile = fopen(mapFileName, "r");
@@ -410,68 +423,108 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 
 	char suffix[1024];
 	int start, end;
-	while(fscanf(mapFile, "%d %d %s %s %s %s\n", &start, &end, lutFileName, tqFileName, totFileName, offsetFileName) == 6) {
+	char line[1024];
+	
+	const boost::regex e("([0-9]+)[[:blank:]]+([0-9]+)[[:blank:]]+(.*)[[:blank:]]+(.*)[[:blank:]]+(.*)");
+	while(fscanf(mapFile, "%[^\n]\n", line) == 1) {
+		boost::match_results<const char *> what;
+		if(!boost::regex_match((const char *)line, what, e, boost::match_default | boost::match_partial)) {
+			fprintf(stderr, "Bad syntax in '%s'\n", mapFileName);
+			continue;
+		}
+		
+		if(!what[1].matched || !what[2].matched || !what[3].matched) {
+			fprintf(stderr, "Bad syntax in '%s'\n", mapFileName);
+			continue;
+		}
+		
+		char temporary[128];
 
-	    if(strcmp(tqFileName, "none")!=0){			
-		    if(multistep==true){
-			    sprintf(suffix,".stp1_%f_stp2_%f",step1, step2);
-			    strcat(tqFileName,suffix); 
-		    }
-			    
-		    if(tqFileName[0] != '/') {
-			    sprintf(tqFilePath, "%s/%s", baseName, tqFileName );
-		    }
-		    else {
-			    sprintf(tqFilePath, "%s", tqFileName);
-		    }
-	    }
+		copySubMatch(temporary, what[1].first, what[1].second);
+		assert(sscanf(temporary, "%d", &start) == 1);
 
-		if(strcmp(totFileName, "none")!=0){			
-		    if(totFileName[0] != '/') {
-			    sprintf(totFilePath, "%s/%s", baseName, totFileName );
-		    }
-		    else {
-			    sprintf(totFilePath, "%s", totFileName);
-		    }
-	    }
+		copySubMatch(temporary, what[2].first, what[2].second);
+		assert(sscanf(temporary, "%d", &end) == 1);
+
+		copySubMatch(lutFileName, what[3].first, what[3].second);
+		
+
+		if(what[4].matched)
+			copySubMatch(tqFileName, what[4].first, what[4].second);
+		else
+			strcpy(tqFileName, "none");
+		
+		if(what[5].matched)
+			copySubMatch(totFileName, what[5].first, what[5].second);
+		else
+			strcpy(totFileName, "none");
+
+		if(what[6].matched)
+			copySubMatch(offsetFileName, what[6].first, what[6].second);
+		else
+			strcpy(offsetFileName, "none");
+		
+	
+		if(strcmp(tqFileName, "none")!=0){
+			if(multistep==true){
+				sprintf(suffix,".stp1_%f_stp2_%f",step1, step2);
+				strcat(tqFileName,suffix); 
+			}
+				
+			if(tqFileName[0] != '/') {
+				sprintf(tqFilePath, "%s/%s", baseName, tqFileName );
+			}
+			else {
+				sprintf(tqFilePath, "%s", tqFileName);
+			}
+		}
+
+		if(strcmp(totFileName, "none")!=0){
+			if(totFileName[0] != '/') {
+				sprintf(totFilePath, "%s/%s", baseName, totFileName );
+			}
+			else {
+				sprintf(totFilePath, "%s", totFileName);
+			}
+		}
 		if(strcmp(offsetFileName, "none")!=0){			
-		    if(offsetFileName[0] != '/') {
-			    sprintf(offsetFilePath, "%s/%s", baseName, offsetFileName );
-		    }
-		    else {
-			    sprintf(offsetFilePath, "%s", offsetFileName);
-		    }
-	    }
+			if(offsetFileName[0] != '/') {
+				sprintf(offsetFilePath, "%s/%s", baseName, offsetFileName );
+			}
+			else {
+				sprintf(offsetFilePath, "%s", offsetFileName);
+			}
+		}
 		
 
-	    if(lutFileName[0] != '/') {
-		    sprintf(lutFilePath, "%s/%s", baseName, lutFileName );
-	    }
-	    else {
-		    sprintf(lutFilePath, "%s", lutFileName);
-	    }
+		if(lutFileName[0] != '/') {
+			sprintf(lutFilePath, "%s/%s", baseName, lutFileName );
+		}
+		else {
+			sprintf(lutFilePath, "%s", lutFileName);
+		}
 		
-	    if(strcmp(lutFileName, "none")!=0){
+		if(strcmp(lutFileName, "none")!=0){
 			printf("P2:: loading TDC calibrations...\n");
-		    printf("P2:: loading '%s' into [%d..%d[\n", lutFilePath, start, end);
-		    loadTDCFile(start, end, lutFilePath);
-	    }
+			printf("P2:: loading '%s' into [%d..%d[\n", lutFilePath, start, end);
+			loadTDCFile(start, end, lutFilePath);
+		}
 		if(strcmp(tqFileName, "none")!=0 and loadTQ==true){
 			printf("P2:: loading TQ calibrations...\n");
-		    printf("P2:: loading '%s' into [%d..%d[\n", tqFilePath, start, end);
-		    loadTQFile(start, end, tqFilePath);
+			printf("P2:: loading '%s' into [%d..%d[\n", tqFilePath, start, end);
+			loadTQFile(start, end, tqFilePath);
 			do_TQcorr = true;
-	    }
+		}
 		if(strcmp(totFileName, "none")!=0){
 			printf("P2:: loading Energy calibrations...\n");
-		    printf("P2:: loading '%s' into [%d..%d[\n", totFilePath, start, end);
-		    loadTOTFile(start, end, totFilePath);
+			printf("P2:: loading '%s' into [%d..%d[\n", totFilePath, start, end);
+			loadTOTFile(start, end, totFilePath);
 			useEnergyCal=true;
-	    }
+		}
 		if(strcmp(offsetFileName, "none")!=0){
 			printf("P2:: loading timeOffset calibrations...\n");
-		    printf("P2:: loading '%s' into [%d..%d[\n",  offsetFilePath, start, end);
-		    loadOffsetFile(start, end, offsetFilePath);
+			printf("P2:: loading '%s' into [%d..%d[\n",  offsetFilePath, start, end);
+			loadOffsetFile(start, end, offsetFilePath);
 		}	       
 	}
 
