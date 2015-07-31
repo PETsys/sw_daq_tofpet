@@ -113,7 +113,11 @@ FrameServer::~FrameServer()
 
 void FrameServer::startAcquisition(int mode)
 {
+	// Pause for 100 ms and wipe buffers
+	usleep(120000);
 	pthread_mutex_lock(&lock);
+	dataFrameWritePointer = 0;
+	dataFrameReadPointer = 0;
 	acquisitionMode = mode;
 	pthread_mutex_unlock(&lock);
 	pthread_cond_signal(&condCleanDataFrame);

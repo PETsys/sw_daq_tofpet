@@ -336,20 +336,18 @@ class ATB:
 			for portID, slaveID in self.getActiveFEBDs():
 				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
-			#sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
-
 			for portID, slaveID in self.getActiveFEBDs(): 
 				self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
-		# Now, start the DAQ!
+		# Start the DAQ
+		# daqd will sleep for ~100 ms and then wipe out the buffers
 		mode = 2 # Do not send mode 1 to daqd!
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, mode)
 		self.__socket.send(data)
-		sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
 
 		if not daqOnly:
 			# Check the status from all the ASICs
