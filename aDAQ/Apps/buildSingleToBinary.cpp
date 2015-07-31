@@ -112,6 +112,8 @@ int main(int argc, char *argv[])
 	while(1) {
 		int optionIndex = 0;
 	    int c=getopt_long(argc, argv, "",longOptions, &optionIndex);
+		if(c==-1) break;
+		
 		if(optionIndex==0){
 			displayHelp(argv[0]);
 			return(1);
