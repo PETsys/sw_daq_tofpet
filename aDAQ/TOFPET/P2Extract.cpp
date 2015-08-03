@@ -67,6 +67,7 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	if(pulse.tofpet_TQT < (1.0 - tDenormalTolerance) || pulse.tofpet_TQT > (3.0 + tDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;
+		pulse.time = raw.time;
 		if(killDenormal) return false;
 	}
 	else {
@@ -77,6 +78,7 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	if(pulse.tofpet_TQE < (1.0 - eDenormalTolerance) || pulse.tofpet_TQE > (3.0 + eDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;
+		pulse.timeEnd = raw.timeEnd;
 		if(killDenormal) return false;
 	}
 	else {
