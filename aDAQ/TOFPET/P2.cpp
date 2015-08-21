@@ -406,8 +406,11 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 {
 	FILE * mapFile = fopen(mapFileName, "r");
 
+	char fileNameCopy[1024];
+	strncpy(fileNameCopy, mapFileName, 1024);
+	
 	char baseName[1024]; baseName[0] = 0;	
-	strncpy(baseName, dirname((char *)mapFileName), 1024);
+	strncpy(baseName, dirname((char *)fileNameCopy), 1024);
 
 	char lutFileName[1024];
 	char lutFilePath[1024];
@@ -425,17 +428,19 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 	int start, end;
 	char line[1024];
 	
-	const boost::regex e("([0-9]+)[[:blank:]]+([0-9]+)[[:blank:]]+(.*)[[:blank:]]+(.*)[[:blank:]]+(.*)");
+	const boost::regex e("([0-9]+)\\s+([0-9]+)\\s+(\\S+)(\\s+)?(\\S+)?(\\s+)?(\\S+)?(\\s+)?(\\S+)?");
+	int lineNumber = 0;
 	while(fscanf(mapFile, "%[^\n]\n", line) == 1) {
+		lineNumber += 1;
 		boost::match_results<const char *> what;
-		if(!boost::regex_match((const char *)line, what, e, boost::match_default | boost::match_partial)) {
-			fprintf(stderr, "Bad syntax in '%s'\n", mapFileName);
+		if(!boost::regex_match((const char *)line, what, e, boost::match_default)) {
+			fprintf(stderr, "Bad syntax in '%s' (line %d) (1)\n", mapFileName, lineNumber);
 			continue;
 		}
 		
 		if(!what[1].matched || !what[2].matched || !what[3].matched) {
-			fprintf(stderr, "Bad syntax in '%s'\n", mapFileName);
-			continue;
+			fprintf(stderr, "Bad syntax in '%s' (line %d) (2)\n", mapFileName, lineNumber);
+		continue;
 		}
 		
 		char temporary[128];
@@ -449,18 +454,21 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 		copySubMatch(lutFileName, what[3].first, what[3].second);
 		
 
-		if(what[4].matched)
-			copySubMatch(tqFileName, what[4].first, what[4].second);
+		if(what[5].matched) {
+			copySubMatch(tqFileName, what[5].first, what[5].second);
+		}
 		else
 			strcpy(tqFileName, "none");
 		
-		if(what[5].matched)
-			copySubMatch(totFileName, what[5].first, what[5].second);
+		if(what[7].matched) {
+			copySubMatch(totFileName, what[7].first, what[7].second);
+		}
 		else
 			strcpy(totFileName, "none");
 
-		if(what[6].matched)
-			copySubMatch(offsetFileName, what[6].first, what[6].second);
+		if(what[9].matched) {
+			copySubMatch(offsetFileName, what[9].first, what[9].second);
+		}
 		else
 			strcpy(offsetFileName, "none");
 		
