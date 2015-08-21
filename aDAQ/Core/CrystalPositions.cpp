@@ -49,6 +49,9 @@ CrystalPositions::CrystalPositions(int nCrystals, const char *mapFileName, Event
 	
 	fclose(mapFile);
 	fprintf(stderr, "%d valid crystal coordinates found\n", nLoaded);
+	
+	nEventsIn = 0;
+	nEventsOut = 0;
 }
 
 CrystalPositions::~CrystalPositions()
@@ -58,6 +61,9 @@ CrystalPositions::~CrystalPositions()
 
 EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer)
 {
+	u_int32_t lEventsIn = 0;
+	u_int32_t lEventsOut = 0;
+	
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
@@ -68,6 +74,7 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 	for(unsigned i = 0; i < nEvents; i++) {
 		RawHit &raw = inBuffer->get(i);
 		if(raw.time < tMin || raw.time >= tMax) continue;
+		lEventsIn += 1;
 		
 		int id = raw.crystalID;
 		if(map[id].region == -1) continue;
@@ -92,7 +99,11 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 		       hit.raw.top.timeEnd,
 		       (hit.raw.top.timeEnd - hit.raw.top.time) / 1000);*/
 		outBuffer->pushWriteSlot();
+		lEventsOut += 1;
 	}
+	
+	atomicAdd(nEventsIn, lEventsIn);
+	atomicAdd(nEventsOut, lEventsOut);
 	
 	delete inBuffer;
 	return outBuffer;
@@ -101,5 +112,8 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 void CrystalPositions::report()
 {
 	fprintf(stderr, ">> CrystalPositions report\n");
-	OverlappedEventHandler<RawHit, Hit>::report();
+	fprintf(stderr, " hits received\n");
+	fprintf(stderr, "  %10u\n", nEventsIn);	OverlappedEventHandler<RawHit, Hit>::report();
+	fprintf(stderr, " hits passed\n");
+	fprintf(stderr, "  %10u\n", nEventsOut);	OverlappedEventHandler<RawHit, Hit>::report();
 }
