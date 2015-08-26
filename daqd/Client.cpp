@@ -42,7 +42,7 @@ int Client::handleRequest()
 	}
 
 	int actionStatus = 0;
-//	fprintf(stderr, "commandType = %d, commandLength = %d\n", int(cmdHeader.type), int(cmdHeader.length));
+	//fprintf(stderr, "commandType = %d, commandLength = %d\n", int(cmdHeader.type), int(cmdHeader.length));
 	if (cmdHeader.type == commandAcqOnOff)
 		doAcqOnOff();
 	else if(cmdHeader.type == commandGetDataFrameSharedMemoryName) 
@@ -91,6 +91,12 @@ int Client::doAcqOnOff()
 		frameServer->startAcquisition(acqMode);
 	else
 		frameServer->stopAcquisition();
+
+	struct { uint16_t length; } header;
+	header.length = 0;
+	int status = send(socket, &header, sizeof(header), MSG_NOSIGNAL);
+	if(status < sizeof(header)) return -1;
+
 	printf("Client::doAcqOnOff() exiting...\n");
 	return 0;
 }

@@ -7,7 +7,6 @@ from sys import argv, stdout, exit
 from time import time, sleep
 import ROOT
 from rootdata import DataFile
-import serial
 import numpy as np
 import argparse
 

@@ -45,7 +45,10 @@ private:
 	static const int txRdPointerReg		= 384;
 	static const int rxWrPointerReg		= 448;
 	static const int rxRdPointerReg		= 512;
+	static const int ThresholdReg		= 544;
 	static const int acqStatusPointerReg	= 576;
+	static const int CoincWindowReg		= 608;
+	static const int CoincMasksReg		= 609;
 	static const int statusReg		= 640;
 
 	WD_DMA *DMA_Point	= NULL;
@@ -64,10 +67,7 @@ private:
 	pthread_mutex_t lock;
 	pthread_cond_t condCleanBuffer;
 	pthread_cond_t condDirtyBuffer;
-	
-//	DTFLY::SBufferInit dmaBuffer;
 
-	
 	uint64_t *wordBuffer;
 	volatile int wordBufferUsed;
 	volatile int wordBufferStatus;
@@ -79,8 +79,6 @@ private:
 
 	pthread_mutex_t hwLock;
 	boost::posix_time::ptime lastCommandTime;
-
-	//FILE *logFile;
 
 };
 }
