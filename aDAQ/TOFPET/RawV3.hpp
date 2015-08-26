@@ -69,7 +69,7 @@ namespace DAQ { namespace TOFPET {
 	class RawReaderV3 : public RawReader, public EventSource<RawPulse> {
 	
 	public:
-		RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink);
+		RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, float deltaTime, bool onlineMode, EventSink<RawPulse> *sink);
 		~RawReaderV3();
 		
 		virtual void run();
@@ -79,6 +79,8 @@ namespace DAQ { namespace TOFPET {
 		unsigned long eventsEnd;
 		FILE *dataFile;
 		double T;
+		float deltaTime;
+		bool onlineMode;
 		bool isOutlier(long long currentFrameID, FILE *dataFile, int entry, int N);
 	};
 	

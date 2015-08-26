@@ -48,8 +48,9 @@ DAQFrameServer::~DAQFrameServer()
 
 void DAQFrameServer::startAcquisition(int mode)
 {
-	FrameServer::startAcquisition(mode);
+	DP->setAcquistionOnOff(false);
 	DP->setAcquistionOnOff(true);
+	FrameServer::startAcquisition(mode);
 }
 
 void DAQFrameServer::stopAcquisition()

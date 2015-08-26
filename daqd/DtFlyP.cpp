@@ -418,7 +418,8 @@ int DtFlyP::setAcquistionOnOff(bool enable)
 	uint32_t data[1];
 	int status;
 	
-	data[0] = enable ? 0x000FFFFU : 0xFFFF0000U;
+	data[0] = enable ? 0x0000FFFFU : 0xFFFF0000U;
+	data[0] = enable ? 0x4444BBBBU : 0xFFFF0000U;
 	pthread_mutex_lock(&hwLock);
 	status = WriteAndCheck(acqStatusPointerReg * 4, data, 1);	
 	pthread_mutex_unlock(&hwLock);

@@ -384,3 +384,10 @@ class ConfigurationErrorBadRead(ConfigurationError):
 	def __str__(self):
 		return "Configuration readback failed for ASIC at port %2d, slave %2d, asic %2d: wrote %s, read %s" % self.data
 
+class ConfigurationErrorBadReply(ConfigurationError):
+	def __init__(self, expected, actual):
+		self.data = (expected, actual)
+	def __str__(self):
+		return "Bad reply for ASIC configuration command: expected %d bytes, got %d bytes" % self.data
+
+

@@ -11,8 +11,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Performs a scan on dark count rates for selected channels and HV bias voltages')
 
-parser.add_argument('OutputFile',
-                   help='output file (ROOT file)')
+parser.add_argument('OutputFilePrefix',
+                   help='output file prefix (file with .root suffix will be created)')
 
 parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
 
@@ -20,7 +20,12 @@ parser.add_argument('--channels',  nargs='*', type=int, help='If set, only the s
 
 parser.add_argument('--hvbias', required=True,  nargs='*', type=int, help='HV bias voltages for which to determine dark count rates (in Volts)')
 
+parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
+
 args = parser.parse_args()
+
+# Operating clock period
+T = 6.25E-9
 
 atbConfig = loadLocalConfig(useBaseline=False)
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
@@ -40,20 +45,18 @@ else:
 targetHVBias = args.hvbias
 
 
-# Operating clock period
-T = 6.25E-9
 
-prefix, ext = splitext(args.Outputfile)
+
 
 for tAsic, tChannel in targetChannels:
 	atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("praedictio", 0)
 
 
 
-rootFile = ROOT.TFile(argv[1], "RECREATE")
+rootFile = ROOT.TFile(args.OutputFilePrefix+'.root', "RECREATE")
 ntuple = ROOT.TNtuple("data", "data", "step1:step2:asic:channel:rate")
 
-uut.config.writeParams(prefix)
+uut.config.writeParams(args.OutputFilePrefix, args.comments)
 
 
 N = 30

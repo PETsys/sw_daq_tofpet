@@ -16,13 +16,14 @@ using namespace DAQ::TOFPET;
 static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 static const unsigned maxEventsPerFrame = 16*1024;
 
-RawReaderV3::RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink)
-	: EventSource<RawPulse>(sink),T(T)
+RawReaderV3::RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, float deltaTime, bool onlineMode, EventSink<RawPulse> *sink)
+	: EventSource<RawPulse>(sink),T(T), deltaTime(deltaTime), onlineMode(onlineMode)
 {
 	char dataFileName[512];
 	sprintf(dataFileName, "%s.raw3", dataFilePrefix);
 	dataFile = fopen(dataFileName, "rb");
-	this->eventsBegin = eventsBegin;
+	
+    this->eventsBegin = eventsBegin;
 	this->eventsEnd = eventsEnd;
 	start();
 }
@@ -38,6 +39,9 @@ RawReaderV3::~RawReaderV3()
 void RawReaderV3::run()
 {
 
+
+	
+
 	unsigned nWraps = 0;
 	
 	EventBuffer<RawPulse> *outBuffer = NULL;
@@ -47,13 +51,38 @@ void RawReaderV3::run()
 	long long tMax = 0, lastTMax = 0;
 
 	sink->pushT0(0);
-	
-	fprintf(stderr, "Reading %llu to %llu\n", eventsBegin, eventsEnd);
-	fseek(dataFile, eventsBegin * sizeof(RawEventV3), SEEK_SET);
-	
+   	
 	int maxReadBlock = 1024*1024;
 	RawEventV3 *rawEvents = new RawEventV3[maxReadBlock];
 
+	if(onlineMode){		
+		eventsBegin=eventsEnd;
+		RawEventV3 Event;
+		fseek(dataFile, -sizeof(RawEventV3), SEEK_END);
+		int r = fread(&Event, sizeof(RawEventV3), 1, dataFile);
+
+		eventsEnd=  ftell(dataFile) / sizeof(DAQ::TOFPET::RawEventV3);
+
+		uint64_t frameID = (Event >> 92) & 0xFFFFFFFFFULL;
+		uint64_t tCoarse = (Event >> 60) & 0x3FF;
+		long long last_time= (1024LL * frameID + tCoarse) * T * 1E12;
+		
+		
+		//long long nEventsStart=  ftell(dataFile) / sizeof(DAQ::TOFPET::RawEventV3);
+		if(deltaTime!=-1){
+			fseek(dataFile, eventsBegin * sizeof(RawEventV3), SEEK_SET); 
+			r = fread(&Event, sizeof(RawEventV3), 1, dataFile);		
+			frameID = (Event >> 92) & 0xFFFFFFFFFULL;
+			tCoarse = (Event >> 60) & 0x3FF;
+			long long start_time= (1024LL * frameID + tCoarse) * T * 1E12;		
+			double runningTime= double(last_time- start_time)/1.0e12;
+			unsigned long nEvents =  deltaTime*(eventsEnd-eventsBegin)/runningTime;		
+			if(eventsBegin+nEvents<eventsEnd)eventsBegin=eventsEnd-nEvents;
+		}
+	}
+	fprintf(stderr, "Reading %llu to %llu\n", eventsBegin, eventsEnd);
+
+	fseek(dataFile, eventsBegin*sizeof(RawEventV3), SEEK_SET);
 	unsigned long long readPointer = eventsBegin;
 	while (readPointer < eventsEnd) {
 		unsigned long long count = eventsEnd - readPointer;
@@ -61,8 +90,8 @@ void RawReaderV3::run()
 		int r = fread(rawEvents, sizeof(RawEventV3), count, dataFile);
 		if(r <= 0) break;
 		readPointer += r;
-	
-		//printf("events extracted= %lld\n",readPointer);
+		
+		//printf("events extracted= %lld\r",readPointer-eventsBegin);
 	
 		for(int j = 0; j < r; j++) {
 			RawEventV3 &r = rawEvents[j];
@@ -141,16 +170,20 @@ void RawReaderV3::run()
 RawScannerV3::RawScannerV3(char *indexFilePrefix) :
 	steps(vector<Step>())
 {
-	float step1;
-	float step2;
-	unsigned long stepBegin;
-	unsigned long stepEnd;
+	float step1=0;
+	float step2=0;
+	unsigned long stepBegin=0;
+	unsigned long stepEnd=0;
 	
 	char indexFileName[512];
 	sprintf(indexFileName, "%s.idx3", indexFilePrefix);
 	indexFile = fopen(indexFileName, "rb");
 	
 	while(fscanf(indexFile, "%f %f %llu %llu\n", &step1, &step2, &stepBegin, &stepEnd) == 4) {
+		Step step = { step1, step2, stepBegin, stepEnd };
+		steps.push_back(step);
+	}
+	if(steps.size()==0){
 		Step step = { step1, step2, stepBegin, stepEnd };
 		steps.push_back(step);
 	}

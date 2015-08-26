@@ -52,7 +52,7 @@ class BoardConfig:
         
         ## Writes formatted text file with all parameters and additional information regarding the state of the system  
         # @param prefix Prefix of the file name to be written (it will have the suffix .params)
-        def writeParams(self, prefix):
+        def writeParams(self, prefix, comments):
           activeAsicsIDs = [ i for i, ac in enumerate(self.asicConfig) if isinstance(ac, tofpet.AsicConfig) ]
           minAsicID = min(activeAsicsIDs);
     
@@ -60,9 +60,18 @@ class BoardConfig:
           
           global_params= self.asicConfig[minAsicID].globalConfig.getKeys()
           channel_params= self.asicConfig[minAsicID].channelConfig[0].getKeys()
+	  
           
 
           f = open(prefix+'.params', 'w')
+	  
+	  f.write("--------------------\n")
+          f.write("----  COMMENTS  ----\n")
+          f.write("--------------------\n\n")
+	  f.write(comments)
+
+	  f.write("\n\n")
+
           f.write("--------------------\n")
           f.write("-- DEFAULT PARAMS --\n")
           f.write("--------------------\n\n")
@@ -86,8 +95,8 @@ class BoardConfig:
           f.write("\n") 
           f.write("Channel{\n")    
     
-          check=True
           for i,key in enumerate(channel_params):
+            check=True  
             for ac in self.asicConfig:
               if not isinstance(ac, tofpet.AsicConfig): continue
               if not check:
@@ -102,7 +111,9 @@ class BoardConfig:
                   break    
             if check:
               f.write('\t"%s" : %d\n' % (key, value))
-            
+	
+
+
           f.write("\t}\n\n")  
           f.write("------------------------\n")
           f.write("-- NON-DEFAULT PARAMS --\n")    
@@ -111,7 +122,7 @@ class BoardConfig:
           for ac in self.asicConfig:
             if not isinstance(ac, tofpet.AsicConfig): continue
         
-            f.write("\maxASIC%d.Global{\n"%ac_ind)  
+            f.write("ASIC%d.Global{\n"%ac_ind)  
             for i,key in enumerate(global_params):
               value= ac.globalConfig.getValue(key)
               value_d= defaultAsicConfig.globalConfig.getValue(key)
@@ -158,6 +169,7 @@ class BoardConfig:
                 baseline= ac.channelConfig[ch].getBaseline()
                 f.write("\tBASELINE : %d\n"%baseline)
                 f.write("\t}\n")
+	      f.write("\n")
             ac_ind+=1
 
 
@@ -179,9 +191,9 @@ class BoardConfig:
           f.write("-- HV BIAS --\n")
           f.write("-------------\n\n")
 
-	  for entry in self.hvBias:
+	  for i,entry in enumerate(self.hvBias):
             if entry!= None:
-              f.write("%f"%entry)
+              f.write("%d\t%f"%(i,entry))
 	      f.write("\n")
           f.close()
 
@@ -300,58 +312,59 @@ class ATB:
 		#self.__shmmap = mmap.mmap(self.__shm.fd, self.__shm.size)
 		#os.close(self.__shm.fd)
 		self.config = None
-		self.__activeAsics = [ False for x in range(64) ]
-		self.__asicType = [ None for x in range(64) ]
+		self.__activeAsics = [ False for x in range(16*1024) ]
+		self.__asicType = [ None for x in range(16*1024) ]
+		self.__asicConfigCache = {}		
 		return None
 
 
         ## Starts the data acquisition
 	# @param mode If set to 1, only data frames  with at least one event are transmitted. If set to 2, all data frames are transmitted. If set to 0, the data transmission is stopped
-	def start(self, mode=2):
+	def start(self, mode=2, daqOnly=False):
 		nTry = 0
 		while True:
 			try:
-				return self.__start(mode)
+				return self.__start(mode, daqOnly)
 			except ErrorAsicPresenceChanged as e:
 				nTry = nTry + 1;
 				if nTry > 5: raise e
 				print "WARNING: ", e, ", retrying..."
 
-	def __start(self, mode=2):
-		# First, generate a "sync" in the FEB/D (or ML605) itself
-		for portID, slaveID in self.getActiveFEBDs():
-			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+	def __start(self, mode, daqOnly):
+		if not daqOnly:
+			# First, generate a "sync" in the FEB/D (or ML605) itself
+			for portID, slaveID in self.getActiveFEBDs():
+				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
-		#sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
+			for portID, slaveID in self.getActiveFEBDs(): 
+				self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
+				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
-		for portID, slaveID in self.getActiveFEBDs(): 
-			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
-			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
-
-		# Now, start the DAQ!
+		# Start the DAQ
+		# daqd will sleep for ~100 ms and then wipe out the buffers
 		mode = 2 # Do not send mode 1 to daqd!
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, mode)
 		self.__socket.send(data)
-		sleep(0.120) # Sleep at least 100 ms while the SYNC proceeds
 
-		# Check the status from all the ASICs
-		for portID, slaveID in self.getActiveFEBDs():
-			nLocalAsics = len(self.getGlobalAsicIDsForFEBD(portID, slaveID))
-			
-			deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
-			decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
+		if not daqOnly:
+			# Check the status from all the ASICs
+			for portID, slaveID in self.getActiveFEBDs():
+				nLocalAsics = len(self.getGlobalAsicIDsForFEBD(portID, slaveID))
+				
+				deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
+				decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
 
-			deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
-			decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+				deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+				decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
 
-			for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
-				localOK = deserializerStatus[i] and decoderStatus[i] 
-				globalOK = self.__activeAsics[globalAsicID]
-				if localOK != globalOK:
-					raise ErrorAsicPresenceChanged(portID, slaveID, i)
+				for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
+					localOK = deserializerStatus[i] and decoderStatus[i] 
+					globalOK = self.__activeAsics[globalAsicID]
+					if localOK != globalOK:
+						raise ErrorAsicPresenceChanged(portID, slaveID, i)
 
 		return None
        
@@ -517,6 +530,35 @@ class ATB:
 
 		return r
 
+	def printDataFrame(self, nonEmpty=False):
+		timeout = 0.5
+		t0 = time()
+		r = False
+		while (r == False) and ((time() - t0) < timeout):
+			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+#			print "WR/RD pointers = %08x %08x" % (wrPointer, rdPointer)
+			bs = self.__dshm.getSizeInFrames()
+			while (wrPointer != rdPointer) and (r == False):
+				index = rdPointer % bs
+				rdPointer = (rdPointer + 1) % (2 * bs)
+
+				nEvents = self.__dshm.getNEvents(index)
+				if nEvents == 0 and nonEmpty == True:
+					continue;
+
+				r = True
+				frameID = self.__dshm.getFrameID(index)
+				frameSize = self.__dshm.getFrameSize(index)
+				print "DATA FRAME FOUND"
+				print "ID = %12d SIZE = %4d words" % (frameID, frameSize)
+				print "BEGIN CONTENT"
+				for n in range(frameSize):
+					print "WORD %4d %016x" % (n, self.__dshm.getFrameWord(index, n))
+				print "END CONTENT"
+
+			self.__setDataFrameReadPointer(rdPointer)
+
+		return r
 	
 	## Sends a command to the FPGA
 	# @param portID  DAQ port ID where the FEB/D is connected
@@ -623,6 +665,16 @@ class ATB:
 	
 		commandCode, isChannel, isRead, dataLength = commandInfo[command]
 
+		# Avoid re-uploading this configuration if it's already in the chip
+		cacheKey = (command, asicID, channel)
+		if not isRead:
+			try:
+				lastValue = self.__asicConfigCache[cacheKey]
+				if value == lastValue:
+					return (0, None)
+			except KeyError:
+				pass
+
 		byte0 = [ (commandCode << 4) + (asicID & 0x0F) ]
 		if isChannel:
 				
@@ -644,7 +696,9 @@ class ATB:
 
 		febID = asicID / 16
 		reply = self.sendCommand(febID, 0, 0x00, cmd)
+		if len(reply) < 2: raise tofpet.ConfigurationErrorBadReply(2, len(reply))
 		status = reply[1]
+			
 
 		if status == 0xE3:
 			raise tofpet.ConfigurationErrorBadAck(febID, 0, asicID % 16, 0)
@@ -657,6 +711,10 @@ class ATB:
 
 		if isRead:
 			#print [ "%02X" % x for x in reply ]
+			expectedBytes = ceil(dataLength/8)
+			if len(reply) < (2+expectedBytes): 
+				print len(reply), (2+expectedBytes)
+				raise tofpet.ConfigurationErrorBadReply(2+expectedBytes, len(reply))
 			reply = str(reply[2:])
 			data = bitarray()
 			data.frombytes(reply)
@@ -669,6 +727,7 @@ class ATB:
 			if readValue != value:
 				raise tofpet.ConfigurationErrorBadRead(febID, 0, asicID % 16, value, readValue)
 
+			self.__asicConfigCache[cacheKey] = bitarray(value)
 			return (status, None)
 
 
@@ -1160,8 +1219,8 @@ class ATB:
 			if (portID, slaveID) not in self.getActiveFEBDs():
 				continue
 
-			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
 			for localAsicID, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)): # Iterate on all possible ASIC in a FEB/D
+				asicType = self.__asicType[globalAsicID]
 				ac = self.config.asicConfig[globalAsicID]
 				asicOK = self.__activeAsics[globalAsicID]
 				if ac == None and asicOK == False:
@@ -1195,10 +1254,14 @@ class ATB:
 	def __uploadConfigTOFPET(self, asic, ac):
 		#stdout.write("Configuring ASIC %3d " % asic); stdout.flush()
 		# Force parameters!
+		# Enable "veto" to reset TDC during configuration, to ensure more consistent results
+		ac.globalConfig.setValue("veto_en", 1)
 		for n, cc in enumerate(ac.channelConfig):
+			# Enable deadtime to reduce insane events
 			cc.setValue("deadtime", 3);
-			 # Clamp thresholds to ensure we're in the valid range
 
+
+			 # Clamp thresholds to ensure we're in the valid range
 			thresholdClamp = 15
 			if cc.getValue("vth_T") < thresholdClamp:
 				cc.setValue("vth_T", thresholdClamp)

@@ -72,6 +72,8 @@ void displayHelp(char * program)
 	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
 	fprintf(stderr,  "  --help \t\t\t Show this help message and exit \n");
+	fprintf(stderr,  "  --onlineMode\t Use this flag to process data in real time during acquisition\n");
+	fprintf(stderr,  "  --acqDeltaTime=ACQDELTATIME\t If online mode is chosen, this variable defines how much data time (in seconds) to process (default is -1 which selects all data for the current step)\n");
 	fprintf(stderr,  "  --raw_version=RAW_VERSION\t The version of the raw file to be processed: 2 or 3 (default) \n");
 	fprintf(stderr, "\npositional arguments:\n");
 	fprintf(stderr, "  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n");
@@ -91,20 +93,40 @@ int main(int argc, char *argv[])
 
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
+		{ "onlineMode", no_argument,0,0 },
+		{ "acqDeltaTime", optional_argument,0,0 },
 		{ "raw_version", optional_argument,0,0 }
 	};
 
 	char rawV[128];
 	sprintf(rawV,"3");
-	int optionIndex = -1;
+	bool onlineMode=false;
+	float readBackTime=-1;
+
+	char * setupFileName=argv[1];
+	char *inputFilePrefix = argv[2];
+	char *outputFileName = argv[3];
+
 	int nOptArgs=0;
-	if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
+
+	while(1) {
+		int optionIndex = 0;
+	    int c=getopt_long(argc, argv, "",longOptions, &optionIndex);
+		if(c==-1) break;
+		
 		if(optionIndex==0){
 			displayHelp(argv[0]);
 			return(1);
-			
 		}
-		if(optionIndex==1){
+		else if(optionIndex==1){
+			nOptArgs++;
+			onlineMode=true;
+		}
+		else if(optionIndex==2){
+			nOptArgs++;
+			readBackTime=atof(optarg);
+		}
+		if(optionIndex==3){
 			nOptArgs++;
 			sprintf(rawV,optarg);
 			if(rawV[0]!='2' && rawV[0]!='3'){
@@ -131,7 +153,6 @@ int main(int argc, char *argv[])
 	}
 	
 
-	char *inputFilePrefix = argv[2];
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
 	if(rawV[0]=='3')
@@ -143,15 +164,15 @@ int main(int argc, char *argv[])
 
 	TOFPET::P2 *lut = new TOFPET::P2(SYSTEM_NCRYSTALS);
 
-	if (strcmp(argv[1], "none") == 0) {
+	if (strcmp(setupFileName, "none") == 0) {
 		lut->setAll(2.0);
 		printf("BIG FAT WARNING: no calibration\n");
 	} 
 	else {
-		lut->loadFiles(argv[1], true, false, 0,0);
+		lut->loadFiles(setupFileName, true, false, 0,0);
 	}
 	
-	FILE *lmFile = fopen(argv[3], "w");
+	FILE *lmFile = fopen(outputFileName, "w");
 	
 	int N = scanner->getNSteps();
 	for(int step = 0; step < N; step++) {
@@ -159,27 +180,28 @@ int main(int argc, char *argv[])
 		Float_t step2;
 		unsigned long long eventsBegin;
 		unsigned long long eventsEnd;
+		if(onlineMode)step=N-1;
 		scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
-		printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
+		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), step1, step2, eventsBegin, eventsEnd);
 		if(N!=1){
-			if (strcmp(argv[1], "none") == 0) {
+			if (strcmp(setupFileName, "none") == 0) {
 				lut->setAll(2.0);
 				printf("BIG FAT WARNING: no calibration file\n");
 			} 
 			else{
-				lut->loadFiles(argv[1], true, true,step1,step2);
+				lut->loadFiles(setupFileName, true, true,step1,step2);
 			}
 		}
 
 		
-		EventSink<RawPulse> * pipeSink = 		new P2Extract(lut, false, 0.0, 0.20,
+		EventSink<RawPulse> * pipeSink = 		new P2Extract(lut, false, 0.0, 0.20, false,
 				new EventWriter(lmFile, step1, step2
 		));
 
 		DAQ::TOFPET::RawReader *reader=NULL;
 	
 		if(rawV[0]=='3') 
-			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
+			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, readBackTime, onlineMode, pipeSink);
 		else 
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 
