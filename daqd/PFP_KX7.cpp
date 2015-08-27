@@ -428,8 +428,7 @@ int PFP_KX7::WriteAndCheck(int reg, uint32_t *data, int count) {
 		//Status = PFP_Write(Card, reg, count * 4, data, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		for(int i = 0; i < count; i++) PFP_Write(Card, reg + 4*i, 4, data+i, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		for(int i = 0; i < count; i++) readBackBuffer[i] = 0;
-		//PFP_Read(Card, reg, count * 4, readBackBuffer, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
-		for(int i = 0; i < count; i++) PFP_Read(Card, reg + 4*i, 4, readBackBuffer+i, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
+		PFP_Read(Card, reg, count * 4, readBackBuffer, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		fail = false;
 		for(int i = 0; i < count; i++) fail |= (data[i] != readBackBuffer[i]);		
 		iter++;
@@ -449,11 +448,9 @@ int PFP_KX7::ReadAndCheck(int reg, uint32_t *data, int count) {
 	int iter = 0;
 	while(fail) {
 		reg = BaseAddrReg + reg;
-		//Status = PFP_Read(Card, reg, count * 4, data, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
-		for(int i = 0; i < count; i++) PFP_Read(Card, reg + 4*i, 4, data+i, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
+		Status = PFP_Read(Card, reg, count * 4, data, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		for(int i = 0; i < count; i++) readBackBuffer[i] = 0;
-		//PFP_Read(Card, reg, count * 4, readBackBuffer, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
-		for(int i = 0; i < count; i++) PFP_Read(Card, reg + 4*i, 4, readBackBuffer+i, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
+		PFP_Read(Card, reg, count * 4, readBackBuffer, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		fail = false;
 		for(int i = 0; i < count; i++) fail |= (data[i] != readBackBuffer[i]);		
 		iter++;
