@@ -162,7 +162,7 @@ float P2::getQtac(int channel, int tac, bool isT, int adc, long long tacIdleTime
 	
 
 
-	if(te.shape.p2 == 0) return defaultQ; // We don't have such thing as a linear TAC!
+	if(te.shape.m == 0) return 2; 
 	
 	
 	float p2 = te.shape.p2;
@@ -253,6 +253,8 @@ float P2::getT0(int channel, int tac, bool isT)
 
 float P2::getT(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT)
 {
+	int index = getIndex(channel, tac, isT);
+	TAC &te = table[index];
 
 	float q = getQ(channel, tac, isT, adc, tacIdleTime, coarseToT);	
 	float f = (coarse % 2 == 0) ?  
@@ -260,7 +262,7 @@ float P2::getT(int channel, int tac, bool isT, int adc, int coarse, long long ta
 		// WARNING: forcing Q to [1..3] range adds a bias, which will need an extra field to be corrected
 		  (q < 2.5 ? 2.0 - q : 4.0 - q) :
 		  (3.0 - q);	
-	
+	if(te.shape.m == 0)f = (coarse % 2 == 0) ? 1.5 : 2.5;
 	float t = coarse + f;
 	return t + getT0(channel, tac, isT);
 }
@@ -283,8 +285,10 @@ float P2::getEnergy(int channel, float tot)
 
 bool P2::isNormal(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT)
 {
+	int index = getIndex(channel, tac, isT);
+	TAC &te = table[index];
 	float q = getQ(channel, tac, isT, adc, tacIdleTime, coarseToT);
-	if(q >= 1.00 && q <= 3.00) return true;
+	if((q >= 1.00 && q <= 3.00) || te.shape.m == 0) return true;
 	else return false;
 }
 
