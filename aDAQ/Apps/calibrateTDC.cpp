@@ -635,7 +635,7 @@ int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *t
 					
 					sprintf(hName, isT ? "C%03d_%02d_%d_A_T_control_E" : "C%03d_%02d_%d_A_E_control_E", 
 							asic, channel, tac);
-					ti.pA_ControlE = new TH1F(hName, hName, 256, -0.5, 0.5);
+					ti.pA_ControlE = new TH1F(hName, hName, 512, -0.5, 0.5);
 					
 					delete pf;
 					delete pf2;
@@ -844,9 +844,14 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 			float offset = INFINITY;
 			if(iter == 0 ) 
 				offset = ti.pA_ControlT->GetMean(2);
-			else
-				offset = ti.pA_ControlE->GetMean();
-			
+			else {
+				ti.pA_ControlE->Fit("gaus", "Q");
+				TF1 *f = ti.pA_ControlE->GetFunction("gaus");
+				if (f != NULL)
+					offset = f->GetParameter(1);
+				else
+					offset = ti.pA_ControlE->GetMean();
+			}
 	
 			float tEdge = myP2.getT0(channel, tac, isT);
 			myP2.setT0(channel, tac, isT, tEdge - offset);
