@@ -27,6 +27,8 @@ namespace DAQ { namespace Core {
 		int maxHits;
 		u_int32_t nHits[GammaPhoton::maxHits];
 		u_int32_t nHitsOverflow;
+		uint32_t nPhotonsLowEnergy;
+		uint32_t nPhotonsHighEnergy;
 		/// put nax hits as option and change buildCoincidence and buildGroup
 	}; 
 	
