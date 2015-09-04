@@ -419,19 +419,19 @@ int main(int argc, char *argv[])
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
 		{ "onlineMode", no_argument,0,0 },
-		{ "acqDeltaTime", optional_argument,0,0 },
-		{ "rawVersion", optional_argument,0,0 },
-		{ "output_type", optional_argument,0,0 },
-		{ "angle", optional_argument,0,0 },
-		{ "ctr", optional_argument,0,0 },
-		{ "cWindow", optional_argument,0,0 },
-		{ "minTot", optional_argument,0,0 },
-		{ "minEnergy", optional_argument,0,0 },
-		{ "maxEnergy", optional_argument,0,0 },
-		{ "gWindow", optional_argument,0,0 },
-		{ "gMaxHits", optional_argument,0,0 },
-		{ "gWindowRoot", optional_argument,0,0 },
-		{ "gMaxHitsRoot", optional_argument,0,0 },
+		{ "acqDeltaTime", required_argument,0,0 },
+		{ "rawVersion", required_argument,0,0 },
+		{ "output_type", required_argument,0,0 },
+		{ "angle", required_argument,0,0 },
+		{ "ctr", required_argument,0,0 },
+		{ "cWindow", required_argument,0,0 },
+		{ "minTot", required_argument,0,0 },
+		{ "minEnergy", required_argument,0,0 },
+		{ "maxEnergy", required_argument,0,0 },
+		{ "gWindow", required_argument,0,0 },
+		{ "gMaxHits", required_argument,0,0 },
+		{ "gWindowRoot", required_argument,0,0 },
+		{ "gMaxHitsRoot", required_argument,0,0 },
 		{ NULL, 0, 0, 0 }
 	};
 #ifndef __ENDOTOFPET__
@@ -447,12 +447,7 @@ int main(int argc, char *argv[])
 	FILE * outListFile;
 	TFile *lmFile;
 	TTree *lmData, *lmIndex;
-	char * setupFileName=argv[1];
-	char *inputFilePrefix = argv[2];
-	char *outputFilePrefix = argv[3];
-	char outputFileName[256];
-	
-	
+
 	float cWindow = 20E-9; // s
 	float gWindow = 100E-9; // s
 	int maxHits=16;
@@ -558,18 +553,21 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc - nOptArgs < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc - nOptArgs> 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
 
-
+	char * setupFileName=argv[optind];
+	char *inputFilePrefix = argv[optind+1];
+	char *outputFilePrefix = argv[optind+2];
+	char outputFileName[256];
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
 #ifndef __ENDOTOFPET__ 

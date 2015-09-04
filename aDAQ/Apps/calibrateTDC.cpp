@@ -196,62 +196,62 @@ int main(int argc, char *argv[])
 	int readInd=0;
 	int posInd=0;
 	
-	char *tDataFileName;
-	char *eDataFileName;
-	char *tableFileNamePrefix;
-	
 	static struct option longOptions[] = {
-		{ "asics_per_file", optional_argument, 0, 0 },
-		{ "int-factor", optional_argument, 0, 0 },
+		{ "asics_per_file", required_argument, 0, 0 },
+		{ "int-factor", required_argument, 0, 0 },
 		{ "help", no_argument, 0, 0 }
 	};
 
 	
-	while (posInd+optind<=argc) {
+	while (true) {
 		int optionIndex = 0;
+		int c=getopt_long(argc, argv, "",longOptions, &optionIndex);
 		
-		if (int c=getopt_long(argc, argv, "",longOptions, &optionIndex) !=-1) {
+		// Option argument
+		if(c == -1) 
+			break;
 		
-			// Option argument
-			if(optionIndex==0 && strcmp (optarg,"ALL") != 0)nAsicsPerFile = atoi(optarg);
-			else if(optionIndex==0 && strcmp (optarg,"ALL") == 0)nAsicsPerFile = nASIC;
-			else if(optionIndex==1)nominalM = atof(optarg);
-			else if(optionIndex==2){
-				displayHelp(argv[0]);
-				return(1);
-			}
-			else if((optionIndex==0 || optionIndex==1) and optarg==NULL){
-				displayUsage(argv[0]);
-				fprintf(stderr, "\n%s: error: must assign a proper value to optional argument!\n", argv[0]);
-				return(1);	
-			}	
-			else{
-				displayUsage(argv[0]);
-				fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
-				return(1);
-			}
-			continue;
+		else if(optionIndex==0 && strcmp (optarg,"ALL") != 0)
+			nAsicsPerFile = atoi(optarg);
+		
+		else if(optionIndex==0 && strcmp (optarg,"ALL") == 0)
+			nAsicsPerFile = nASIC;
+		
+		else if(optionIndex==1)
+			nominalM = atof(optarg);
+		
+		else if(optionIndex==2) {
+			displayHelp(argv[0]);
+			return(1);
 		}
-		else if(argv[readInd][0]!='-' && argv[readInd][1]!='-'){
-			if(posInd==1)tDataFileName = argv[readInd];
-			else if(posInd==2)eDataFileName  = argv[readInd];
-			else if(posInd==3)tableFileNamePrefix = argv[readInd];	
-			posInd++;
+		else if((optionIndex==0 || optionIndex==1) and optarg==NULL) {
+			displayUsage(argv[0]);
+			fprintf(stderr, "\n%s: error: must assign a proper value to optional argument!\n", argv[0]);
+			return(1);	
+		}	
+		else {
+			displayUsage(argv[0]);
+			fprintf(stderr, "\n%s: error: Unknown option!\n", argv[0]);
+			return(1);
 		}
-		readInd++;
+
 	}
 	
-	if(posInd < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(posInd > 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
-
+	char *tDataFileName = argv[optind+0];
+	char *eDataFileName = argv[optind+1];
+	char *tableFileNamePrefix = argv[optind+2];
+	
+	
 	
 	// printf("tdata =%s\n", tDataFileName);
 	// printf("edata= %s\n", eDataFileName);

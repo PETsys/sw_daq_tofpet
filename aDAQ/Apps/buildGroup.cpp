@@ -144,13 +144,13 @@ int main(int argc, char *argv[])
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
 		{ "onlineMode", no_argument,0,0 },
-		{ "acqDeltaTime", optional_argument,0,0 },
-		{ "raw_version", optional_argument,0,0 },
-		{ "minEnergy", optional_argument,0,0 },
-		{ "maxEnergy", optional_argument,0,0 },
-		{ "gWindow", optional_argument,0,0 },
-		{ "gMaxHits", optional_argument,0,0 },
-		{ "gMaxHitsRoot", optional_argument,0,0 },
+		{ "acqDeltaTime", required_argument,0,0 },
+		{ "raw_version", required_argument,0,0 },
+		{ "minEnergy", required_argument,0,0 },
+		{ "maxEnergy", required_argument,0,0 },
+		{ "gWindow", required_argument,0,0 },
+		{ "gMaxHits", required_argument,0,0 },
+		{ "gMaxHitsRoot", required_argument,0,0 },
 		{ NULL, 0, 0, 0 }
 	};
 
@@ -158,10 +158,6 @@ int main(int argc, char *argv[])
 	rawV[0]='3';
 	bool onlineMode=false;
 	float readBackTime=-1;
-	char * setupFileName=argv[1];
-	char *inputFilePrefix = argv[2];
-	char *outputFilePrefix = argv[3];
-	char outputFileName[256];
 	
 	float gWindow = 100E-9; // s
 	float minEnergy = 150; // keV or ns (if energy=tot)
@@ -223,17 +219,21 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc - nOptArgs < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	if(argc - nOptArgs < 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
 
+	char * setupFileName=argv[optind];
+	char *inputFilePrefix = argv[optind+1];
+	char *outputFilePrefix = argv[optind+2];
+	char outputFileName[256];
 
    
 

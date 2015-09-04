@@ -94,18 +94,14 @@ int main(int argc, char *argv[])
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
 		{ "onlineMode", no_argument,0,0 },
-		{ "acqDeltaTime", optional_argument,0,0 },
-		{ "raw_version", optional_argument,0,0 }
+		{ "acqDeltaTime", required_argument,0,0 },
+		{ "raw_version", required_argument,0,0 }
 	};
 
 	char rawV[128];
 	sprintf(rawV,"3");
 	bool onlineMode=false;
 	float readBackTime=-1;
-
-	char * setupFileName=argv[1];
-	char *inputFilePrefix = argv[2];
-	char *outputFileName = argv[3];
 
 	int nOptArgs=0;
 
@@ -141,16 +137,20 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc - nOptArgs < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc - nOptArgs> 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
+
+	char * setupFileName=argv[optind];
+	char *inputFilePrefix = argv[optind+1];
+	char *outputFileName = argv[optind+2];
 	
 
 
