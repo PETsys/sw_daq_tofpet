@@ -3,8 +3,6 @@
 ## @package atb
 # This module defines all the classes, variables and methods to operate the TOFPET ASIC via a UNIX socket  
 
-import crcmod
-import serial
 from math import log, ceil
 from bitarray import bitarray
 from time import sleep, time
@@ -40,7 +38,7 @@ intToBin = tofpet.intToBin
 class BoardConfig:
         ## Constructor
 	def __init__(self):
-		maxASIC = 64
+		maxASIC = 16*12
 		maxDAC = 8
                 self.asicConfigFile = [ "Default Configuration" for x in range(maxASIC) ]
                 self.asicBaselineFile = [ "None" for x in range(maxASIC) ]
@@ -296,7 +294,6 @@ class ATB:
 		self.__socketPath = socketPath
 		self.__socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		self.__socket.connect(self.__socketPath)
-		self.__crcFunc = crcmod.mkCrcFun(0x104C11DB7, rev=False, initCrc=0x0A1CB27F)
 		self.__lastSN = randrange(0, 2**15-1)
 		self.__pendingReplies = 0
 		self.__recvBuffer = bytearray([]);
@@ -320,61 +317,57 @@ class ATB:
 
         ## Starts the data acquisition
 	# @param mode If set to 1, only data frames  with at least one event are transmitted. If set to 2, all data frames are transmitted. If set to 0, the data transmission is stopped
-	def start(self, mode=2, daqOnly=False):
+	def start(self,):
 		nTry = 0
 		while True:
 			try:
-				return self.__start(mode, daqOnly)
+				return self.__start()
 			except ErrorAsicPresenceChanged as e:
 				nTry = nTry + 1;
 				if nTry > 5: raise e
 				print "WARNING: ", e, ", retrying..."
 
-	def __start(self, mode, daqOnly):
-		if not daqOnly:
-			# First, generate a "sync" in the FEB/D (or ML605) itself
-			for portID, slaveID in self.getActiveFEBDs():
-				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
-
-			for portID, slaveID in self.getActiveFEBDs(): 
-				self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
-				self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
-
-		# Start the DAQ
-		# daqd will sleep for ~100 ms and then wipe out the buffers
-		mode = 2 # Do not send mode 1 to daqd!
+	def _daqdMode(self, mode):
 		template1 = "@HH"
 		template2 = "@H"
 		n = struct.calcsize(template1) + struct.calcsize(template2);
 		data = struct.pack(template1, 0x01, n) + struct.pack(template2, mode)
 		self.__socket.send(data)
+		data = self.__socket.recv(2)
+		assert len(data) == 2		
 
-		if not daqOnly:
-			# Check the status from all the ASICs
-			for portID, slaveID in self.getActiveFEBDs():
-				nLocalAsics = len(self.getGlobalAsicIDsForFEBD(portID, slaveID))
-				
-				deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
-				decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
+	def __start(self):
+		# First, generate a "sync" in the FEB/D (or ML605) itself
+		for portID, slaveID in self.getActiveFEBDs():
+			self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 
-				deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
-				decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+		for portID, slaveID in self.getActiveFEBDs(): 
+			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 
-				for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
-					localOK = deserializerStatus[i] and decoderStatus[i] 
-					globalOK = self.__activeAsics[globalAsicID]
-					if localOK != globalOK:
-						raise ErrorAsicPresenceChanged(portID, slaveID, i)
+		# Now, start the DAQ!
+		self._daqdMode(2); # Start acquisition on daqd
+
+		# Check the status from all the ASICs
+		for portID, slaveID in self.getActiveFEBDs():
+			nLocalAsics = len(self.getGlobalAsicIDsForFEBD(portID, slaveID))
+			
+			deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
+			decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
+
+			deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+			decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
+
+			for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
+				localOK = deserializerStatus[i] and decoderStatus[i] 
+				globalOK = self.__activeAsics[globalAsicID]
+				if localOK != globalOK:
+					raise ErrorAsicPresenceChanged(portID, slaveID, i)
 
 		return None
        
         ## Stops the data acquisition, the same as calling start(mode=0)
 	def stop(self):
-		template1 = "@HH"
-		template2 = "@H"
-		n = struct.calcsize(template1) + struct.calcsize(template2);
-		data = struct.pack(template1, 0x01, n) + struct.pack(template2, 0)
-		self.__socket.send(data)
+		self._daqdMode(0)
 		return None
 
         ## Returns the size of the allocated memory block 
@@ -412,7 +405,7 @@ class ATB:
 		n = struct.calcsize(template)
 		data = self.__socket.recv(n);
 		length, mask = struct.unpack(template, data)
-		reply = [ n for n in range(64) if (mask & (1<<n)) != 0 ]
+		reply = [ n for n in range(12*16) if (mask & (1<<n)) != 0 ]
 		return reply
 
 	## Returns an array of (portID, slaveID) for the active FEB/Ds (PAB) 
@@ -567,7 +560,6 @@ class ATB:
 	# @param payload The actual command to be transmitted
         # @param maxTries The maximum number of attempts to send the command without obtaining a valid reply   	
 	def sendCommand(self, portID, slaveID, commandType, payload, maxTries=10):
-
 		nTries = 0;
 		reply = None
 		doOnce = True

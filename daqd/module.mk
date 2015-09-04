@@ -13,9 +13,15 @@ endif
 ifeq (1, ${ENDOTOFPET})
 	CPPFLAGS := $(CPPFLAGS) -D__ENDOTOFPET__
 endif 
+ifeq (1, ${PFP_KX7})
+	OBJS := $(OBJS) DAQFrameServer.cpp.o PFP_KX7.cpp.o
+	CPPFLAGS := $(CPPFLAGS) -I ./include -DLINUX -D__PFP_KX7__
+	LDFLAGS := $(LDFLAGS)  -lpfp_kx7_api -lwdapi1160 
+endif 
+
 
 all: daqd SHM.o DSHM.so
-headers: Client.hpp FrameServer.hpp UDPFrameServer.hpp DAQFrameServer.hpp DtFlyP.hpp Protocol.hpp SHM.hpp
+headers: Client.hpp FrameServer.hpp UDPFrameServer.hpp DAQFrameServer.hpp DtFlyP.hpp Protocol.hpp SHM.hpp PFP_KX7.hpp
 
 
 DSHM.so: SHM.cpp.o DSHM.cpp.o

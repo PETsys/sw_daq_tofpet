@@ -16,14 +16,22 @@
 
 using namespace DAQd;
 
+AbstractDAQCard::AbstractDAQCard()
+{
+}
+
+AbstractDAQCard::~AbstractDAQCard()
+{
+}
+
 const uint64_t IDLE_WORD = 0xFFFFFFFFFFFFFFFFULL;
 const uint64_t HEADER_WORD = 0xFFFFFFFFFFFFFFF5ULL;
 const uint64_t TRAILER_WORD = 0xFFFFFFFFFFFFFFFAULL;
 
-DAQFrameServer::DAQFrameServer(int nFEB, int *feTypeMap, int debugLevel)
-  : FrameServer(nFEB, feTypeMap, debugLevel)
+DAQFrameServer::DAQFrameServer(AbstractDAQCard *card, int nFEB, int *feTypeMap, int debugLevel)
+  : FrameServer(nFEB, feTypeMap, debugLevel), DP(card)
 {
-	DP = new DtFlyP();
+	
 	printf("allocated DP object = %p\n", DP);
 	//	P = new DtFlyP;
 
@@ -33,6 +41,8 @@ DAQFrameServer::DAQFrameServer(int nFEB, int *feTypeMap, int debugLevel)
 
 DAQFrameServer::~DAQFrameServer()
 {
+	stopWorker();
+	printf("DAQFrameServer::~DAQFrameServer\n");
 	delete DP;	
 }
 
@@ -51,6 +61,7 @@ void DAQFrameServer::stopAcquisition()
 
 int DAQFrameServer::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
+	getPortUp(); // hint at register access for PFP_KX7
 
 	uint16_t sentSN = (unsigned(buffer[0]) << 8) + unsigned(buffer[1]);	
 
@@ -117,12 +128,6 @@ void *DAQFrameServer::doWork()
 	
 	DataFrame *devNull = new DataFrame;
 	
-	for(int i = 0; i < N_ASIC * 64 * 4; i++) {
-		tacLastEventTime[i] = 0;
-	}
-	for(int i = 0; i < N_ASIC * 64; i++) {
-		channelLastEventTime[i] = 0;
-	}
 	
 	long nFramesFound = 0;
 	long nFramesPushed = 0;
@@ -192,11 +197,11 @@ void *DAQFrameServer::doWork()
 		if(nWords < 0) { lastFrameWasBad = true; skippedLoops = 1000005; continue; }
 // 		printf("DBG4 %016llx \n", trailerWord);
 		if(trailerWord != TRAILER_WORD) { 
-			for(unsigned i = 0; i < frameSize; i++) { 
+/*			for(unsigned i = 0; i < frameSize; i++) { 
 				printf("%4d %016llx \n", i, dataFrame->data[i]);
 			}
 			printf("TAIL %016llx \n", trailerWord);
-				
+*/				
 				lastFrameWasBad = true; skippedLoops = 1000006; continue; 
 		}
 

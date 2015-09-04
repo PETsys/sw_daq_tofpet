@@ -66,7 +66,13 @@ FrameServer::FrameServer(int nFEB, int *feTypeMap, int debugLevel)
 		this->feTypeMap[i] = feTypeMap[i];
 	}
 	tacLastEventTime = new uint64_t[N_ASIC * 64 * 4];
+	for(int i = 0; i < N_ASIC * 64 * 4; i++) {
+		tacLastEventTime[i] = 0;
+	}
 	channelLastEventTime = new uint64_t[N_ASIC * 64];
+	for(int i = 0; i < N_ASIC * 64; i++) {
+		channelLastEventTime[i] = 0;
+	}	
 	
 	m_lut[ 0x7FFF ] = -1; // invalid state
 	uint16_t lfsr = 0x0000;
@@ -96,7 +102,8 @@ FrameServer::FrameServer(int nFEB, int *feTypeMap, int debugLevel)
 
 FrameServer::~FrameServer()
 {
-	stopWorker();
+	printf("FrameServer::~FrameServer()\n");
+	// WARNING: stopWorker() should be called from derived class destructors!
 	delete [] channelLastEventTime;
 	delete [] tacLastEventTime;
 

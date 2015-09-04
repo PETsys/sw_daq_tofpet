@@ -6,7 +6,6 @@ from sys import  stdout, exit
 from time import time, sleep
 import ROOT
 from rootdata import DataFile
-import serial
 import tofpet
 from os.path import dirname, isdir
 import argparse
