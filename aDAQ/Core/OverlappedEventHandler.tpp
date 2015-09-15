@@ -27,11 +27,6 @@ void OverlappedEventHandler<TEventInput, TEventOutput>::pushEvents(EventBuffer<T
 	if(buffer == NULL) 
 		return;
 
-	if(buffer->getSize() == 0) {
-		delete buffer;
-		return;
-	}	
-	
 	stepProcessingNBlocks++;
 	peakThreads = workers.size() > peakThreads ? workers.size() : peakThreads;	
 	
