@@ -41,13 +41,13 @@ static float		eventToT;
 static float		eventTQT;
 static float		eventTQE;
 
-class TQCorrWriter : public EventSink<Pulse> {
+class TQCorrWriter : public EventSink<Pulse>, public EventSource<Pulse>{
 
 
 
 public:
-	TQCorrWriter(FILE *tQcalFile, P2 *lut) 
-		: tQcalFile(tQcalFile), lut(lut){
+	TQCorrWriter(FILE *tQcalFile, P2 *lut, EventSink<Pulse> *sink) 
+		: EventSource<Pulse>(sink), tQcalFile(tQcalFile), lut(lut){
 		
 		start_t = 1.;
 		end_t = 3.;
@@ -94,7 +94,7 @@ public:
 			
 			
 
-			long long T = e.raw.T;
+			long long T = e.raw->T;
 			eventTime = e.time;
 			eventChannel = e.channelID;
 			eventToT = 1E-3*(e.timeEnd - e.time);
@@ -105,7 +105,7 @@ public:
 		
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -291,7 +291,8 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__	
 		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
 				new P2Extract(P2, false, 0.0, 0.20, true,
-				new TQCorrWriter(f, P2
+				new TQCorrWriter(f, P2,
+				new NullSink<Pulse>()
         )));
 
 		if(rawV[0]=='3') 
@@ -302,7 +303,8 @@ int main(int argc, char *argv[])
 		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
 				new Sanity(100E-9,								 
 				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
-				new TQCorrWriter(f, P2							 
+				new TQCorrWriter(f, P2,
+				new NullSink<Pulse>()
 				))));
 #endif
 	

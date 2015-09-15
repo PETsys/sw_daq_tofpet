@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 			bool frameLost = shm->getFrameLost(index);
 			
 			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE);
+				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE, NULL);
 			}
 			
 			for (int n = 0; outputType != 'N' && n < nEvents; n++) {

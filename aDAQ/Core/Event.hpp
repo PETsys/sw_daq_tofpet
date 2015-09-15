@@ -1,6 +1,7 @@
 #ifndef __nDAQ__EVENT_HPP__DEFINED__
 #define __nDAQ__EVENT_HPP__DEFINED__
 
+#include <cstddef>
 #include <sys/types.h>
 #include <stdint.h>
 
@@ -52,7 +53,7 @@ namespace DAQ { namespace Core {
 	};
 
 	struct Pulse {
-		RawPulse raw;
+		RawPulse *raw;
 		long long time;
 		long long timeEnd;
 		short region;
@@ -72,14 +73,14 @@ namespace DAQ { namespace Core {
 			channelID = -1;
 			energy = 0;
 			region = -1;
-			raw = RawPulse();
+			raw = NULL;
 			badEvent = true;
 		};
 	};
 
 	struct RawHit {
-		Pulse bottom;
-		Pulse top;
+		Pulse *bottom;
+		Pulse *top;
 		long long time;
 		short region;
 		int crystalID;
@@ -96,13 +97,13 @@ namespace DAQ { namespace Core {
 			asymmetry = 0;
 			missingEnergy = 0;
 			nMissing = 0;
-			bottom = Pulse();
-			top = Pulse();
+			bottom = NULL;
+			top = NULL;
 		};
 	};
 
 	struct Hit {
-		RawHit raw;
+		RawHit *raw;
 		long long time;
 		short region;
 		float x;
@@ -125,6 +126,7 @@ namespace DAQ { namespace Core {
 			energy = 0;
 			missingEnergy = 0;
 			nMissing = 0;
+			raw = NULL;
 		};
 	};
 
@@ -137,7 +139,7 @@ namespace DAQ { namespace Core {
 		float missingEnergy;
 		short nMissing;
 		int nHits;
-		Hit hits[maxHits];		
+		Hit *hits[maxHits];		
 
 		GammaPhoton() {
 			time = -1;
@@ -148,19 +150,19 @@ namespace DAQ { namespace Core {
 			x = y = z = 0;
 			nHits = 0;			
 			for(int i = 0; i < maxHits; i++)
-				hits[i] = Hit();
+				hits[i] = NULL;
 		};
 	};
 
 	struct Coincidence {
 		static const int maxPhotons = 2;
 		int nPhotons;
-		GammaPhoton photons[maxPhotons];
+		GammaPhoton *photons[maxPhotons];
 		
 		Coincidence() {
 			nPhotons = 0;
 			for(int i = 0; i < maxPhotons; i++)
-				photons[i] = GammaPhoton();
+				photons[i] = NULL;
 		};
 	};	
 }}

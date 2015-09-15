@@ -53,7 +53,7 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 // 		return false;
 // 	}
    
-	pulse.raw = raw;		
+	pulse.raw = &raw;
 	pulse.region = raw.region;
 	pulse.channelID = raw.channelID;
 
@@ -89,7 +89,7 @@ EventBuffer<Pulse> * P2Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents);
+	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
@@ -103,7 +103,6 @@ EventBuffer<Pulse> * P2Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 			outBuffer->pushWriteSlot();
 		}	
 	}
-	delete inBuffer;
 	return outBuffer;
 }
 

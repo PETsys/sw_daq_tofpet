@@ -27,7 +27,7 @@ EventBuffer<Coincidence> * CoincidenceGrouper::handleEvents(EventBuffer<GammaPho
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Coincidence> * outBuffer = new EventBuffer<Coincidence>(nEvents);
+	EventBuffer<Coincidence> * outBuffer = new EventBuffer<Coincidence>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 
@@ -46,9 +46,9 @@ EventBuffer<Coincidence> * CoincidenceGrouper::handleEvents(EventBuffer<GammaPho
 				c.nPhotons = 2;
 				
 				bool first1 = photon1.region > photon2.region;
-				c.photons[0] = first1 ? photon1 : photon2;
-				c.photons[1] = first1 ? photon2 : photon1;
-				if(c.photons[0].time < tMin || c.photons[0].time >= tMax) continue;		
+				c.photons[0] = first1 ? &photon1 : &photon2;
+				c.photons[1] = first1 ? &photon2 : &photon1;
+				if(c.photons[0]->time < tMin || c.photons[0]->time >= tMax) continue;		
 				outBuffer->pushWriteSlot();
 				lPrompts++;
 			}		
@@ -58,6 +58,5 @@ EventBuffer<Coincidence> * CoincidenceGrouper::handleEvents(EventBuffer<GammaPho
 	}
 	atomicAdd(nPrompts, lPrompts);
 	
-	delete inBuffer;
 	return outBuffer;
 }

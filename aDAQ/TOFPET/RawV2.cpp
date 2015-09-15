@@ -149,7 +149,7 @@ void RawReaderV2::run()
 			RawEventV2 &rawEvent = rawEvents[j];
 
 			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawPulse>(outBlockSize);
+				outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
 			}
 		
 

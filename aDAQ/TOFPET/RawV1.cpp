@@ -133,7 +133,7 @@ void RawReaderV1::run()
 		fread(&rawEvent, sizeof(RawEventV1), 1, dataFile);
 
 		if(outBuffer == NULL) {
-			outBuffer = new EventBuffer<RawPulse>(outBlockSize);
+			outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
 		}
 		
 

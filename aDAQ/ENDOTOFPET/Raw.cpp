@@ -92,7 +92,7 @@ void RawReaderE::run()
 				bytes=fread(&rawEvent, sizeof(RawTOFPET), 1, dataFile);
 				//fprintf(stderr, "tof.struct=%d\n %d\n %d\n %ld\n %ld\n %ld\n %lld\n %lld\n \n\n", rawEvent.code, rawEvent.tac, rawEvent.channelID,rawEvent.tCoarse,  rawEvent.eCoarse, rawEvent.tFine , rawEvent.eFine , rawEvent.tacIdleTime , rawEvent.channelIdleTime );
 				if(outBuffer == NULL) {
-					  outBuffer = new EventBuffer<RawPulse>(outBlockSize);
+					  outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
 				}
 				
 			
@@ -141,7 +141,7 @@ void RawReaderE::run()
 				fread(&rawEvent2, sizeof(RawSTICv3), 1, dataFile);
 				
 				if(outBuffer == NULL) {
-					  outBuffer = new EventBuffer<RawPulse>(outBlockSize);
+					  outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
 				}
 				
 				

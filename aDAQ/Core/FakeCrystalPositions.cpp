@@ -15,7 +15,7 @@ EventBuffer<Hit> * FakeCrystalPositions::handleEvents (EventBuffer<RawHit> *inBu
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Hit> * outBuffer = new EventBuffer<Hit>(nEvents);
+	EventBuffer<Hit> * outBuffer = new EventBuffer<Hit>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
@@ -26,7 +26,7 @@ EventBuffer<Hit> * FakeCrystalPositions::handleEvents (EventBuffer<RawHit> *inBu
 		int id = raw.crystalID;
 		
 		Hit &hit = outBuffer->getWriteSlot();
-		hit.raw = raw;
+		hit.raw = &raw;
 		hit.time = raw.time;
 		hit.region = raw.region;
 		hit.energy = raw.energy;
@@ -45,7 +45,6 @@ EventBuffer<Hit> * FakeCrystalPositions::handleEvents (EventBuffer<RawHit> *inBu
 		outBuffer->pushWriteSlot();
 	}
 	
-	delete inBuffer;
 	return outBuffer;
 }
 

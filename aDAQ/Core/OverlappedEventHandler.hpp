@@ -4,7 +4,7 @@
 #include <Core/EventBuffer.hpp>
 #include <pthread.h>
 #include <deque>
-#include <boost/timer.hpp>
+#include <time.h>
 #include <Core/ThreadPool.hpp>
 
 namespace DAQ { namespace Core {
@@ -29,13 +29,13 @@ namespace DAQ { namespace Core {
 
 
 	private:
-		boost::timer dbgTimer;
 		bool singleWorker;
 		ThreadPool *threadPool;
 		
 		unsigned peakThreads;
-		unsigned nBlocks;
-		double blockProcessingTime;
+		unsigned long long stepProcessingNBlocks;
+		double stepProcessingTime;
+		unsigned long long stepProcessingNInputEvents;
 
 					
 		EventBuffer<TEventInput> *lastBuffer;
@@ -59,6 +59,7 @@ namespace DAQ { namespace Core {
 			bool isFinished();
 			void wait();
 			double runTime;
+			long runEvents;
 			static void* run(void *);		
 		};
 

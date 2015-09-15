@@ -44,13 +44,13 @@ static float 		eventZ;
 static float		eventTQT;
 static float		eventTQE;
 
-class EventWriter : public EventSink<Hit> {
+class EventWriter : public EventSink<Hit>, public EventSource<Hit> {
 
 
 
 public:
-	EventWriter(TTree *lmDataTuple) 
-		: lmDataTuple(lmDataTuple) {
+	EventWriter(TTree *lmDataTuple, EventSink<Hit> *sink) 
+		: EventSource<Hit>(sink), lmDataTuple(lmDataTuple) {
 		
 	};
 	
@@ -65,29 +65,29 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Hit &hit = buffer->get(i);
 			
-			RawHit &raw= hit.raw;
-			long long T = raw.top.raw.T;
+			RawHit &raw= *(hit.raw);
+			long long T = raw.top->raw->T;
 			eventTime = raw.time;
-			eventChannel = raw.top.channelID;
-			eventToT = 1E-3*(raw.top.timeEnd - raw.top.time);
-			eventEnergy=raw.top.energy;
-			eventTac = raw.top.raw.d.tofpet.tac;
-			eventChannelIdleTime = raw.top.raw.channelIdleTime * T * 1E-12;
-			eventTacIdleTime = raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-			eventTQT = raw.top.tofpet_TQT;
-			eventTQE = raw.top.tofpet_TQE;
+			eventChannel = raw.top->channelID;
+			eventToT = 1E-3*(raw.top->timeEnd - raw.top->time);
+			eventEnergy=raw.top->energy;
+			eventTac = raw.top->raw->d.tofpet.tac;
+			eventChannelIdleTime = raw.top->raw->channelIdleTime * T * 1E-12;
+			eventTacIdleTime = raw.top->raw->d.tofpet.tacIdleTime * T * 1E-12;
+			eventTQT = raw.top->tofpet_TQT;
+			eventTQE = raw.top->tofpet_TQE;
 			eventX = hit.x;
 			eventY = hit.y;
 			eventZ = hit.z;
 			eventXi = hit.xi;
 			eventYi = hit.yi;
 			
-			//printf("%lld %e %f\n", raw.top.raw.d.tofpet.tacIdleTime, eventTacIdleTime, eventTQ);
+			//printf("%lld %e %f\n", raw.top->raw->d.tofpet.tacIdleTime, eventTacIdleTime, eventTQ);
 			
 			lmDataTuple->Fill();
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -267,7 +267,8 @@ int main(int argc, char *argv[])
 				new P2Extract(P2, false, 0.0, 0.20, false,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new EventWriter(lmData
+				new EventWriter(lmData, 
+				new NullSink<Hit>()
 		        )))));
 	
 		if(rawV[0]=='3') 
@@ -280,7 +281,8 @@ int main(int argc, char *argv[])
 				new DAQ::ENDOTOFPET::Extract( new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new EventWriter(lmData
+				new EventWriter(lmData, 
+				new NullSink<Hit>()
 				))))));		
 #endif
 
