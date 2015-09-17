@@ -29,10 +29,10 @@ struct EventOut {
 } __attribute__((packed));
 
 
-class EventWriter : public EventSink<Pulse> {
+class EventWriter : public EventSink<Pulse>, EventSource<Pulse> {
 public:
-	EventWriter(FILE *dataFile, float step1, float step2) 
-	: dataFile(dataFile), step1(step1), step2(step2) {
+	EventWriter(FILE *dataFile, float step1, float step2, EventSink<Pulse> *sink) 
+	:  EventSource<Pulse>(sink), dataFile(dataFile), step1(step1), step2(step2) {
 		
 	};
 	
@@ -50,12 +50,12 @@ public:
 				p.time, 
 				(unsigned short)(p.channelID), 
 				p.energy, 
-				(unsigned char)(p.raw.d.tofpet.tac), 
+				(unsigned char)(p.raw->d.tofpet.tac), 
 				(unsigned char)(p.badEvent ? 1 : 0) };
 			fwrite(&e, sizeof(e), 1, dataFile);
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -195,7 +195,8 @@ int main(int argc, char *argv[])
 
 		
 		EventSink<RawPulse> * pipeSink = 		new P2Extract(lut, false, 0.0, 0.20, false,
-				new EventWriter(lmFile, step1, step2
+				new EventWriter(lmFile, step1, step2, 
+				new NullSink<Pulse>()
 		));
 
 		DAQ::TOFPET::RawReader *reader=NULL;

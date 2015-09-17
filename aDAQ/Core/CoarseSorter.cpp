@@ -27,7 +27,7 @@ EventBuffer<RawPulse> * CoarseSorter::handleEvents (EventBuffer<RawPulse> *inBuf
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<RawPulse> * outBuffer = new EventBuffer<RawPulse>(nEvents);
+	EventBuffer<RawPulse> * outBuffer = new EventBuffer<RawPulse>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);	
 	u_int32_t lSingleRead = 0;
@@ -54,7 +54,6 @@ EventBuffer<RawPulse> * CoarseSorter::handleEvents (EventBuffer<RawPulse> *inBuf
 	atomicAdd(nSingleRead, lSingleRead);
 	//fprintf(stderr, "CoarseSorter:: %4u in, %4u sorted, %4d out\n", nEvents, sortList.size(), lSingleRead);
 	
-	delete inBuffer;
 	return outBuffer;
 }
 

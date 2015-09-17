@@ -84,6 +84,7 @@ void RawReaderV3::run()
 
 	fseek(dataFile, eventsBegin*sizeof(RawEventV3), SEEK_SET);
 	unsigned long long readPointer = eventsBegin;
+	unsigned long long nBlocks = 0;
 	while (readPointer < eventsEnd) {
 		unsigned long long count = eventsEnd - readPointer;
 		if(count > maxReadBlock) count = maxReadBlock;
@@ -97,7 +98,7 @@ void RawReaderV3::run()
 			RawEventV3 &r = rawEvents[j];
 
 			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawPulse>(outBlockSize);
+				outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
 			}
 
 			RawPulse &p = outBuffer->getWriteSlot();
@@ -146,6 +147,7 @@ void RawReaderV3::run()
 				outBuffer->setTMax(tMax);		
 				sink->pushEvents(outBuffer);
 				outBuffer = NULL;
+				nBlocks += 1;
 			}
 		}
 	}
@@ -158,12 +160,16 @@ void RawReaderV3::run()
 		outBuffer->setTMax(tMax);		
 		sink->pushEvents(outBuffer);
 		outBuffer = NULL;
+		nBlocks += 1;
 		
 	}
 	
 	sink->finish();
 	
 	fprintf(stderr, "RawReaderV3 report\n");
+	fprintf(stderr, " %10lu events processed\n", eventsEnd - eventsBegin);
+	fprintf(stderr, " %10lu blocks processed\n",  nBlocks);
+	fprintf(stderr, " %10lu events/block\n",  (eventsEnd - eventsBegin)/nBlocks);
 	sink->report();
 }
 
@@ -178,7 +184,6 @@ RawScannerV3::RawScannerV3(char *indexFilePrefix) :
 	char indexFileName[512];
 	sprintf(indexFileName, "%s.idx3", indexFilePrefix);
 	indexFile = fopen(indexFileName, "rb");
-	
 	while(fscanf(indexFile, "%f %f %llu %llu\n", &step1, &step2, &stepBegin, &stepEnd) == 4) {
 		Step step = { step1, step2, stepBegin, stepEnd };
 		steps.push_back(step);

@@ -54,13 +54,13 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<GammaPhoton> * outBuffer = new EventBuffer<GammaPhoton>(nEvents);
+	EventBuffer<GammaPhoton> * outBuffer = new EventBuffer<GammaPhoton>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
 	u_int32_t lHits[maxHits];	
 	for(int i = 0; i < maxHits; i++)
-		lHits[i] = 0;
+	lHits[i] = 0;
 	u_int32_t lHitsOverflow = 0;
 	uint32_t lPhotonsLowEnergy = 0;
 	uint32_t lPhotonsHighEnergy = 0;	
@@ -121,15 +121,15 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		
 		GammaPhoton &photon = outBuffer->getWriteSlot();
 		for(int k = 0; k < nHits; k++)
-			photon.hits[k] = *(hits[k]);
+			photon.hits[k] = hits[k];
 		
 		photon.nHits = nHits;		
-		photon.region = photon.hits[0].region;
-		photon.time = photon.hits[0].time;
-		photon.x = photon.hits[0].x;
-		photon.y = photon.hits[0].y;		
-		photon.z = photon.hits[0].z;		
-		photon.energy = photon.hits[0].energy;
+		photon.region = photon.hits[0]->region;
+		photon.time = photon.hits[0]->time;
+		photon.x = photon.hits[0]->x;
+		photon.y = photon.hits[0]->y;		
+		photon.z = photon.hits[0]->z;		
+		photon.energy = photon.hits[0]->energy;
 		photon.missingEnergy = 0;
 		photon.nMissing = 0;
 		
@@ -154,7 +154,6 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 	atomicAdd(nPhotonsLowEnergy, lPhotonsLowEnergy);
 	atomicAdd(nPhotonsHighEnergy, lPhotonsHighEnergy);
 	
-	delete inBuffer;
 	return outBuffer;
 }
 

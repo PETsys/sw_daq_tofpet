@@ -41,7 +41,7 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<GammaPhoton> * outBuffer = new EventBuffer<GammaPhoton>(nEvents);
+	EventBuffer<GammaPhoton> * outBuffer = new EventBuffer<GammaPhoton>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
@@ -59,7 +59,7 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 		GammaPhoton &photon = outBuffer->getWriteSlot();
 		photon.time = hit.time;
 		photon.region = hit.region;
-		photon.hits[0] = hit;
+		photon.hits[0] = &hit;
 		int nHits = 1;
 		
 		for(int j = i+1; j < nEvents; j++) {
@@ -77,7 +77,7 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 			if((d2 < radius2) && (tAbs(hit.time - hit2.time) <= timeWindow)) {
 				taken[j] = true;
 				if(nHits < GammaPhoton::maxHits) {
-					photon.hits[nHits] = hit2;
+					photon.hits[nHits] = &hit2;
 				}
 				nHits++;
 				continue;
@@ -93,9 +93,9 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 		photon.missingEnergy = 0;
 		photon.nMissing = 0;
 		for(int k = 0; k < photon.nHits; k++) {
-			photon.energy += photon.hits[k].energy;
-			photon.missingEnergy += photon.hits[k].missingEnergy;// * photon.hits[k].missingEnergy;
-			photon.nMissing += photon.hits[k].nMissing;
+			photon.energy += photon.hits[k]->energy;
+			photon.missingEnergy += photon.hits[k]->missingEnergy;// * photon.hits[k].missingEnergy;
+			photon.nMissing += photon.hits[k]->nMissing;
 		}
 		//photon.missingEnergy = sqrtf(photon.missingEnergy);
 
@@ -103,10 +103,10 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 			continue;
 		
 		// WARNING: beware of rounding issues when modifying this code
-		long long tA = photon.hits[0].time;
+		long long tA = photon.hits[0]->time;
 		float tB = 0;
 		for(int k = 1; k < photon.nHits; k++) {
-			tB += (photon.hits[k].time - tA) * photon.hits[k].energy / photon.energy;
+			tB += (photon.hits[k]->time - tA) * photon.hits[k]->energy / photon.energy;
 		}			
 		photon.time = tA + (long long)roundf(tB);
 		
@@ -123,15 +123,15 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 		 * 2 hit photons get position of the lowest energy hit
 		 * others we don't actually care.. 
 		 */
-		if(photon.nHits == 2 && photon.hits[1].energy < photon.hits[0].energy) {
-			photon.x = photon.hits[1].x;
-			photon.y = photon.hits[1].y;
-			photon.z = photon.hits[1].z;
+		if(photon.nHits == 2 && photon.hits[1]->energy < photon.hits[0]->energy) {
+			photon.x = photon.hits[1]->x;
+			photon.y = photon.hits[1]->y;
+			photon.z = photon.hits[1]->z;
 		}
 		else {
-			photon.x = photon.hits[0].x;
-			photon.y = photon.hits[0].y;
-			photon.z = photon.hits[0].z;
+			photon.x = photon.hits[0]->x;
+			photon.y = photon.hits[0]->y;
+			photon.z = photon.hits[0]->z;
 		}
 
 		if(photon.time < tMin or photon.time >= tMax) continue;
@@ -151,6 +151,5 @@ EventBuffer<GammaPhoton> * ComptonGrouper::handleEvents(EventBuffer<Hit> *inBuff
 	for(int i = 0; i < GammaPhoton::maxHits; i++)
 		atomicAdd(nHits[i], lHits[i]);
 
-	delete inBuffer;
 	return outBuffer;
 }
