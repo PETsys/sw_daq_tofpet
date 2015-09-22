@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 				feTypeHasBeenSet = 1;
 #else
 				fprintf(stderr, "ERROR: This was built without PFP_KX7 support.\n");
-				fprintf(stderr, "Recompile, adding PFP_KX7=1 to make command to enable DTFLY support\n");
+				fprintf(stderr, "Recompile, adding PFP_KX7=1 to make command to enable PFP_KX7 support\n");
 				return -1;
 #endif 
 			}
