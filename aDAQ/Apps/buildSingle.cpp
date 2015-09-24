@@ -49,8 +49,8 @@ class EventWriter : public EventSink<Hit>, public EventSource<Hit> {
 
 
 public:
-	EventWriter(TTree *lmDataTuple, EventSink<Hit> *sink) 
-		: EventSource<Hit>(sink), lmDataTuple(lmDataTuple) {
+	EventWriter(TTree *lmDataTuple, bool writeBadEvents, EventSink<Hit> *sink) 
+		: EventSource<Hit>(sink), lmDataTuple(lmDataTuple), writeBadEvents(writeBadEvents) {
 		
 	};
 	
@@ -66,6 +66,8 @@ public:
 			Hit &hit = buffer->get(i);
 			
 			RawHit &raw= *(hit.raw);
+			bool isBadEvent=raw.top->badEvent;
+			if(writeBadEvents==false && isBadEvent)continue;
 			long long T = raw.top->raw->T;
 			eventTime = raw.time;
 			eventChannel = raw.top->channelID;
@@ -95,6 +97,7 @@ public:
 	void report() { };
 private: 
 	TTree *lmDataTuple;
+	bool writeBadEvents;
 
 };
 
@@ -267,7 +270,7 @@ int main(int argc, char *argv[])
 				new P2Extract(P2, false, 0.0, 0.20, false,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new EventWriter(lmData, 
+				new EventWriter(lmData, false,
 				new NullSink<Hit>()
 		        )))));
 	
@@ -281,7 +284,7 @@ int main(int argc, char *argv[])
 				new DAQ::ENDOTOFPET::Extract( new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new EventWriter(lmData, 
+				new EventWriter(lmData, false,
 				new NullSink<Hit>()
 				))))));		
 #endif
