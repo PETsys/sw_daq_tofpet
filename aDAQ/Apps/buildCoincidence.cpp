@@ -73,7 +73,7 @@ using namespace std;
 
 class EventWriterRoot : public EventSink<Coincidence>, public EventSource<Coincidence> {
 public:
-	EventWriterRoot(TTree *lmTree, float maxDeltaT, int maxN, EventSink<Coincidence> *sink)
+	EventWriterRoot(TTree *lmTree, bool writeBadEvents, float maxDeltaT, int maxN, EventSink<Coincidence> *sink)
 	: EventSource<Coincidence>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN)
 	{
 	};
@@ -99,6 +99,9 @@ public:
 					Hit &hit2 = *c.photons[1]->hits[j2];
 					
 					long long T = hit1.raw->top->raw->T;
+					bool isBadEvent1=hit1.raw->top->badEvent;
+					bool isBadEvent2=hit2.raw->top->badEvent;
+					if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 					
 					float dt1 = hit1.time - t0_1;
 					if(dt1 > maxDeltaT) continue;
@@ -163,13 +166,14 @@ public:
 private: 
 	TTree *lmTree;
 	long long maxDeltaT;
-	int maxN;	
+	int maxN;
+	bool writeBadEvents;
 };
 
 class EventWriterRootList : public EventSink<Coincidence>, public EventSource<Coincidence> {
 public:
-	EventWriterRootList(TTree *lmTree, float maxDeltaT, int maxN, FILE *listFile, float angle, float ctr, EventSink<Coincidence> *sink)
-		: EventSource<Coincidence>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), listFile(listFile), angle(angle), ctr(ctr)
+	EventWriterRootList(TTree *lmTree, bool writeBadEvents, float maxDeltaT, int maxN, FILE *listFile, float angle, float ctr, EventSink<Coincidence> *sink)
+		: EventSource<Coincidence>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), listFile(listFile), angle(angle), ctr(ctr), writeBadEvents(writeBadEvents)
 	{
 	};
    
@@ -194,13 +198,17 @@ public:
 					Hit &hit2 = *c.photons[1]->hits[j2];
 					
 					long long T = hit1.raw->top->raw->T;
-					
+
+					bool isBadEvent1=hit1.raw->top->badEvent;
+					bool isBadEvent2=hit2.raw->top->badEvent;
+					if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
+
 					if(j1==0 && j2==0){
 						long long time = hit1.time + hit2.time;
 						long long deltaTime=hit1.time - hit2.time;
 						fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw->top->energy, hit2.raw->top->energy, c.photons[0]->nHits, c.photons[1]->nHits, float(1e-12*deltaTime), ctr); 
 					}
-
+					
 					float dt1 = hit1.time - t0_1;
 					if(dt1 > maxDeltaT) continue;
 					
@@ -265,6 +273,7 @@ private:
 	FILE *listFile;
 	float angle;
 	float ctr;
+	bool writeBadEvents;
 };
 
 
@@ -272,8 +281,8 @@ private:
 class EventWriterList : public EventSink<Coincidence>, public EventSource<Coincidence> {
 public:
 	
-	EventWriterList(FILE *listFile, float angle, float ctr, EventSink<Coincidence> *sink)
-	: EventSource<Coincidence>(sink), listFile(listFile), angle(angle), ctr(ctr)
+	EventWriterList(FILE *listFile, bool writeBadEvents, float angle, float ctr, EventSink<Coincidence> *sink)
+		: EventSource<Coincidence>(sink), listFile(listFile), angle(angle), ctr(ctr), writeBadEvents(writeBadEvents)
 	{
 	};
 
@@ -297,7 +306,9 @@ public:
 			Hit &hit2 = *c.photons[1]->hits[0];
 			
 			long long T = hit1.raw->top->raw->T;
-			
+			bool isBadEvent1=hit1.raw->top->badEvent;
+			bool isBadEvent2=hit2.raw->top->badEvent;
+			if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 			//float dt1 = hit1.time - t0_1;
 			//if(dt1 > maxDeltaT) continue;
 			
@@ -322,13 +333,14 @@ private:
 	FILE *listFile;
 	float angle;
 	float ctr;
+	bool writeBadEvents;
 };
 
 #ifdef __ENDOTOFPET__	
 class EventWriterListE : public EventSink<Coincidence>, EventSource<Coincidence> {
 public:
-	EventWriterListE(FILE *listFile, EventSink<Coincidence> *sink)
-	: EventSource<Coincidence>(sink) listFile(listFile) {
+	EventWriterListE(FILE *listFile, bool writeBadEvents, EventSink<Coincidence> *sink)
+		: EventSource<Coincidence>(sink) , listFile(listFile),  writeBadEvents(writeBadEvents) {
 	};
 	
 	~EventWriterListE() {
@@ -348,7 +360,9 @@ public:
 			Hit &hit2 = c.photons[1].hits[0];
 
 			long long T = hit1.raw->top->raw->T;
-
+			bool isBadEvent1=hit1.raw->top->badEvent;
+			bool isBadEvent2=hit2.raw->top->badEvent;
+			if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 			int xi1 = hit1.xi;	// External plate
 			int yi1 = hit1.yi;
 			int xi2 = hit2.xi % 4;	// Probe
@@ -375,6 +389,7 @@ public:
 	void report() { };
 private: 
 	FILE *listFile;
+	bool writeBadEvents;
 };
 #endif
 
@@ -677,18 +692,18 @@ int main(int argc, char *argv[])
 
 #ifndef __ENDOTOFPET__	
 		if(useROOT == false) {
-			writer = new EventWriterList(outListFile, acqAngle, ctrEstimate, new NullSink<Coincidence>());
+			writer = new EventWriterList(outListFile, false, acqAngle, ctrEstimate, new NullSink<Coincidence>());
 		}
 #else
 		if(useROOT == false) {
-			writer = new EventWriterListE(outListFile, new NullSink<Coincidence>());
+			writer = new EventWriterListE(outListFile, false, new NullSink<Coincidence>());
 		}
 #endif
 		else if(useLIST==false) {
-			writer = new EventWriterRoot(lmData, gWindow, maxHitsRoot, new NullSink<Coincidence>());
+			writer = new EventWriterRoot(lmData, false, gWindow, maxHitsRoot, new NullSink<Coincidence>());
 		}
 		else {
-			writer = new EventWriterRootList(lmData, gWindow, maxHitsRoot, outListFile, acqAngle, ctrEstimate, new NullSink<Coincidence>());
+			writer = new EventWriterRootList(lmData, false, gWindow, maxHitsRoot, outListFile, acqAngle, ctrEstimate, new NullSink<Coincidence>());
 		}
 
 

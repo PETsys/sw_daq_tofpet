@@ -50,8 +50,8 @@ using namespace std;
 
 class EventWriter : public EventSink<GammaPhoton>, public EventSource<GammaPhoton> {
 public:
-	EventWriter(TTree *lmTree, float maxDeltaT, int maxN, EventSink<GammaPhoton> *sink) 
-	: EventSource<GammaPhoton>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN)
+	EventWriter(TTree *lmTree, bool writeBadEvents,float maxDeltaT, int maxN, EventSink<GammaPhoton> *sink) 
+		: EventSource<GammaPhoton>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), writeBadEvents(writeBadEvents)
 	{
 	};
 	
@@ -69,7 +69,8 @@ public:
 			long long t0 = e.hits[0]->time;
 			for(int j1 = 0; (j1 < e.nHits) && (j1 < maxN); j1 ++) {
 				Hit &hit = *e.hits[j1];
-				
+				bool isBadEvent=hit.raw->top->badEvent;
+				if(writeBadEvents==false && isBadEvent)continue;
 				float dt = hit.time - t0;
 				if(dt > maxDeltaT) continue;
 				
@@ -111,6 +112,7 @@ private:
 	TTree *lmTree;
 	long long maxDeltaT;
 	int maxN;
+	bool writeBadEvents;
 };
 
 void displayHelp(char * program)
@@ -309,7 +311,7 @@ int main(int argc, char *argv[])
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, gMaxHits,
-				new EventWriter(lmData, gWindow, gMaxHitsRoot,
+				new EventWriter(lmData, false, gWindow, gMaxHitsRoot,
 				new NullSink<GammaPhoton>()
 			)))));
 

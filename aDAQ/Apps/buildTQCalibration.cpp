@@ -46,8 +46,8 @@ class TQCorrWriter : public EventSink<Pulse>, public EventSource<Pulse>{
 
 
 public:
-	TQCorrWriter(FILE *tQcalFile, P2 *lut, EventSink<Pulse> *sink) 
-		: EventSource<Pulse>(sink), tQcalFile(tQcalFile), lut(lut){
+	TQCorrWriter(FILE *tQcalFile, bool writeBadEvents, P2 *lut, EventSink<Pulse> *sink) 
+		: EventSource<Pulse>(sink), tQcalFile(tQcalFile), lut(lut), writeBadEvents(writeBadEvents){
 		
 		start_t = 1.;
 		end_t = 3.;
@@ -92,9 +92,11 @@ public:
 			Pulse &e = buffer->get(i);
 			
 			
-			
+			bool isBadEvent=e.badEvent;
+			if(writeBadEvents==false && isBadEvent)continue;
 
 			long long T = e.raw->T;
+			
 			eventTime = e.time;
 			eventChannel = e.channelID;
 			eventToT = 1E-3*(e.timeEnd - e.time);
@@ -151,6 +153,8 @@ private:
 	float end_t;
 	float end_e;
 	float cumul;
+	bool writeBadEvents;
+
 	
 
 };
@@ -291,7 +295,7 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__	
 		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
 				new P2Extract(P2, false, 0.0, 0.20, true,
-				new TQCorrWriter(f, P2,
+				new TQCorrWriter(f, false, P2,
 				new NullSink<Pulse>()
         )));
 
@@ -303,7 +307,7 @@ int main(int argc, char *argv[])
 		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
 				new Sanity(100E-9,								 
 				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
-				new TQCorrWriter(f, P2,
+				new TQCorrWriter(f, false, P2,
 				new NullSink<Pulse>()
 				))));
 #endif
