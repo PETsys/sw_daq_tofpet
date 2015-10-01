@@ -164,9 +164,9 @@ void *PFP_KX7::runWorker(void *arg)
 
 	while(!p->die) {
 		pthread_mutex_lock(&p->hwLock);
-		while((boost::posix_time::microsec_clock::local_time() - p->lastCommandTime).total_milliseconds() < 300) {
+		while((boost::posix_time::microsec_clock::local_time() - p->lastCommandTime).total_milliseconds() < 5) {
 			pthread_mutex_unlock(&p->hwLock);
-			usleep(10000);
+			usleep(1000);
 			pthread_mutex_lock(&p->hwLock);
 		}
 		DMAStatus = PFP_DoDMA(p->Card, p->DMA_Point, 0, DMA_TRANS_BYTE_SIZE, DMA_AXI_STREAM, 10);
