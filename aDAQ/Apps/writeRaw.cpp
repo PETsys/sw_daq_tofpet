@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
 				writer->closeStep();
 			}
 
-			fprintf(stderr, "writeRaw:: Step had %d frames with %d events; %f events/frame avg, %d event/frame max\n", 
+			fprintf(stderr, "writeRaw:: Step had %lld frames with %lld events; %f events/frame avg, %d event/frame max\n", 
 					stepGoodFrames, stepEvents, 
 					float(stepEvents)/stepGoodFrames,
 					stepMaxFrame); fflush(stderr);
