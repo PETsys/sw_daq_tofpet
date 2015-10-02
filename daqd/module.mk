@@ -10,6 +10,9 @@ ifeq (1, ${DTFLY})
 	LDFLAGS := $(LDFLAGS)  -ldtfly -lwdapi1011 
 endif 
 
+ifeq (1, ${NO_CHANNEL_IDLE_TIME})
+	CPPFLAGS := $(CPPFLAGS) -D__NO_CHANNEL_IDLE_TIME__
+endif
 ifeq (1, ${ENDOTOFPET})
 	CPPFLAGS := $(CPPFLAGS) -D__ENDOTOFPET__
 endif 

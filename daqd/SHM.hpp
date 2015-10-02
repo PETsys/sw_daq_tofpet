@@ -14,8 +14,10 @@ static const int N_ASIC=16*1024;
 
 struct DataFrame {
 		uint64_t data[MaxDataFrameSize];
+#ifndef __NO_CHANNEL_IDLE_TIME__
 		uint64_t channelIdleTime[MaxDataFrameSize];
 		uint64_t tacIdleTime[MaxDataFrameSize];
+#endif
 #ifdef __ENDOTOFPET__
 		int8_t feType[MaxDataFrameSize];
 #endif
@@ -165,13 +167,21 @@ public:
 	};
 
 	long long getTACIdleTime(int index, int event) {
+#ifndef __NO_CHANNEL_IDLE_TIME__
 		DataFrame *dataFrame = &shm[index];
 		return dataFrame->tacIdleTime[event+2];
+#else
+		return 0;
+#endif
 	};
 
 	long long getChannelIdleTime(int index, int event) {
+#ifndef __NO_CHANNEL_IDLE_TIME__
 		DataFrame *dataFrame = &shm[index];
 		return dataFrame->channelIdleTime[event+2];
+#else
+		return 0;
+#endif
 	};
   
 
