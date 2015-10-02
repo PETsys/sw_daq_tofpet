@@ -179,33 +179,36 @@ int DtFlyP::getWords(uint64_t *buffer, int count)
 
 int DtFlyP::getWords_(uint64_t *buffer, int count)
 {
-	//printf("DtFlyP::getWords_(%p, %d) ", buffer, count);
-	int result = -1;
-	
-/*	printf("status = %d, used = %d\n", wordBufferStatus, wordBufferUsed);*/
-	
+	// If the DMA buffer queue is empty for reading, wait until we have something.
+	// Otherwise, proceed without even touching the lock.
+	if(dmaBufferQueueIsEmpty()) {
+		pthread_mutex_lock(&lock);
+		while(!die && dmaBufferQueueIsEmpty()) {
+			pthread_cond_wait(&condDirtyBuffer, &lock);
+		}
+		pthread_mutex_unlock(&lock);
+		if(die) return -1;
+	}
+
+	// If this buffer has been fully consumed, increase read pointer and return 0.
+	// getWords() will retry again.
 	if(wordBufferUsed[dmaBufferRdPtr%NB] >= wordBufferStatus[dmaBufferRdPtr%NB]) {
 		pthread_mutex_lock(&lock);
 		dmaBufferRdPtr = (dmaBufferRdPtr + 1) % (2*NB);
 		pthread_mutex_unlock(&lock);
 		pthread_cond_signal(&condCleanBuffer);
+		return 0;
 	}
 	
-	pthread_mutex_lock(&lock);
-	while(!die && dmaBufferQueueIsEmpty()) {
-		pthread_cond_wait(&condDirtyBuffer, &lock);
-	}
-	pthread_mutex_unlock(&lock);
-	
-	if (die) {
-		result = -1;
-	}
-	else if(wordBufferStatus[dmaBufferRdPtr%NB] < 0) {
+	int result = -1;
+	if(wordBufferStatus[dmaBufferRdPtr%NB] < 0) {
+		// This buffer had an error status
 		printf("Buffer status was set to %d\n", wordBufferStatus[dmaBufferRdPtr%NB]);
 		wordBufferUsed[dmaBufferRdPtr%NB] = wordBufferStatus[dmaBufferRdPtr%NB]; // Set wordBufferUsed to some number equal or greater than status
 		result = wordBufferStatus[dmaBufferRdPtr%NB];
 	}	
 	else {	
+		// This buffer has normal data
 		int wordsAvailable = wordBufferStatus[dmaBufferRdPtr%NB] - wordBufferUsed[dmaBufferRdPtr%NB];
 		result = count < wordsAvailable ? count : wordsAvailable;
 		if(result < 0) result = 0;
@@ -214,12 +217,8 @@ int DtFlyP::getWords_(uint64_t *buffer, int count)
 		wordBufferUsed[dmaBufferRdPtr%NB] += result;
 	}
 
-	// if(result <= 0 || emptied) {
-	// 	pthread_cond_signal(&condCleanBuffer);
-	// }
-	       
-
 	return result;
+	
 }
 
 void DtFlyP::startWorker()
