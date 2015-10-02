@@ -164,8 +164,8 @@ int main(int argc, char *argv[])
 	float gWindow = 100E-9; // s
 	float minEnergy = 150; // keV or ns (if energy=tot)
 	float maxEnergy = 500; // keV or ns (if energy=tot)
-	int gMaxHits=16;
-	int gMaxHitsRoot=16;
+	int gMaxHits=GammaPhoton::maxHits;
+	int gMaxHitsRoot=GammaPhoton::maxHits;
 
 	int nOptArgs=0;
 	while(1) {

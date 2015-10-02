@@ -465,7 +465,7 @@ int main(int argc, char *argv[])
 
 	float cWindow = 20E-9; // s
 	float gWindow = 100E-9; // s
-	int maxHits=16;
+	int maxHits=GammaPhoton::maxHits;
 	float gWindowRoot = 100E-9; // s
 	int maxHitsRoot=1;
 	float minEnergy = 150; // keV or ns (if energy=tot)
