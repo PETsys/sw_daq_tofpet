@@ -86,7 +86,6 @@ int Client::doAcqOnOff()
 
 	uint16_t acqMode = 0;
 	memcpy(&acqMode, socketBuffer + sizeof(CmdHeader_t), sizeof(uint16_t));
-	printf("Client::doAcqOnOff() called with acqMode = %hu\n", acqMode);
 	if (acqMode != 0) 
 		frameServer->startAcquisition(acqMode);
 	else
@@ -97,7 +96,6 @@ int Client::doAcqOnOff()
 	int status = send(socket, &header, sizeof(header), MSG_NOSIGNAL);
 	if(status < sizeof(header)) return -1;
 
-	printf("Client::doAcqOnOff() exiting...\n");
 	return 0;
 }
 
