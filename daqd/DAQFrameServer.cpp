@@ -61,8 +61,6 @@ void DAQFrameServer::stopAcquisition()
 
 int DAQFrameServer::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
-	getPortUp(); // hint at register access for PFP_KX7
-
 	uint16_t sentSN = (unsigned(buffer[0]) << 8) + unsigned(buffer[1]);	
 
 	boost::posix_time::ptime t1 = boost::posix_time::microsec_clock::local_time();

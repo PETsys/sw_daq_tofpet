@@ -23,7 +23,9 @@ import DSHM
 import tofpet
 import sticv3
 
-
+MAX_DAQ_PORTS = 32
+MAX_CHAIN_FEBD = 32
+MAX_FEBD_ASIC = 64
 
 ###	
 ## Required for compatibility with configuration files and older code
@@ -38,8 +40,8 @@ intToBin = tofpet.intToBin
 class BoardConfig:
         ## Constructor
 	def __init__(self):
-		maxASIC = 16*12
-		maxDAC = 8
+		maxASIC = MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC
+		maxDAC = MAX_DAQ_PORTS * MAX_CHAIN_FEBD * 2
                 self.asicConfigFile = [ "Default Configuration" for x in range(maxASIC) ]
                 self.asicBaselineFile = [ "None" for x in range(maxASIC) ]
                 self.HVDACParamsFile = "None"
@@ -309,8 +311,10 @@ class ATB:
 		#self.__shmmap = mmap.mmap(self.__shm.fd, self.__shm.size)
 		#os.close(self.__shm.fd)
 		self.config = None
-		self.__activeAsics = [ False for x in range(16*1024) ]
-		self.__asicType = [ None for x in range(16*1024) ]
+		self.__activePorts = []
+		self.__activeFEBDs = []
+		self.__activeAsics = [ False for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
+		self.__asicType = [ None for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
 		self.__asicConfigCache = {}		
 		return None
 
@@ -396,6 +400,9 @@ class ATB:
 
 	## Returns an array with the active ports (PAB only has port 0)
 	def getActivePorts(self):
+		return self.__activePorts
+
+	def __getActivePorts(self):
 		template = "@HH"
 		n = struct.calcsize(template)
 		data = struct.pack(template, 0x06, n)
@@ -410,6 +417,9 @@ class ATB:
 
 	## Returns an array of (portID, slaveID) for the active FEB/Ds (PAB) 
 	def getActiveFEBDs(self):
+		return self.__activeFEBDs
+
+	def __getActiveFEBDs(self):
 		return [ (x, 0) for x in self.getActivePorts() ]
 
 	def __getPossibleFEBDs(self):
@@ -872,6 +882,8 @@ class ATB:
 	## Sends the entire configuration (needs to be assigned to the abstract ATB.config data structure) to the ASIC and starts to write data to the shared memory block
         # @param maxTries The maximum number of attempts to read a valid dataframe after uploading configuration 
 	def initialize(self, maxTries = 1):
+		self.__activePorts = self.__getActivePorts()
+		self.__activeFEBDs = self.__getActiveFEBDs()
 		assert self.config is not None
 		activePorts = self.getActivePorts()
 		print "INFO: active FEB/D on ports: ", (", ").join([str(x) for x in activePorts])

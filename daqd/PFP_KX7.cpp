@@ -23,7 +23,7 @@ using namespace DAQd;
 static const unsigned DMA_TRANS_BYTE_SIZE = 262144;  // max for USER_FIFO_THRESHOLD 262128
 static const unsigned wordBufferSize = DMA_TRANS_BYTE_SIZE / 8;
 
-static const int COMMAND_TO_DMA_PAUSE = 100;
+static const int COMMAND_TO_DMA_PAUSE = 10;
 
 //static int COM_count = 0;
 

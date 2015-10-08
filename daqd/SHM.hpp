@@ -9,7 +9,7 @@ namespace DAQd {
 	
 static const int MaxDataFrameSize = 2048;
 static const unsigned MaxDataFrameQueueSize = 1024;
-static const int N_ASIC=16*1024;
+static const int N_ASIC=32*32*64; // defined by number of bits available in protocol
 
 
 struct DataFrame {
