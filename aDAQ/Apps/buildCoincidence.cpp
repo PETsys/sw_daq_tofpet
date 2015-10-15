@@ -71,10 +71,10 @@ using namespace std;
 
 
 
-class EventWriterRoot : public EventSink<Coincidence> {
+class EventWriterRoot : public EventSink<Coincidence>, public EventSource<Coincidence> {
 public:
-	EventWriterRoot(TTree *lmTree, float maxDeltaT, int maxN)
-	: lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN)
+	EventWriterRoot(TTree *lmTree, bool writeBadEvents, float maxDeltaT, int maxN, EventSink<Coincidence> *sink)
+	: EventSource<Coincidence>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN)
 	{
 	};
    
@@ -89,16 +89,19 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Coincidence &c = buffer->get(i);
 			
-			for(int j1 = 0; (j1 < c.photons[0].nHits) && (j1 < maxN); j1 ++) {
-				long long t0_1 = c.photons[0].hits[0].time;		
+			for(int j1 = 0; (j1 < c.photons[0]->nHits) && (j1 < maxN); j1 ++) {
+				long long t0_1 = c.photons[0]->hits[0]->time;
 				
-				for(int j2 = 0; (j2 < c.photons[1].nHits) && (j2 < maxN); j2++) {
-					long long t0_2 = c.photons[1].hits[0].time;
+				for(int j2 = 0; (j2 < c.photons[1]->nHits) && (j2 < maxN); j2++) {
+					long long t0_2 = c.photons[1]->hits[0]->time;
 		
-					Hit &hit1 = c.photons[0].hits[j1];
-					Hit &hit2 = c.photons[1].hits[j2];
+					Hit &hit1 = *c.photons[0]->hits[j1];
+					Hit &hit2 = *c.photons[1]->hits[j2];
 					
-					long long T = hit1.raw.top.raw.T;
+					long long T = hit1.raw->top->raw->T;
+					bool isBadEvent1=hit1.raw->top->badEvent;
+					bool isBadEvent2=hit2.raw->top->badEvent;
+					if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 					
 					float dt1 = hit1.time - t0_1;
 					if(dt1 > maxDeltaT) continue;
@@ -108,17 +111,17 @@ public:
 					
 				
 					event1J = j1;
-					event1N = c.photons[0].nHits;
+					event1N = c.photons[0]->nHits;
 					event1DeltaT = dt1;
 					event1Time = hit1.time;
-					event1Channel = hit1.raw.top.channelID;
-					event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
-					event1Energy=hit1.raw.top.energy;
-					event1Tac = hit1.raw.top.raw.d.tofpet.tac;
-					event1ChannelIdleTime = hit1.raw.top.raw.channelIdleTime * T * 1E-12;
-					event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-					event1TQT = hit1.raw.top.tofpet_TQT;
-					event1TQE = hit1.raw.top.tofpet_TQE;
+					event1Channel = hit1.raw->top->channelID;
+					event1ToT = 1E-3*(hit1.raw->top->timeEnd - hit1.raw->top->time);
+					event1Energy=hit1.raw->top->energy;
+					event1Tac = hit1.raw->top->raw->d.tofpet.tac;
+					event1ChannelIdleTime = hit1.raw->top->raw->channelIdleTime * T * 1E-12;
+					event1TacIdleTime = hit1.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = hit1.raw->top->tofpet_TQT;
+					event1TQE = hit1.raw->top->tofpet_TQE;
 					event1X = hit1.x;
 					event1Y = hit1.y;
 					event1Z = hit1.z;
@@ -126,17 +129,17 @@ public:
 					event1Yi = hit1.yi;			
 						
 					event2J = j2;
-					event2N = c.photons[1].nHits;
+					event2N = c.photons[1]->nHits;
 					event2DeltaT = dt2;
 					event2Time = hit2.time;
-					event2Channel = hit2.raw.top.channelID;
-					event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
-					event2Energy=hit2.raw.top.energy;
-					event2Tac = hit2.raw.top.raw.d.tofpet.tac;
-					event2ChannelIdleTime = hit2.raw.top.raw.channelIdleTime * T * 1E-12;
-					event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-					event2TQT = hit2.raw.top.tofpet_TQT;
-					event2TQE = hit2.raw.top.tofpet_TQE;
+					event2Channel = hit2.raw->top->channelID;
+					event2ToT = 1E-3*(hit2.raw->top->timeEnd - hit2.raw->top->time);
+					event2Energy=hit2.raw->top->energy;
+					event2Tac = hit2.raw->top->raw->d.tofpet.tac;
+					event2ChannelIdleTime = hit2.raw->top->raw->channelIdleTime * T * 1E-12;
+					event2TacIdleTime = hit2.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = hit2.raw->top->tofpet_TQT;
+					event2TQE = hit2.raw->top->tofpet_TQE;
 					event2X = hit2.x;
 					event2Y = hit2.y;
 					event2Z = hit2.z;
@@ -154,7 +157,7 @@ public:
 			
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -163,13 +166,14 @@ public:
 private: 
 	TTree *lmTree;
 	long long maxDeltaT;
-	int maxN;	
+	int maxN;
+	bool writeBadEvents;
 };
 
-class EventWriterRootList : public EventSink<Coincidence> {
+class EventWriterRootList : public EventSink<Coincidence>, public EventSource<Coincidence> {
 public:
-	EventWriterRootList(TTree *lmTree, float maxDeltaT, int maxN, FILE *listFile, float angle, float ctr)
-		: lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), listFile(listFile), angle(angle), ctr(ctr)
+	EventWriterRootList(TTree *lmTree, bool writeBadEvents, float maxDeltaT, int maxN, FILE *listFile, float angle, float ctr, EventSink<Coincidence> *sink)
+		: EventSource<Coincidence>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), listFile(listFile), angle(angle), ctr(ctr), writeBadEvents(writeBadEvents)
 	{
 	};
    
@@ -184,23 +188,27 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Coincidence &c = buffer->get(i);
 			
-			for(int j1 = 0; (j1 < c.photons[0].nHits) && (j1 < maxN); j1 ++) {
-				long long t0_1 = c.photons[0].hits[0].time;		
+			for(int j1 = 0; (j1 < c.photons[0]->nHits) && (j1 < maxN); j1 ++) {
+				long long t0_1 = c.photons[0]->hits[0]->time;
 				
-				for(int j2 = 0; (j2 < c.photons[1].nHits) && (j2 < maxN); j2++) {
-					long long t0_2 = c.photons[1].hits[0].time;
+				for(int j2 = 0; (j2 < c.photons[1]->nHits) && (j2 < maxN); j2++) {
+					long long t0_2 = c.photons[1]->hits[0]->time;
 		
-					Hit &hit1 = c.photons[0].hits[j1];
-					Hit &hit2 = c.photons[1].hits[j2];
+					Hit &hit1 = *c.photons[0]->hits[j1];
+					Hit &hit2 = *c.photons[1]->hits[j2];
 					
-					long long T = hit1.raw.top.raw.T;
-					
+					long long T = hit1.raw->top->raw->T;
+
+					bool isBadEvent1=hit1.raw->top->badEvent;
+					bool isBadEvent2=hit2.raw->top->badEvent;
+					if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
+
 					if(j1==0 && j2==0){
 						long long time = hit1.time + hit2.time;
 						long long deltaTime=hit1.time - hit2.time;
-						fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw.top.energy, hit2.raw.top.energy, c.photons[0].nHits, c.photons[1].nHits, float(1e-12*deltaTime), ctr); 
+						fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw->top->energy, hit2.raw->top->energy, c.photons[0]->nHits, c.photons[1]->nHits, float(1e-12*deltaTime), ctr); 
 					}
-
+					
 					float dt1 = hit1.time - t0_1;
 					if(dt1 > maxDeltaT) continue;
 					
@@ -209,17 +217,17 @@ public:
 					
 				
 					event1J = j1;
-					event1N = c.photons[0].nHits;
+					event1N = c.photons[0]->nHits;
 					event1DeltaT = dt1;
 					event1Time = hit1.time;
-					event1Channel = hit1.raw.top.channelID;
-					event1ToT = 1E-3*(hit1.raw.top.timeEnd - hit1.raw.top.time);
-					event1Energy=hit1.raw.top.energy;
-					event1Tac = hit1.raw.top.raw.d.tofpet.tac;
-					event1ChannelIdleTime = hit1.raw.top.raw.channelIdleTime * T * 1E-12;
-					event1TacIdleTime = hit1.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-					event1TQT = hit1.raw.top.tofpet_TQT;
-					event1TQE = hit1.raw.top.tofpet_TQE;
+					event1Channel = hit1.raw->top->channelID;
+					event1ToT = 1E-3*(hit1.raw->top->timeEnd - hit1.raw->top->time);
+					event1Energy=hit1.raw->top->energy;
+					event1Tac = hit1.raw->top->raw->d.tofpet.tac;
+					event1ChannelIdleTime = hit1.raw->top->raw->channelIdleTime * T * 1E-12;
+					event1TacIdleTime = hit1.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = hit1.raw->top->tofpet_TQT;
+					event1TQE = hit1.raw->top->tofpet_TQE;
 					event1X = hit1.x;
 					event1Y = hit1.y;
 					event1Z = hit1.z;
@@ -227,17 +235,17 @@ public:
 					event1Yi = hit1.yi;			
 						
 					event2J = j2;
-					event2N = c.photons[1].nHits;
+					event2N = c.photons[1]->nHits;
 					event2DeltaT = dt2;
 					event2Time = hit2.time;
-					event2Channel = hit2.raw.top.channelID;
-					event2ToT = 1E-3*(hit2.raw.top.timeEnd - hit2.raw.top.time);
-					event2Energy=hit2.raw.top.energy;
-					event2Tac = hit2.raw.top.raw.d.tofpet.tac;
-					event2ChannelIdleTime = hit2.raw.top.raw.channelIdleTime * T * 1E-12;
-					event2TacIdleTime = hit2.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-					event2TQT = hit2.raw.top.tofpet_TQT;
-					event2TQE = hit2.raw.top.tofpet_TQE;
+					event2Channel = hit2.raw->top->channelID;
+					event2ToT = 1E-3*(hit2.raw->top->timeEnd - hit2.raw->top->time);
+					event2Energy=hit2.raw->top->energy;
+					event2Tac = hit2.raw->top->raw->d.tofpet.tac;
+					event2ChannelIdleTime = hit2.raw->top->raw->channelIdleTime * T * 1E-12;
+					event2TacIdleTime = hit2.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = hit2.raw->top->tofpet_TQT;
+					event2TQE = hit2.raw->top->tofpet_TQE;
 					event2X = hit2.x;
 					event2Y = hit2.y;
 					event2Z = hit2.z;
@@ -252,7 +260,7 @@ public:
 			
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -265,15 +273,16 @@ private:
 	FILE *listFile;
 	float angle;
 	float ctr;
+	bool writeBadEvents;
 };
 
 
 
-class EventWriterList : public EventSink<Coincidence> {
+class EventWriterList : public EventSink<Coincidence>, public EventSource<Coincidence> {
 public:
 	
-	EventWriterList(FILE *listFile, float angle, float ctr)
-		: listFile(listFile), angle(angle), ctr(ctr)
+	EventWriterList(FILE *listFile, bool writeBadEvents, float angle, float ctr, EventSink<Coincidence> *sink)
+		: EventSource<Coincidence>(sink), listFile(listFile), angle(angle), ctr(ctr), writeBadEvents(writeBadEvents)
 	{
 	};
 
@@ -289,15 +298,17 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Coincidence &c = buffer->get(i);
 			
-			long long t0_1 = c.photons[0].hits[0].time;		
+			long long t0_1 = c.photons[0]->hits[0]->time;
 				
-			long long t0_2 = c.photons[1].hits[0].time;
+			long long t0_2 = c.photons[1]->hits[0]->time;
 		
-			Hit &hit1 = c.photons[0].hits[0];
-			Hit &hit2 = c.photons[1].hits[0];
+			Hit &hit1 = *c.photons[0]->hits[0];
+			Hit &hit2 = *c.photons[1]->hits[0];
 			
-			long long T = hit1.raw.top.raw.T;
-			
+			long long T = hit1.raw->top->raw->T;
+			bool isBadEvent1=hit1.raw->top->badEvent;
+			bool isBadEvent2=hit2.raw->top->badEvent;
+			if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 			//float dt1 = hit1.time - t0_1;
 			//if(dt1 > maxDeltaT) continue;
 			
@@ -307,12 +318,12 @@ public:
 			//if(j1!=0 || j2!=0)continue;
 			long long time = hit1.time + hit2.time;
 			long long deltaTime=hit1.time - hit2.time;
-			fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw.top.energy, hit2.raw.top.energy, c.photons[0].nHits, c.photons[1].nHits, float(1e-12*deltaTime), ctr); 
+			fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw->top->energy, hit2.raw->top->energy, c.photons[0]->nHits, c.photons[1]->nHits, float(1e-12*deltaTime), ctr); 
 					
 
 		}
 				  	
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -322,13 +333,14 @@ private:
 	FILE *listFile;
 	float angle;
 	float ctr;
+	bool writeBadEvents;
 };
 
 #ifdef __ENDOTOFPET__	
-class EventWriterListE : public EventSink<Coincidence> {
+class EventWriterListE : public EventSink<Coincidence>, EventSource<Coincidence> {
 public:
-	EventWriterListE(FILE *listFile)
-	: listFile(listFile) {
+	EventWriterListE(FILE *listFile, bool writeBadEvents, EventSink<Coincidence> *sink)
+		: EventSource<Coincidence>(sink) , listFile(listFile),  writeBadEvents(writeBadEvents) {
 	};
 	
 	~EventWriterListE() {
@@ -347,8 +359,10 @@ public:
 			Hit &hit1 = c.photons[0].hits[0];
 			Hit &hit2 = c.photons[1].hits[0];
 
-			long long T = hit1.raw.top.raw.T;
-
+			long long T = hit1.raw->top->raw->T;
+			bool isBadEvent1=hit1.raw->top->badEvent;
+			bool isBadEvent2=hit2.raw->top->badEvent;
+			if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 			int xi1 = hit1.xi;	// External plate
 			int yi1 = hit1.yi;
 			int xi2 = hit2.xi % 4;	// Probe
@@ -367,7 +381,7 @@ public:
 					0
 					);						
 		}
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -375,6 +389,7 @@ public:
 	void report() { };
 private: 
 	FILE *listFile;
+	bool writeBadEvents;
 };
 #endif
 
@@ -419,19 +434,19 @@ int main(int argc, char *argv[])
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
 		{ "onlineMode", no_argument,0,0 },
-		{ "acqDeltaTime", optional_argument,0,0 },
-		{ "rawVersion", optional_argument,0,0 },
-		{ "output_type", optional_argument,0,0 },
-		{ "angle", optional_argument,0,0 },
-		{ "ctr", optional_argument,0,0 },
-		{ "cWindow", optional_argument,0,0 },
-		{ "minTot", optional_argument,0,0 },
-		{ "minEnergy", optional_argument,0,0 },
-		{ "maxEnergy", optional_argument,0,0 },
-		{ "gWindow", optional_argument,0,0 },
-		{ "gMaxHits", optional_argument,0,0 },
-		{ "gWindowRoot", optional_argument,0,0 },
-		{ "gMaxHitsRoot", optional_argument,0,0 },
+		{ "acqDeltaTime", required_argument,0,0 },
+		{ "rawVersion", required_argument,0,0 },
+		{ "output_type", required_argument,0,0 },
+		{ "angle", required_argument,0,0 },
+		{ "ctr", required_argument,0,0 },
+		{ "cWindow", required_argument,0,0 },
+		{ "minTot", required_argument,0,0 },
+		{ "minEnergy", required_argument,0,0 },
+		{ "maxEnergy", required_argument,0,0 },
+		{ "gWindow", required_argument,0,0 },
+		{ "gMaxHits", required_argument,0,0 },
+		{ "gWindowRoot", required_argument,0,0 },
+		{ "gMaxHitsRoot", required_argument,0,0 },
 		{ NULL, 0, 0, 0 }
 	};
 #ifndef __ENDOTOFPET__
@@ -447,15 +462,10 @@ int main(int argc, char *argv[])
 	FILE * outListFile;
 	TFile *lmFile;
 	TTree *lmData, *lmIndex;
-	char * setupFileName=argv[1];
-	char *inputFilePrefix = argv[2];
-	char *outputFilePrefix = argv[3];
-	char outputFileName[256];
-	
-	
+
 	float cWindow = 20E-9; // s
 	float gWindow = 100E-9; // s
-	int maxHits=16;
+	int maxHits=GammaPhoton::maxHits;
 	float gWindowRoot = 100E-9; // s
 	int maxHitsRoot=1;
 	float minEnergy = 150; // keV or ns (if energy=tot)
@@ -558,18 +568,21 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc - nOptArgs < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc - nOptArgs> 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
 
-
+	char * setupFileName=argv[optind];
+	char *inputFilePrefix = argv[optind+1];
+	char *outputFilePrefix = argv[optind+2];
+	char outputFileName[256];
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
 #ifndef __ENDOTOFPET__ 
@@ -679,18 +692,18 @@ int main(int argc, char *argv[])
 
 #ifndef __ENDOTOFPET__	
 		if(useROOT == false) {
-			writer = new EventWriterList(outListFile, acqAngle, ctrEstimate);
+			writer = new EventWriterList(outListFile, false, acqAngle, ctrEstimate, new NullSink<Coincidence>());
 		}
 #else
 		if(useROOT == false) {
-			writer = new EventWriterListE(outListFile);
+			writer = new EventWriterListE(outListFile, false, new NullSink<Coincidence>());
 		}
 #endif
 		else if(useLIST==false) {
-			writer = new EventWriterRoot(lmData, gWindow, maxHitsRoot);
+			writer = new EventWriterRoot(lmData, false, gWindow, maxHitsRoot, new NullSink<Coincidence>());
 		}
-		else{
-			writer = new EventWriterRootList(lmData, gWindow, maxHitsRoot, outListFile, acqAngle, ctrEstimate);
+		else {
+			writer = new EventWriterRootList(lmData, false, gWindow, maxHitsRoot, outListFile, acqAngle, ctrEstimate, new NullSink<Coincidence>());
 		}
 
 

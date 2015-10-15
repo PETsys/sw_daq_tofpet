@@ -44,13 +44,13 @@ static float 		eventZ;
 static float		eventTQT;
 static float		eventTQE;
 
-class EventWriter : public EventSink<Hit> {
+class EventWriter : public EventSink<Hit>, public EventSource<Hit> {
 
 
 
 public:
-	EventWriter(TTree *lmDataTuple) 
-		: lmDataTuple(lmDataTuple) {
+	EventWriter(TTree *lmDataTuple, bool writeBadEvents, EventSink<Hit> *sink) 
+		: EventSource<Hit>(sink), lmDataTuple(lmDataTuple), writeBadEvents(writeBadEvents) {
 		
 	};
 	
@@ -65,29 +65,31 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Hit &hit = buffer->get(i);
 			
-			RawHit &raw= hit.raw;
-			long long T = raw.top.raw.T;
+			RawHit &raw= *(hit.raw);
+			bool isBadEvent=raw.top->badEvent;
+			if(writeBadEvents==false && isBadEvent)continue;
+			long long T = raw.top->raw->T;
 			eventTime = raw.time;
-			eventChannel = raw.top.channelID;
-			eventToT = 1E-3*(raw.top.timeEnd - raw.top.time);
-			eventEnergy=raw.top.energy;
-			eventTac = raw.top.raw.d.tofpet.tac;
-			eventChannelIdleTime = raw.top.raw.channelIdleTime * T * 1E-12;
-			eventTacIdleTime = raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-			eventTQT = raw.top.tofpet_TQT;
-			eventTQE = raw.top.tofpet_TQE;
+			eventChannel = raw.top->channelID;
+			eventToT = 1E-3*(raw.top->timeEnd - raw.top->time);
+			eventEnergy=raw.top->energy;
+			eventTac = raw.top->raw->d.tofpet.tac;
+			eventChannelIdleTime = raw.top->raw->channelIdleTime * T * 1E-12;
+			eventTacIdleTime = raw.top->raw->d.tofpet.tacIdleTime * T * 1E-12;
+			eventTQT = raw.top->tofpet_TQT;
+			eventTQE = raw.top->tofpet_TQE;
 			eventX = hit.x;
 			eventY = hit.y;
 			eventZ = hit.z;
 			eventXi = hit.xi;
 			eventYi = hit.yi;
 			
-			//printf("%lld %e %f\n", raw.top.raw.d.tofpet.tacIdleTime, eventTacIdleTime, eventTQ);
+			//printf("%lld %e %f\n", raw.top->raw->d.tofpet.tacIdleTime, eventTacIdleTime, eventTQ);
 			
 			lmDataTuple->Fill();
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -95,6 +97,7 @@ public:
 	void report() { };
 private: 
 	TTree *lmDataTuple;
+	bool writeBadEvents;
 
 };
 
@@ -125,8 +128,8 @@ int main(int argc, char *argv[])
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
 		{ "onlineMode", no_argument,0,0 },
-		{ "acqDeltaTime", optional_argument,0,0 },
-		{ "raw_version", optional_argument,0,0 }
+		{ "acqDeltaTime", required_argument,0,0 },
+		{ "raw_version", required_argument,0,0 }
 	};
 #ifndef __ENDOTOFPET__
 	char rawV[128];
@@ -135,10 +138,6 @@ int main(int argc, char *argv[])
 	float readBackTime=-1;
 #endif
 
-	char * setupFileName=argv[1];
-	char *inputFilePrefix = argv[2];
-	char *outputFilePrefix = argv[3];
-	char outputFileName[256];
 	int optionIndex = -1;
 	int nOptArgs=0;
 	while(1) {
@@ -175,16 +174,22 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc - nOptArgs < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc - nOptArgs> 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
+
+	char * setupFileName=argv[optind];
+	char *inputFilePrefix = argv[optind+1];
+	char *outputFilePrefix = argv[optind+2];
+	char outputFileName[256];
+
 	
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
@@ -265,7 +270,8 @@ int main(int argc, char *argv[])
 				new P2Extract(P2, false, 0.0, 0.20, false,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new EventWriter(lmData
+				new EventWriter(lmData, false,
+				new NullSink<Hit>()
 		        )))));
 	
 		if(rawV[0]=='3') 
@@ -278,7 +284,8 @@ int main(int argc, char *argv[])
 				new DAQ::ENDOTOFPET::Extract( new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
-				new EventWriter(lmData
+				new EventWriter(lmData, false,
+				new NullSink<Hit>()
 				))))));		
 #endif
 

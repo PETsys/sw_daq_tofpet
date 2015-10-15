@@ -23,7 +23,7 @@ EventBuffer<Pulse> * Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents);
+	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);	
 
@@ -61,7 +61,6 @@ EventBuffer<Pulse> * Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 	atomicAdd(nEvent, lEvent);
 	atomicAdd(nPassed, lPassed);
 
-	delete inBuffer;
 	return outBuffer;
 }
 

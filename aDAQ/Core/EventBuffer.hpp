@@ -5,17 +5,54 @@
 
 namespace DAQ { namespace Core {
 
+	class AbstractEventBuffer {
+	public:
+		AbstractEventBuffer(AbstractEventBuffer *parent) 
+		: parent(parent) {
+			tMin = -1;
+			tMax = -1;
+		};
+
+		virtual ~AbstractEventBuffer()
+		{
+			delete parent;
+		};
+
+		void setTMin(long long t) {
+			tMin = t;
+		}
+		
+		void setTMax(long long t) {
+			tMax = t;
+		}
+		
+		long long getTMin() {
+			return tMin;
+		}
+
+		long long getTMax() {
+			return tMax;
+		}
+
+	private:
+		AbstractEventBuffer * parent;
+		long long tMin;
+		long long tMax;
+		
+		
+	};
+	
 	template <class TEvent>
-	class EventBuffer {
+	class EventBuffer : public AbstractEventBuffer {
 	public:
 
-		EventBuffer(unsigned initialCapacity) {
+		EventBuffer(unsigned initialCapacity, AbstractEventBuffer *parent)
+			: AbstractEventBuffer(parent) 
+		{
 			initialCapacity = ((initialCapacity / 1024) + 1) * 1024;				
 			buffer = (TEvent *)malloc(sizeof(TEvent)*initialCapacity);
 			capacity = initialCapacity;
 			used = 0;
-			tMin = -1;
-			tMax = -1;
 		};
 		
 		void reserve(unsigned newCapacity) {
@@ -59,33 +96,16 @@ namespace DAQ { namespace Core {
 		};
 
 
-		~EventBuffer() {
+		virtual ~EventBuffer() {
 			free((void*)buffer);
 		};
 		
-		void setTMin(long long t) {
-			tMin = t;
-		}
-		
-		void setTMax(long long t) {
-			tMax = t;
-		}
-		
-		long long getTMin() {
-			return tMin;
-		}
-		
-		long long getTMax() {
-			return tMax;
-		}
 
 	private:
 		TEvent *buffer;
 		size_t capacity;
 		size_t used;
 		
-		long long tMin;
-		long long tMax;
 		
 	};
 

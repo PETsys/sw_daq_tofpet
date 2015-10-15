@@ -33,22 +33,23 @@ namespace DAQ { namespace Core {
 	template <class TEventInput> 
 	class NullSink : public EventSink<TEventInput> {
 	public:
-		NullSink() { count = 0; };
+		NullSink() { lastBuffer = NULL; };
 		virtual void pushT0(double t0) {};
 		virtual void pushEvents(EventBuffer<TEventInput> *buffer) {
-			count += buffer->getSize();
-			delete buffer;
+			// Do not delete this buffer immediable, because the next buffer 
+			// may hold pointers into one of the parent buffers.
+			delete lastBuffer;
+			lastBuffer = buffer;
 		};
 		
 		virtual void finish() {
 		};
 		
 		virtual void report() {
-			fprintf(stderr, ">> NullSink report:\n total events received: %ld\n", count);
 		};
-		~NullSink() {};
+		~NullSink() { delete lastBuffer; };
 	private:
-		long count;
+		AbstractEventBuffer *lastBuffer;
 	};
 	
 }}

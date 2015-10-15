@@ -48,11 +48,11 @@ using namespace std;
 
 
 
-class EventWriter : public EventSink<GammaPhoton> {
+class EventWriter : public EventSink<GammaPhoton>, public EventSource<GammaPhoton> {
 public:
-	EventWriter(TTree *lmTree, float maxDeltaT, int maxN) 
-	: lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN)
-	{		
+	EventWriter(TTree *lmTree, bool writeBadEvents,float maxDeltaT, int maxN, EventSink<GammaPhoton> *sink) 
+		: EventSource<GammaPhoton>(sink), lmTree(lmTree), maxDeltaT((long long)(maxDeltaT*1E12)), maxN(maxN), writeBadEvents(writeBadEvents)
+	{
 	};
 	
 	~EventWriter() {
@@ -66,26 +66,27 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			GammaPhoton &e = buffer->get(i);
 
-			long long t0 = e.hits[0].time;
+			long long t0 = e.hits[0]->time;
 			for(int j1 = 0; (j1 < e.nHits) && (j1 < maxN); j1 ++) {
-				Hit &hit = e.hits[j1];
-				
+				Hit &hit = *e.hits[j1];
+				bool isBadEvent=hit.raw->top->badEvent;
+				if(writeBadEvents==false && isBadEvent)continue;
 				float dt = hit.time - t0;
 				if(dt > maxDeltaT) continue;
 				
-				long long T = hit.raw.top.raw.T;
+				long long T = hit.raw->top->raw->T;
 				eventJ = j1;
 				eventN = e.nHits;
 				eventDeltaT = dt;
 				eventTime = hit.time;
-				eventChannel = hit.raw.top.channelID;
-				eventToT = 1E-3*(hit.raw.top.timeEnd - hit.raw.top.time);
-				eventEnergy = hit.raw.top.energy;
-				eventTac = hit.raw.top.raw.d.tofpet.tac;
-				eventChannelIdleTime = hit.raw.top.raw.channelIdleTime * T * 1E-12;
-				eventTacIdleTime = hit.raw.top.raw.d.tofpet.tacIdleTime * T * 1E-12;
-				eventTQT = hit.raw.top.tofpet_TQT;
-				eventTQE = hit.raw.top.tofpet_TQE;
+				eventChannel = hit.raw->top->channelID;
+				eventToT = 1E-3*(hit.raw->top->timeEnd - hit.raw->top->time);
+				eventEnergy = hit.raw->top->energy;
+				eventTac = hit.raw->top->raw->d.tofpet.tac;
+				eventChannelIdleTime = hit.raw->top->raw->channelIdleTime * T * 1E-12;
+				eventTacIdleTime = hit.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
+				eventTQT = hit.raw->top->tofpet_TQT;
+				eventTQE = hit.raw->top->tofpet_TQE;
 				eventX = hit.x;
 				eventY = hit.y;
 				eventZ = hit.z;
@@ -101,7 +102,7 @@ public:
 			
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -111,6 +112,7 @@ private:
 	TTree *lmTree;
 	long long maxDeltaT;
 	int maxN;
+	bool writeBadEvents;
 };
 
 void displayHelp(char * program)
@@ -144,13 +146,13 @@ int main(int argc, char *argv[])
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
 		{ "onlineMode", no_argument,0,0 },
-		{ "acqDeltaTime", optional_argument,0,0 },
-		{ "raw_version", optional_argument,0,0 },
-		{ "minEnergy", optional_argument,0,0 },
-		{ "maxEnergy", optional_argument,0,0 },
-		{ "gWindow", optional_argument,0,0 },
-		{ "gMaxHits", optional_argument,0,0 },
-		{ "gMaxHitsRoot", optional_argument,0,0 },
+		{ "acqDeltaTime", required_argument,0,0 },
+		{ "raw_version", required_argument,0,0 },
+		{ "minEnergy", required_argument,0,0 },
+		{ "maxEnergy", required_argument,0,0 },
+		{ "gWindow", required_argument,0,0 },
+		{ "gMaxHits", required_argument,0,0 },
+		{ "gMaxHitsRoot", required_argument,0,0 },
 		{ NULL, 0, 0, 0 }
 	};
 
@@ -158,16 +160,12 @@ int main(int argc, char *argv[])
 	rawV[0]='3';
 	bool onlineMode=false;
 	float readBackTime=-1;
-	char * setupFileName=argv[1];
-	char *inputFilePrefix = argv[2];
-	char *outputFilePrefix = argv[3];
-	char outputFileName[256];
 	
 	float gWindow = 100E-9; // s
 	float minEnergy = 150; // keV or ns (if energy=tot)
 	float maxEnergy = 500; // keV or ns (if energy=tot)
-	int gMaxHits=16;
-	int gMaxHitsRoot=16;
+	int gMaxHits=GammaPhoton::maxHits;
+	int gMaxHitsRoot=GammaPhoton::maxHits;
 
 	int nOptArgs=0;
 	while(1) {
@@ -223,17 +221,21 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc - nOptArgs < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	if(argc - nOptArgs < 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
 
+	char * setupFileName=argv[optind];
+	char *inputFilePrefix = argv[optind+1];
+	char *outputFilePrefix = argv[optind+2];
+	char outputFileName[256];
 
    
 
@@ -309,8 +311,9 @@ int main(int argc, char *argv[])
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, gMaxHits,
-				new EventWriter(lmData, gWindow, gMaxHitsRoot 
-								)))));
+				new EventWriter(lmData, false, gWindow, gMaxHitsRoot,
+				new NullSink<GammaPhoton>()
+			)))));
 
 		DAQ::TOFPET::RawReader *reader=NULL;
 	

@@ -41,13 +41,13 @@ static float		eventToT;
 static float		eventTQT;
 static float		eventTQE;
 
-class TQCorrWriter : public EventSink<Pulse> {
+class TQCorrWriter : public EventSink<Pulse>, public EventSource<Pulse>{
 
 
 
 public:
-	TQCorrWriter(FILE *tQcalFile, P2 *lut) 
-		: tQcalFile(tQcalFile), lut(lut){
+	TQCorrWriter(FILE *tQcalFile, bool writeBadEvents, P2 *lut, EventSink<Pulse> *sink) 
+		: EventSource<Pulse>(sink), tQcalFile(tQcalFile), lut(lut), writeBadEvents(writeBadEvents){
 		
 		start_t = 1.;
 		end_t = 3.;
@@ -92,9 +92,11 @@ public:
 			Pulse &e = buffer->get(i);
 			
 			
-			
+			bool isBadEvent=e.badEvent;
+			if(writeBadEvents==false && isBadEvent)continue;
 
-			long long T = e.raw.T;
+			long long T = e.raw->T;
+			
 			eventTime = e.time;
 			eventChannel = e.channelID;
 			eventToT = 1E-3*(e.timeEnd - e.time);
@@ -105,7 +107,7 @@ public:
 		
 		}
 		
-		delete buffer;
+		sink->pushEvents(buffer);
 	};
 	
 	void pushT0(double t0) { };
@@ -151,6 +153,8 @@ private:
 	float end_t;
 	float end_e;
 	float cumul;
+	bool writeBadEvents;
+
 	
 
 };
@@ -183,8 +187,8 @@ int main(int argc, char *argv[])
    	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
 		{ "onlineMode", no_argument,0,0 },
-		{ "acqDeltaTime", optional_argument,0,0 },
-		{ "raw_version", optional_argument,0,0 }
+		{ "acqDeltaTime", required_argument,0,0 },
+		{ "raw_version", required_argument,0,0 }
 	};
 
 #ifndef __ENDOTOFPET__
@@ -193,10 +197,6 @@ int main(int argc, char *argv[])
 	bool onlineMode=false;
 	float readBackTime=-1;
 #endif
-	char * setupFileName=argv[1];
-	char *inputFilePrefix = argv[2];
-	char *outputFilePrefix = argv[3];
-
 	int nOptArgs=0;
 	while(1) {
 		int optionIndex = 0;
@@ -233,16 +233,20 @@ int main(int argc, char *argv[])
 		}
 	}
    
-	if(argc - nOptArgs < 4){
+	if(argc - optind < 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too few arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc - nOptArgs> 4){
+	else if(argc - optind > 3){
 		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: too many arguments!\n", argv[0]);
+		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
+
+	char * setupFileName=argv[optind];
+	char *inputFilePrefix = argv[optind+1];
+	char *outputFilePrefix = argv[optind+2];
 
 
 	DAQ::TOFPET::RawScanner *scanner = NULL;
@@ -291,7 +295,8 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__	
 		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
 				new P2Extract(P2, false, 0.0, 0.20, true,
-				new TQCorrWriter(f, P2
+				new TQCorrWriter(f, false, P2,
+				new NullSink<Pulse>()
         )));
 
 		if(rawV[0]=='3') 
@@ -302,7 +307,8 @@ int main(int argc, char *argv[])
 		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
 				new Sanity(100E-9,								 
 				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
-				new TQCorrWriter(f, P2							 
+				new TQCorrWriter(f, false, P2,
+				new NullSink<Pulse>()
 				))));
 #endif
 	

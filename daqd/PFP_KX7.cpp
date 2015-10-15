@@ -22,7 +22,8 @@ using namespace DAQd;
 
 static const unsigned DMA_TRANS_BYTE_SIZE = 262144;  // max for USER_FIFO_THRESHOLD 262128
 static const unsigned wordBufferSize = DMA_TRANS_BYTE_SIZE / 8;
-static const int N_BUFFERS = 1;
+
+static const int COMMAND_TO_DMA_PAUSE = 10;
 
 //static int COM_count = 0;
 
@@ -95,20 +96,26 @@ PFP_KX7::PFP_KX7()
 	assert(Status == WD_STATUS_SUCCESS);
 	printf("Channel Up: %03X\n", word32);
 
-
+	// setting up DMA buffer
+	for(int n = 0; n < NB; n++) {
+		DMA_Buffer[n] = NULL;
+		DMA_Point[n] = NULL;
+		Status = PFP_SetupDMA(Card, &DMA_Buffer[n], DMA_FROM_DEVICE, DMA_TRANS_BYTE_SIZE, &DMA_Point[n]);
+		assert(Status == WD_STATUS_SUCCESS);
+	}
+	
 	pthread_mutex_init(&lock, NULL);
 	pthread_cond_init(&condCleanBuffer, NULL);
 	pthread_cond_init(&condDirtyBuffer, NULL);
 
 	pthread_mutex_init(&hwLock, NULL);
-	lastCommandTime = boost::posix_time::microsec_clock::local_time(); 
+	lastCommandIdleCount = 0;
 	
 	ReadAndCheck(txWrPointerReg * 4 , &txWrPointer, 1);
 	ReadAndCheck(rxRdPointerReg * 4 , &rxRdPointer, 1);
 
-	wordBuffer = new uint64_t[wordBufferSize];
-	wordBufferUsed = 0;
-	wordBufferStatus = 0;
+	dmaBufferRdPtr = 0;
+	dmaBufferWrPtr = 0;
 	
 	die = true;
 	hasWorker = false;
@@ -122,16 +129,40 @@ PFP_KX7::~PFP_KX7()
 	printf("PFP_KX7::~PFP_KX7\n");
 	stopWorker();
 
-	delete [] wordBuffer;
-
 	pthread_mutex_destroy(&hwLock);
 	pthread_cond_destroy(&condDirtyBuffer);
 	pthread_cond_destroy(&condCleanBuffer);
 	pthread_mutex_destroy(&lock);	
 
+	// releasing DMA buffers
+	for(int n = 0; n < NB; n++) {
+		PFP_UnsetupDMA(DMA_Point[n]);
+	}
+
 	PFP_CloseCard(Card);  // closing card
 	PFP_CloseDriver();  // closing driver
 }
+
+bool PFP_KX7::dmaBufferQueueIsEmpty()
+{
+	return dmaBufferWrPtr == dmaBufferRdPtr;
+}
+
+bool PFP_KX7::dmaBufferQueueIsFull()
+{
+	return (dmaBufferWrPtr != dmaBufferRdPtr) && ((dmaBufferWrPtr%NB) == (dmaBufferRdPtr%NB));
+}
+
+void PFP_KX7::setLastCommandTimeIdleCount()
+{
+	__atomic_store_n(&lastCommandIdleCount, COMMAND_TO_DMA_PAUSE, __ATOMIC_RELEASE);
+}
+
+uint32_t PFP_KX7::getLastCommandTimeIdleCount()
+{
+	return __atomic_exchange_n(&lastCommandIdleCount, 0, __ATOMIC_ACQ_REL);	
+}
+
 
 const uint64_t idleWord = 0xFFFFFFFFFFFFFFFFULL;
 
@@ -148,36 +179,42 @@ void *PFP_KX7::runWorker(void *arg)
 	uint32_t word32_dmat = 0x8000000 + DMA_TRANS_BYTE_SIZE / 16;
 	int DMA_count = 0;
 
-	// setting up DMA buffer
-	Status = PFP_SetupDMA(p->Card, &p->DMA_Buffer, DMA_FROM_DEVICE, DMA_TRANS_BYTE_SIZE, &p->DMA_Point);
-	assert(Status == WD_STATUS_SUCCESS);
-
+	pthread_mutex_lock(&p->hwLock);
 	// setting up DMA configuration
-	// DMA Start toggle (26); DMA Size in 16B word addressing (23 -> 0)
 	Status = PFP_Write(p->Card, BaseAddrReg + DMAConfigReg * 4, 4, &word32_dmat, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 	assert(Status == WD_STATUS_SUCCESS);
-
-	word32_dmat = word32_dmat ^ 0x08000000;
-	Status = PFP_Write(p->Card, BaseAddrReg + DMAConfigReg * 4, 4, &word32_dmat, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
-	assert(Status == WD_STATUS_SUCCESS);
-
+	pthread_mutex_unlock(&p->hwLock);
 
 	while(!p->die) {
-		pthread_mutex_lock(&p->hwLock);
-		while((boost::posix_time::microsec_clock::local_time() - p->lastCommandTime).total_milliseconds() < 300) {
-			pthread_mutex_unlock(&p->hwLock);
-			usleep(10000);
-			pthread_mutex_lock(&p->hwLock);
+		pthread_mutex_lock(&p->lock);	
+		while(!p->die && p->dmaBufferQueueIsFull()) {
+			pthread_cond_wait(&p->condCleanBuffer, &p->lock);
 		}
-		DMAStatus = PFP_DoDMA(p->Card, p->DMA_Point, 0, DMA_TRANS_BYTE_SIZE, DMA_AXI_STREAM, 10);
-		pthread_mutex_unlock(&p->hwLock);
+		pthread_mutex_unlock(&p->lock);
+		
+		int n = p->dmaBufferWrPtr%NB;
+		int lWordBufferStatus = ENOWORDS;
+		int lWordBufferUsed = ENOWORDS-1;
+		char *lWordBuffer = (char *)p->DMA_Buffer[n];
+		assert(lWordBuffer != NULL);
+
+		int sleepTime;
+		while((sleepTime = p->getLastCommandTimeIdleCount()) > 0) {
+			usleep(sleepTime * 1000);
+		}
+		pthread_mutex_lock(&p->hwLock);
+		// DMA Start toggle (26); DMA Size in 16B word addressing (23 -> 0)
+		word32_dmat = word32_dmat ^ 0x08000000;
+		Status = PFP_Write(p->Card, BaseAddrReg + DMAConfigReg * 4, 4, &word32_dmat, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
+		assert(Status == WD_STATUS_SUCCESS);
+		
+		DMAStatus = PFP_DoDMA(p->Card, p->DMA_Point[n], 0, DMA_TRANS_BYTE_SIZE, DMA_AXI_STREAM, 1);
 		assert(DMAStatus != TW_DMA_ERROR);
 		if (DMAStatus == TW_DMA_TIMEOUT || DMAStatus == TW_DMA_EOT)
 			ExtraDMAByteCount = 4;
 		else
 			ExtraDMAByteCount = 0;
 
-		pthread_mutex_lock(&p->hwLock);
 		// read DMA transfered size
 		// 0x108 on Timeout and End of Transfer will have an extra 4B added
 		Status = PFP_Read(p->Card, 0x108, 4, &word32_108, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
@@ -185,44 +222,37 @@ void *PFP_KX7::runWorker(void *arg)
 		// DMACptSizeReg on Timeout and End of Transfer will have an extra 16B added
 		Status = PFP_Read(p->Card, BaseAddrReg + DMACptSizeReg * 4, 4, &word32_256, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		assert(Status == WD_STATUS_SUCCESS);
-		pthread_mutex_unlock(&p->hwLock);
 
-		pthread_mutex_lock(&p->lock);	
-		while(!p->die && (p->wordBufferUsed < p->wordBufferStatus)) {
-			pthread_cond_wait(&p->condCleanBuffer, &p->lock);
-		}
-
-		p->wordBufferUsed = word32_108 / 4;  // converting to 16 byte addressing
-		p->wordBufferUsed = p->wordBufferUsed * 16;  // converting to byte addressing
-		p->wordBufferStatus = word32_256 / 8;
-		if (p->wordBufferUsed < DMA_TRANS_BYTE_SIZE) {
+		lWordBufferUsed = word32_108 / 4;  // converting to 16 byte addressing
+		lWordBufferUsed = lWordBufferUsed * 16;  // converting to byte addressing
+		lWordBufferStatus = word32_256 / 8;
+		if (lWordBufferUsed < DMA_TRANS_BYTE_SIZE) {
 			if (word32_256 >= ExtraDMAByteCount * 4)  // prevent negative value to be written
-				p->wordBufferStatus = (word32_256 - ExtraDMAByteCount * 4) / 8;
+				lWordBufferStatus = (word32_256 - ExtraDMAByteCount * 4) / 8;
 		}
 
-		// Reseting DMA
-		word32_dmat = word32_dmat ^ 0x08000000;
-		Status = PFP_Write(p->Card, BaseAddrReg + DMAConfigReg * 4, 4, &word32_dmat, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
-		assert(Status == WD_STATUS_SUCCESS);
-
-		if(p->die || p->wordBufferUsed == 0) {
-		  	p->wordBufferUsed = ENOWORDS - 1; // Set wordBufferUsed to some number smaller than status
-			p->wordBufferStatus = ENOWORDS;
-			printf("PFP_KX7::worker wordBufferStatus set to %d\n", p->wordBufferStatus);
+		pthread_mutex_unlock(&p->hwLock);
+		
+		if(p->die || lWordBufferUsed == 0) {
+		  	lWordBufferUsed = ENOWORDS - 1; // Set wordBufferUsed to some number smaller than status
+			lWordBufferStatus = ENOWORDS;
+			printf("PFP_KX7::worker wordBufferStatus set to %d\n", lWordBufferStatus);
 		}
 		else {
-			memcpy(p->wordBuffer, p->DMA_Buffer, p->wordBufferUsed);		
-			p->wordBufferUsed = 0;	
+			lWordBufferUsed = 0;
 		}
+		p->wordBufferStatus[n] = lWordBufferStatus;
+		p->wordBufferUsed[n] = lWordBufferUsed;
+		p->wordBuffer[n] = (uint64_t *)lWordBuffer;
+		
+		pthread_mutex_lock(&p->lock);
+		p->dmaBufferWrPtr = (p->dmaBufferWrPtr+1) % (2*NB);
 		pthread_mutex_unlock(&p->lock);
-	       	pthread_cond_signal(&p->condDirtyBuffer);
+		pthread_cond_signal(&p->condDirtyBuffer);
 		
 		DMA_count++;
 	}
 	pthread_cond_signal(&p->condDirtyBuffer);
-	// releasing DMA buffer
-	PFP_UnsetupDMA(p->DMA_Point);
-	
 	
 	printf("PFP_KX7::runWorker exiting...\n");
 	return NULL;
@@ -245,32 +275,43 @@ int PFP_KX7::getWords(uint64_t *buffer, int count)
 
 int PFP_KX7::getWords_(uint64_t *buffer, int count)
 {
-	int result = -1;
-	
-	if(wordBufferUsed >= wordBufferStatus)
+	if(die) return -1;
+	// If the DMA buffer queue is empty for reading, wait until we have something.
+	// Otherwise, proceed without even touching the lock.
+	if(dmaBufferQueueIsEmpty()) {
+		pthread_mutex_lock(&lock);
+		while(!die && dmaBufferQueueIsEmpty()) {
+			pthread_cond_wait(&condDirtyBuffer, &lock);
+		}
+		pthread_mutex_unlock(&lock);
+		if(die) return -1;
+	}
+
+	// If this buffer has been fully consumed, increase read pointer and return 0.
+	// getWords() will retry again.
+	if(wordBufferUsed[dmaBufferRdPtr%NB] >= wordBufferStatus[dmaBufferRdPtr%NB]) {
+		pthread_mutex_lock(&lock);
+		dmaBufferRdPtr = (dmaBufferRdPtr + 1) % (2*NB);
+		pthread_mutex_unlock(&lock);
 		pthread_cond_signal(&condCleanBuffer);
-	
-	pthread_mutex_lock(&lock);		
-	while(!die && (wordBufferUsed >= wordBufferStatus)) {
-		pthread_cond_wait(&condDirtyBuffer, &lock);
+		return 0;
 	}
 	
-	if (die) {
-		result = -1;
-	}
-	else if(wordBufferStatus < 0) {
-		printf("Buffer status was set to %d\n", wordBufferStatus);
-		wordBufferUsed = wordBufferStatus; // Set wordBufferUsed to some number equal or greater than status
-		result = wordBufferStatus;
+	int result = -1;
+	if(wordBufferStatus[dmaBufferRdPtr%NB] < 0) {
+		// This buffer had an error status
+		printf("Buffer status was set to %d\n", wordBufferStatus[dmaBufferRdPtr%NB]);
+		wordBufferUsed[dmaBufferRdPtr%NB] = wordBufferStatus[dmaBufferRdPtr%NB]; // Set wordBufferUsed to some number equal or greater than status
+		result = wordBufferStatus[dmaBufferRdPtr%NB];
 	}	
 	else {	
-		int wordsAvailable = wordBufferStatus - wordBufferUsed;
+		// This buffer has normal data
+		int wordsAvailable = wordBufferStatus[dmaBufferRdPtr%NB] - wordBufferUsed[dmaBufferRdPtr%NB];
 		result = count < wordsAvailable ? count : wordsAvailable;
 		if(result < 0) result = 0;
-		memcpy(buffer, wordBuffer + wordBufferUsed, result * sizeof(uint64_t));
-		wordBufferUsed += result;
+		memcpy(buffer, wordBuffer[dmaBufferRdPtr%NB] + wordBufferUsed[dmaBufferRdPtr%NB], result * sizeof(uint64_t));
+		wordBufferUsed[dmaBufferRdPtr%NB] += result;
 	}
-	pthread_mutex_unlock(&lock);
 
 	return result;
 }
@@ -290,7 +331,7 @@ void PFP_KX7::startWorker()
 void PFP_KX7::stopWorker()
 {
 	printf("PFP_KX7::stopWorker() called...\n");
-
+	setAcquistionOnOff(false);
 	die = true;
 	pthread_cond_signal(&condCleanBuffer);
 	pthread_cond_signal(&condDirtyBuffer);
@@ -310,6 +351,7 @@ bool PFP_KX7::cardOK()
 
 int PFP_KX7::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
+	setLastCommandTimeIdleCount();
 	int status;
 
 	uint64_t outBuffer[8];
@@ -322,19 +364,20 @@ int PFP_KX7::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, 
 	outBuffer[0] = header;
 	outBuffer[1] = commandLength;
 	memcpy((void*)(outBuffer+2), buffer, commandLength);
+	int nWords = 2 + ceil(float(commandLength)/sizeof(uint64_t));
 	
 	uint32_t txRdPointer;
 
+	pthread_mutex_lock(&hwLock);
 	boost::posix_time::ptime startTime = boost::posix_time::microsec_clock::local_time();
 	do {
-		pthread_mutex_lock(&hwLock);
 		// Read the RD pointer
 		status = ReadAndCheck(txRdPointerReg * 4 , &txRdPointer, 1);
-		lastCommandTime = boost::posix_time::microsec_clock::local_time(); 
-		pthread_mutex_unlock(&hwLock);
+		setLastCommandTimeIdleCount();
 
 		boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
 		if((now - startTime).total_milliseconds() > 10) {
+			pthread_mutex_unlock(&hwLock);
 			return -1;
 		}		
 
@@ -342,18 +385,15 @@ int PFP_KX7::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, 
 		// until there is space to write the command
 	} while( ((txWrPointer & 16) != (txRdPointer & 16)) && ((txWrPointer & 15) == (txRdPointer & 15)) );
 	
-	pthread_mutex_lock(&hwLock);
 	uint32_t wrSlot = txWrPointer & 15;
-	
-
-	status = WriteAndCheck(wrSlot * 16 * 4 , (uint32_t *)outBuffer, 16);
+	status = WriteAndCheck(wrSlot * 16 * 4 , (uint32_t *)outBuffer, (nWords * 2));
 		
 	txWrPointer += 1;
 	txWrPointer = txWrPointer & 31;	// There are only 16 slots, but we use another bit for the empty/full condition
 	txWrPointer |= 0xCAFE1500;
 	
 	status = WriteAndCheck(txWrPointerReg * 4 , &txWrPointer, 1);
-	lastCommandTime = boost::posix_time::microsec_clock::local_time();
+	setLastCommandTimeIdleCount();
 	pthread_mutex_unlock(&hwLock);
 	return 0;
 
@@ -361,28 +401,28 @@ int PFP_KX7::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, 
 
 int PFP_KX7::recvReply(char *buffer, int bufferSize)
 {
+	setLastCommandTimeIdleCount();
 	int status;
 	uint64_t outBuffer[8];
 	
 	uint32_t rxWrPointer;
 
+	pthread_mutex_lock(&hwLock);
 	boost::posix_time::ptime startTime = boost::posix_time::microsec_clock::local_time();
 	int nLoops = 0;
 	do {
-		pthread_mutex_lock(&hwLock);
 		// Read the WR pointer
 		status = ReadAndCheck(rxWrPointerReg * 4 , &rxWrPointer, 1);
-		lastCommandTime = boost::posix_time::microsec_clock::local_time(); 
-		pthread_mutex_unlock(&hwLock);
+		setLastCommandTimeIdleCount();
 
 		boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
 		if((now - startTime).total_milliseconds() > 10) {
+			pthread_mutex_unlock(&hwLock);
 			return -1;
 		}		
 
 		// until there a reply to read
 	} while((rxWrPointer & 31) == (rxRdPointer & 31));
-	pthread_mutex_lock(&hwLock);
 	uint32_t rdSlot = rxRdPointer & 15;
 	
 	status = ReadAndCheck((768 + rdSlot * 16) * 4 , (uint32_t *)outBuffer, 16);
@@ -391,25 +431,25 @@ int PFP_KX7::recvReply(char *buffer, int bufferSize)
 	rxRdPointer |= 0xFACE9100;
 	
 	status = WriteAndCheck(rxRdPointerReg * 4 , &rxRdPointer, 1);
-	lastCommandTime = boost::posix_time::microsec_clock::local_time();
+	setLastCommandTimeIdleCount();
 	pthread_mutex_unlock(&hwLock);
 	
 	int replyLength = outBuffer[1];
 	replyLength = replyLength < bufferSize ? replyLength : bufferSize;
 	memcpy(buffer, outBuffer+2, replyLength);
-
 	return replyLength;
 }
 
 int PFP_KX7::setAcquistionOnOff(bool enable)
 {
+	setLastCommandTimeIdleCount();
 	uint32_t data[1];
 	int status;
 	
 	data[0] = enable ? 0x000FFFFU : 0xFFFF0000U;
 	pthread_mutex_lock(&hwLock);
 	status = WriteAndCheck(acqStatusPointerReg * 4, data, 1);	
-	lastCommandTime = boost::posix_time::microsec_clock::local_time();
+	setLastCommandTimeIdleCount();
 	pthread_mutex_unlock(&hwLock);
 	return status;	
 }
@@ -461,22 +501,24 @@ int PFP_KX7::ReadAndCheck(int reg, uint32_t *data, int count) {
 
 uint64_t PFP_KX7::getPortUp()
 {
+	setLastCommandTimeIdleCount();
 	pthread_mutex_lock(&hwLock);
 	uint64_t reply = 0;
 	uint32_t channelUp = 0;
 	ReadAndCheck(statusReg * 4, &channelUp, 1);
-	reply = channelUp;
-	lastCommandTime = boost::posix_time::microsec_clock::local_time(); 
+	reply = channelUp;	
+	setLastCommandTimeIdleCount();
 	pthread_mutex_unlock(&hwLock);
 	return reply;
 }
 
 uint64_t PFP_KX7::getPortCounts(int channel, int whichCount)
 {
+	setLastCommandTimeIdleCount();
 	pthread_mutex_lock(&hwLock);
 	uint64_t reply;
 	ReadAndCheck((statusReg + 1 + 6*channel + 2*whichCount)* 4, (uint32_t *)&reply, 2);
-	lastCommandTime = boost::posix_time::microsec_clock::local_time(); 
+	setLastCommandTimeIdleCount();
 	pthread_mutex_unlock(&hwLock);
 	return reply;
 }

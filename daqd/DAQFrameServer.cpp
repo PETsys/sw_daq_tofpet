@@ -61,8 +61,6 @@ void DAQFrameServer::stopAcquisition()
 
 int DAQFrameServer::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, int commandLength)
 {
-	getPortUp(); // hint at register access for PFP_KX7
-
 	uint16_t sentSN = (unsigned(buffer[0]) << 8) + unsigned(buffer[1]);	
 
 	boost::posix_time::ptime t1 = boost::posix_time::microsec_clock::local_time();
@@ -172,6 +170,7 @@ void *DAQFrameServer::doWork()
 		
 		DataFrame *dataFrame = devNull;
 		if (m->acquisitionMode != 0) {
+#ifndef __NO_CHANNEL_IDLE_TIME__
 			// Get a free frame from the queue, if possible
 			// If not, just carry on with the devNull frame
 			pthread_mutex_lock(&m->lock);
@@ -179,6 +178,16 @@ void *DAQFrameServer::doWork()
 				dataFrame = &dataFrameSharedMemory[m->dataFrameWritePointer % MaxDataFrameQueueSize];
 			}
 			pthread_mutex_unlock(&m->lock);
+#else
+			// Wait until we have a free data frame
+			pthread_mutex_lock(&m->lock);
+			while(!die && isFull(m->dataFrameWritePointer, m->dataFrameReadPointer)) {
+				pthread_cond_wait(&m->condCleanDataFrame, &m->lock);
+			}
+
+			dataFrame = &dataFrameSharedMemory[m->dataFrameWritePointer % MaxDataFrameQueueSize];
+			pthread_mutex_unlock(&m->lock);
+#endif
 		}
 		if(die) break;
 		

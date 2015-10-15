@@ -9,10 +9,14 @@ CPPFLAGS := $(CPPFLAGS) -I.
 
 CPPFLAGS := $(CPPFLAGS)
 
-LIBS := $(LIBS) $(GLIBS) -L$(shell root-config --libdir --libs) $(shell root-config --auxlibs) -lMinuit -lboost_system -lboost_filesystem -lboost_regex
+LIBS := $(LIBS) $(GLIBS) -L$(shell root-config --libdir --libs) $(shell root-config --auxlibs) -lMinuit -lboost_filesystem -lboost_regex -lboost_system
 CPPFLAGS := $(CPPFLAGS) -I$(shell root-config --incdir)
 
 CPPFLAGS := $(CPPFLAGS) -I../daqd/
+
+ifeq (1, ${NO_CHANNEL_IDLE_TIME})
+	CPPFLAGS := $(CPPFLAGS) -D__NO_CHANNEL_IDLE_TIME__
+endif 
 
 ifeq (1, ${ENDOTOFPET})
 	CPPFLAGS := $(CPPFLAGS) -D__ENDOTOFPET__

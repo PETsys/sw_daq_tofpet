@@ -18,7 +18,7 @@ Sticv3Handler::Sticv3Handler()
 	atomicAdd(nEvent, 1);
 	if(raw.feType != RawPulse::STIC) return false;
 
-        pulse.raw = raw;                
+        pulse.raw = &raw;
         // WARNING: rounding sensitive!
         pulse.time = raw.time + (raw.d.stic.tfine * raw.T / (4*32));  
         pulse.timeEnd = raw.timeEnd;

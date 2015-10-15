@@ -19,7 +19,7 @@ EventBuffer<Pulse> * CoarseExtract::handleEvents (EventBuffer<RawPulse> *inBuffe
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned N =  inBuffer->getSize();
-	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(N);
+	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(N, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);
 	
@@ -52,7 +52,7 @@ EventBuffer<Pulse> * CoarseExtract::handleEvents (EventBuffer<RawPulse> *inBuffe
 		}
 		
 		Pulse &p = outBuffer->getWriteSlot();
-		p.raw = raw;		
+		p.raw = &raw;		
 		// WARNING: rounding sensitive!
 		p.time = raw.time;
 		p.region = raw.region;
@@ -67,7 +67,6 @@ EventBuffer<Pulse> * CoarseExtract::handleEvents (EventBuffer<RawPulse> *inBuffe
 	atomicAdd(nZeroToT, lZeroTot);
 	atomicAdd(nPassed, lPassed);
 	
-	delete inBuffer;
 	return outBuffer;
 }
 

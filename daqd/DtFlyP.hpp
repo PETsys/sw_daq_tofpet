@@ -50,12 +50,14 @@ private:
 	pthread_cond_t condCleanBuffer;
 	pthread_cond_t condDirtyBuffer;
 	
-	DTFLY::SBufferInit dmaBuffer;
-
-	
-	uint64_t *wordBuffer;
-	volatile int wordBufferUsed;
-	volatile int wordBufferStatus;
+	static const unsigned NB = 4;
+	unsigned dmaBufferRdPtr;
+	unsigned dmaBufferWrPtr;
+	bool dmaBufferQueueIsEmpty();
+	bool dmaBufferQueueIsFull();
+	DTFLY::SBufferInit dmaBuffer[NB];
+	volatile int wordBufferUsed[NB];
+	volatile int wordBufferStatus[NB];
 	
 	
 	volatile bool die;

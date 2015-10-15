@@ -51,10 +51,18 @@ private:
 	static const int CoincMasksReg		= 609;
 	static const int statusReg		= 640;
 
-	WD_DMA *DMA_Point	= NULL;
-	PVOID DMA_Buffer	= NULL;
 	WDC_DEVICE_HANDLE Card;
-
+	static const unsigned NB = 2;
+	WD_DMA *DMA_Point[NB];
+	PVOID DMA_Buffer[NB];
+	unsigned dmaBufferRdPtr;
+	unsigned dmaBufferWrPtr;
+	bool dmaBufferQueueIsEmpty();
+	bool dmaBufferQueueIsFull();
+	int wordBufferUsed[NB];
+	int wordBufferStatus[NB];
+	uint64_t *wordBuffer[NB];
+	
 	int getWords_(uint64_t *buffer, int count);
 	int WriteAndCheck(int reg, uint32_t *data, int count);
 	int ReadAndCheck(int reg, uint32_t *data, int count);
@@ -68,17 +76,14 @@ private:
 	pthread_cond_t condCleanBuffer;
 	pthread_cond_t condDirtyBuffer;
 
-	uint64_t *wordBuffer;
-	volatile int wordBufferUsed;
-	volatile int wordBufferStatus;
-	
-	
 	volatile bool die;
 	volatile bool hasWorker;
 	static void *runWorker(void *arg);
 
 	pthread_mutex_t hwLock;
-	boost::posix_time::ptime lastCommandTime;
+	uint32_t lastCommandIdleCount;
+	void setLastCommandTimeIdleCount();
+	uint32_t getLastCommandTimeIdleCount();
 
 };
 }

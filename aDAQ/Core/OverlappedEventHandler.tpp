@@ -1,16 +1,15 @@
-#include <string.h>
-#include <stdio.h>
 
 template <class TEventInput, class TEventOutput>
 OverlappedEventHandler<TEventInput, TEventOutput>::OverlappedEventHandler(EventSink<TEventOutput> *sink, bool singleWorker, ThreadPool *pool)
-: EventSource<TEventOutput>(sink), dbgTimer(), singleWorker(singleWorker), threadPool(singleWorker ? new ThreadPool(1) : pool)
+: EventSource<TEventOutput>(sink), singleWorker(singleWorker), threadPool(singleWorker ? new ThreadPool(1) : pool)
 {
 	threadPool->clientIncrease();
 	this->lastBuffer = NULL;
 
 	peakThreads = 0;
-	nBlocks = 0;
-	blockProcessingTime = 0;
+	stepProcessingNBlocks = 0;
+	stepProcessingTime = 0;
+	stepProcessingNInputEvents = 0;
 	
 }
 
@@ -28,12 +27,7 @@ void OverlappedEventHandler<TEventInput, TEventOutput>::pushEvents(EventBuffer<T
 	if(buffer == NULL) 
 		return;
 
-	if(buffer->getSize() == 0) {
-		delete buffer;
-		return;
-	}	
-	
-	nBlocks++;
+	stepProcessingNBlocks++;
 	peakThreads = workers.size() > peakThreads ? workers.size() : peakThreads;	
 	
 	
@@ -87,8 +81,7 @@ template <class TEventInput, class TEventOutput>
 void OverlappedEventHandler<TEventInput, TEventOutput>::report()
 {
 	fprintf(stderr, " thread pool\n");
-	fprintf(stderr, "   %10d blocks received\n", nBlocks);
-	fprintf(stderr, "   %10.4lf seconds/block\n", blockProcessingTime/nBlocks);
+	fprintf(stderr, "   %10.4lf milliseconds/block\n", stepProcessingTime/stepProcessingNBlocks*1000);
 	fprintf(stderr, "   %10d peak threads\n", peakThreads);
 
 	this->sink->report();
@@ -108,7 +101,8 @@ void OverlappedEventHandler<TEventInput, TEventOutput>::extractWorker()
 	workers.pop_front();	
 	worker->wait();
 	this->sink->pushEvents(worker->outBuffer);
-	blockProcessingTime += worker->runTime;	
+	stepProcessingTime += worker->runTime;	
+	stepProcessingNInputEvents += worker->runEvents;
 	delete worker;
 }
 
@@ -133,9 +127,15 @@ template <class TEventInput, class TEventOutput>
 void *OverlappedEventHandler<TEventInput, TEventOutput>::Worker::run(void *arg)
 {
 	Worker *w = (Worker *)arg;	
-	boost::timer t;	
+	struct timespec t0;
+	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t0);
+	w->runEvents = w->inBuffer->getSize();
+	
 	w->outBuffer = w->master->handleEvents(w->inBuffer);
-	w->runTime = t.elapsed();
+	
+	struct timespec t1;
+	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t1);
+	w->runTime = t1.tv_sec - t0.tv_sec + 1E-9*(t1.tv_nsec - t0.tv_nsec);
 	return NULL;
 }
 

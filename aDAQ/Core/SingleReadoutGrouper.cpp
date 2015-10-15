@@ -16,7 +16,7 @@ EventBuffer<RawHit> * SingleReadoutGrouper::handleEvents (EventBuffer<Pulse> *in
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<RawHit> * outBuffer = new EventBuffer<RawHit>(nEvents);
+	EventBuffer<RawHit> * outBuffer = new EventBuffer<RawHit>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);	
 	
@@ -28,13 +28,12 @@ EventBuffer<RawHit> * SingleReadoutGrouper::handleEvents (EventBuffer<Pulse> *in
 		int crystalID = e.channelID;
 		
 		// WARNING: this needs better handling..
-		if(e.badEvent) continue;
-		
+
 		RawHit &hit = outBuffer->getWriteSlot();
-		hit.top = e;
+		hit.top = &e;
 		hit.time = e.time;
 		if(hit.time < tMin || hit.time >=  tMax) continue;
-		hit.bottom = Pulse();
+		hit.bottom = NULL;
 		hit.crystalID = crystalID;
 		hit.region = e.region;
 		hit.energy = e.energy;
@@ -47,7 +46,6 @@ EventBuffer<RawHit> * SingleReadoutGrouper::handleEvents (EventBuffer<Pulse> *in
 	}
 	atomicAdd(nSingleRead, lSingleRead);
 	
-	delete inBuffer;
 	return outBuffer;
 }
 

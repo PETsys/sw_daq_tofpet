@@ -162,7 +162,7 @@ float P2::getQtac(int channel, int tac, bool isT, int adc, long long tacIdleTime
 	
 
 
-	if(te.shape.p2 == 0) return defaultQ; // We don't have such thing as a linear TAC!
+	if(te.shape.m == 0) return 2; 
 	
 	
 	float p2 = te.shape.p2;
@@ -253,6 +253,8 @@ float P2::getT0(int channel, int tac, bool isT)
 
 float P2::getT(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT)
 {
+	int index = getIndex(channel, tac, isT);
+	TAC &te = table[index];
 
 	float q = getQ(channel, tac, isT, adc, tacIdleTime, coarseToT);	
 	float f = (coarse % 2 == 0) ?  
@@ -260,7 +262,7 @@ float P2::getT(int channel, int tac, bool isT, int adc, int coarse, long long ta
 		// WARNING: forcing Q to [1..3] range adds a bias, which will need an extra field to be corrected
 		  (q < 2.5 ? 2.0 - q : 4.0 - q) :
 		  (3.0 - q);	
-	
+	if(te.shape.m == 0)f = (coarse % 2 == 0) ? 1.5 : 2.5;
 	float t = coarse + f;
 	return t + getT0(channel, tac, isT);
 }
@@ -283,8 +285,10 @@ float P2::getEnergy(int channel, float tot)
 
 bool P2::isNormal(int channel, int tac, bool isT, int adc, int coarse, long long tacIdleTime, float coarseToT)
 {
+	int index = getIndex(channel, tac, isT);
+	TAC &te = table[index];
 	float q = getQ(channel, tac, isT, adc, tacIdleTime, coarseToT);
-	if(q >= 1.00 && q <= 3.00) return true;
+	if((q >= 1.00 && q <= 3.00) || te.shape.m == 0) return true;
 	else return false;
 }
 
@@ -406,8 +410,11 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 {
 	FILE * mapFile = fopen(mapFileName, "r");
 
+	char fileNameCopy[1024];
+	strncpy(fileNameCopy, mapFileName, 1024);
+	
 	char baseName[1024]; baseName[0] = 0;	
-	strncpy(baseName, dirname((char *)mapFileName), 1024);
+	strncpy(baseName, dirname((char *)fileNameCopy), 1024);
 
 	char lutFileName[1024];
 	char lutFilePath[1024];
@@ -425,17 +432,19 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 	int start, end;
 	char line[1024];
 	
-	const boost::regex e("([0-9]+)[[:blank:]]+([0-9]+)[[:blank:]]+(.*)[[:blank:]]+(.*)[[:blank:]]+(.*)");
+	const boost::regex e("([0-9]+)\\s+([0-9]+)\\s+(\\S+)(\\s+)?(\\S+)?(\\s+)?(\\S+)?(\\s+)?(\\S+)?");
+	int lineNumber = 0;
 	while(fscanf(mapFile, "%[^\n]\n", line) == 1) {
+		lineNumber += 1;
 		boost::match_results<const char *> what;
-		if(!boost::regex_match((const char *)line, what, e, boost::match_default | boost::match_partial)) {
-			fprintf(stderr, "Bad syntax in '%s'\n", mapFileName);
+		if(!boost::regex_match((const char *)line, what, e, boost::match_default)) {
+			fprintf(stderr, "Bad syntax in '%s' (line %d) (1)\n", mapFileName, lineNumber);
 			continue;
 		}
 		
 		if(!what[1].matched || !what[2].matched || !what[3].matched) {
-			fprintf(stderr, "Bad syntax in '%s'\n", mapFileName);
-			continue;
+			fprintf(stderr, "Bad syntax in '%s' (line %d) (2)\n", mapFileName, lineNumber);
+		continue;
 		}
 		
 		char temporary[128];
@@ -449,18 +458,21 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 		copySubMatch(lutFileName, what[3].first, what[3].second);
 		
 
-		if(what[4].matched)
-			copySubMatch(tqFileName, what[4].first, what[4].second);
+		if(what[5].matched) {
+			copySubMatch(tqFileName, what[5].first, what[5].second);
+		}
 		else
 			strcpy(tqFileName, "none");
 		
-		if(what[5].matched)
-			copySubMatch(totFileName, what[5].first, what[5].second);
+		if(what[7].matched) {
+			copySubMatch(totFileName, what[7].first, what[7].second);
+		}
 		else
 			strcpy(totFileName, "none");
 
-		if(what[6].matched)
-			copySubMatch(offsetFileName, what[6].first, what[6].second);
+		if(what[9].matched) {
+			copySubMatch(offsetFileName, what[9].first, what[9].second);
+		}
 		else
 			strcpy(offsetFileName, "none");
 		

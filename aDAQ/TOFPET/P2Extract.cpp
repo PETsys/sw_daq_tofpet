@@ -53,7 +53,7 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 // 		return false;
 // 	}
    
-	pulse.raw = raw;		
+	pulse.raw = &raw;
 	pulse.region = raw.region;
 	pulse.channelID = raw.channelID;
 
@@ -64,27 +64,19 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	float f_E = lut->getT(raw.channelID, raw.d.tofpet.tac, false, efine, eCoarse, tacIdleTime, coarseToT*raw.T/1000.0) - eCoarse;
 	
 	pulse.badEvent = false;
-	if(pulse.tofpet_TQT < (1.0 - tDenormalTolerance) || pulse.tofpet_TQT > (3.0 + tDenormalTolerance)) {
+	if(pulse.tofpet_TQT < (1.0 - tDenormalTolerance) || pulse.tofpet_TQT > (3.0 + tDenormalTolerance) ||  pulse.tofpet_TQE < (1.0 - eDenormalTolerance) || pulse.tofpet_TQE > (3.0 + eDenormalTolerance)) {
 		atomicAdd(nNotNormal, 1);
 		pulse.badEvent = true;
 		pulse.time = raw.time;
-		if(killDenormal) return false;
-	}
-	else {
-		// WARNING: rounding sensitive!
-		pulse.time = raw.time + (long long)((f_T * raw.T) + lut->timeOffset[raw.channelID]);
-	}
-	
-	if(pulse.tofpet_TQE < (1.0 - eDenormalTolerance) || pulse.tofpet_TQE > (3.0 + eDenormalTolerance)) {
-		atomicAdd(nNotNormal, 1);
-		pulse.badEvent = true;
 		pulse.timeEnd = raw.timeEnd;
 		if(killDenormal) return false;
 	}
 	else {
 		// WARNING: rounding sensitive!
+		pulse.time = raw.time + (long long)((f_T * raw.T) + lut->timeOffset[raw.channelID]);
 		pulse.timeEnd = raw.timeEnd + (long long)((f_E * raw.T) + lut->timeOffset[raw.channelID]);
 	}
+	
    	//printf("tot=%f energy = %f\n", 1E-3*(pulse.timeEnd - pulse.time), pulse.energy);
 	pulse.energy = lut->getEnergy(raw.channelID, 1E-3*(pulse.timeEnd - pulse.time));
 
@@ -97,7 +89,7 @@ EventBuffer<Pulse> * P2Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents);
+	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
@@ -111,7 +103,6 @@ EventBuffer<Pulse> * P2Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 			outBuffer->pushWriteSlot();
 		}	
 	}
-	delete inBuffer;
 	return outBuffer;
 }
 

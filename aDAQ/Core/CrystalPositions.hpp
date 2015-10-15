@@ -29,6 +29,8 @@ namespace DAQ { namespace Core {
 		};
 		
 		Entry *map;
+		u_int32_t nEventsIn;
+		u_int32_t nEventsOut;
 			
 
 	protected:

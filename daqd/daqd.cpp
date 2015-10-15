@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 				feTypeHasBeenSet = 1;
 #else
 				fprintf(stderr, "ERROR: This was built without PFP_KX7 support.\n");
-				fprintf(stderr, "Recompile, adding PFP_KX7=1 to make command to enable DTFLY support\n");
+				fprintf(stderr, "Recompile, adding PFP_KX7=1 to make command to enable PFP_KX7 support\n");
 				return -1;
 #endif 
 			}
@@ -287,7 +287,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 		else {
 //		  fprintf(stderr, "Got a client (%d) event %08llX\n", event.data.fd, event.events);
 		  if ((event.events & EPOLLHUP) || (event.events & EPOLLERR)) {
-			fprintf(stderr, "WARNING: Client hung up or error\n");
+			fprintf(stderr, "INFO: Client hung up or error\n");
 			epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event.data.fd, NULL);
 			delete clientList[event.data.fd]; clientList.erase(event.data.fd);
 		  }
@@ -304,7 +304,7 @@ void pollSocket(int listeningSocket, FrameServer *frameServer)
 			
 		  }
 		  else {
-			fprintf(stderr, "Event was WTF\n");
+			fprintf(stderr, "WARING: epoll() event was WTF\n");
 			epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event.data.fd, NULL);
 			delete clientList[event.data.fd]; clientList.erase(event.data.fd);
 		  }

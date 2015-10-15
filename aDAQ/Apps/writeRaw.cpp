@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 			bool frameLost = shm->getFrameLost(index);
 			
 			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE);
+				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE, NULL);
 			}
 			
 			for (int n = 0; outputType != 'N' && n < nEvents; n++) {
@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
 				writer->closeStep();
 			}
 
-			fprintf(stderr, "writeRaw:: Step had %d frames with %d events; %f events/frame avg, %d event/frame max\n", 
+			fprintf(stderr, "writeRaw:: Step had %lld frames with %lld events; %f events/frame avg, %d event/frame max\n", 
 					stepGoodFrames, stepEvents, 
 					float(stepEvents)/stepGoodFrames,
 					stepMaxFrame); fflush(stderr);
