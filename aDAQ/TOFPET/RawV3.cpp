@@ -144,7 +144,8 @@ void RawReaderV3::run()
 		
 			if(outBuffer->getSize() >= outBlockSize) {
 				outBuffer->setTMin(lastTMax);
-				outBuffer->setTMax(tMax);		
+				outBuffer->setTMax(tMax);
+				lastTMax=tMax;
 				sink->pushEvents(outBuffer);
 				outBuffer = NULL;
 				nBlocks += 1;

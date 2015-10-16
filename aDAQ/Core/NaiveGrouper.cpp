@@ -76,7 +76,7 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 			
 			float u = hit.x - hit2.x;
 			float v = hit.y - hit2.y;
-			float w = hit.y - hit2.y;
+			float w = hit.z - hit2.z;
 			float d2 = u*u + v*v + w*w;
 
 
