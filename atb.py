@@ -400,6 +400,8 @@ class ATB:
 
 	## Returns an array with the active ports (PAB only has port 0)
 	def getActivePorts(self):
+		if self.__activePorts == []:
+			self.__activePorts = self.__getActivePorts()
 		return self.__activePorts
 
 	def __getActivePorts(self):
@@ -417,6 +419,8 @@ class ATB:
 
 	## Returns an array of (portID, slaveID) for the active FEB/Ds (PAB) 
 	def getActiveFEBDs(self):
+		if self.__activeFEBDs == []:
+			self.__activeFEBDs = self.__getActiveFEBDs()
 		return self.__activeFEBDs
 
 	def __getActiveFEBDs(self):
