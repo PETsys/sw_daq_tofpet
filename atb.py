@@ -348,8 +348,17 @@ class ATB:
 		for portID, slaveID in self.getActiveFEBDs(): 
 			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 
-		# Now, start the DAQ!
-		self._daqdMode(2); # Start acquisition on daqd
+		# Start acquisition process
+		# Disable DAQ card
+		self._daqdMode(0);
+		# Enable all FEB/D to receive external sync
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 10, 1)
+		# Enable DAQ card (also generates sync to FEB/Ds
+		self._daqdMode(2);
+		# Inhibit all FEB/Ds from receiving external sync
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 10, 0)
 
 		# Check the status from all the ASICs
 		for portID, slaveID in self.getActiveFEBDs():
