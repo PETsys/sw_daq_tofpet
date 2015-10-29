@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 			}
 			else {
 				fprintf(stderr, "ERROR: '%s' is not a valid DAQ type\n", (char *)optarg);
-				fprintf(stderr, "Valid DAQ types are 'GBE', 'DTFLY'\n");
+				fprintf(stderr, "Valid DAQ types are 'GBE', 'DTFLY' or 'PFP_KX7'\n");
 				return -1;
 			}
 			
