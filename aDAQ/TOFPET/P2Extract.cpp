@@ -73,11 +73,11 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	}
 	else {
 		// WARNING: rounding sensitive!
-		pulse.time = raw.time + (long long)((f_T * raw.T) + lut->timeOffset[raw.channelID]);
-		pulse.timeEnd = raw.timeEnd + (long long)((f_E * raw.T) + lut->timeOffset[raw.channelID]);
+		pulse.time = raw.time + (long long)((f_T * raw.T) + lut->timeOffset[raw.channelID]*1e12);
+		pulse.timeEnd = raw.timeEnd + (long long)((f_E * raw.T) + lut->timeOffset[raw.channelID]*1e12);
 	}
 	
-   	//printf("tot=%f energy = %f\n", 1E-3*(pulse.timeEnd - pulse.time), pulse.energy);
+   	//printf("tot=%f energy = %e\n", 1E-3*(pulse.timeEnd - pulse.time), lut->timeOffset[raw.channelID]);
 	pulse.energy = lut->getEnergy(raw.channelID, 1E-3*(pulse.timeEnd - pulse.time));
 
 	atomicAdd(nPassed, 1); 

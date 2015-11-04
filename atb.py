@@ -1119,7 +1119,7 @@ class ATB:
         # @param cWindow Coincidence window (in seconds) If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
 	# @param minToT Minimal ToT (in seconds) for events to be considered as a coincidence trigger candidate.
 	def openAcquisition(self, fileName, cWindow = 0, minToT = 0, writer = "TOFPET"):
-		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' }
+		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N', 'RAW' : 'R' }
 		if writer  not in writerModeDict.keys():
 			print "ERROR: when calling ATB::openAcquisition(), writer must be ", ", ".join(writerModeDict.keys())
 		

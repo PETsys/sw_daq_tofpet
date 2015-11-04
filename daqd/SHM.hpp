@@ -39,6 +39,11 @@ public:
 		return (eventWord >> 36) & 0x7FFF;
 	};
 	
+	DataFrame *getDataFrame(int index) {
+		DataFrame *dataFrame = &shm[index];
+		return dataFrame;
+	}
+
 	unsigned long long getFrameWord(int index, int n) {
 		DataFrame *dataFrame = &shm[index];
 		uint64_t eventWord = dataFrame->data[n];
