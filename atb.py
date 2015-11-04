@@ -348,8 +348,17 @@ class ATB:
 		for portID, slaveID in self.getActiveFEBDs(): 
 			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 
-		# Now, start the DAQ!
-		self._daqdMode(2); # Start acquisition on daqd
+		# Start acquisition process
+		# Disable DAQ card
+		self._daqdMode(0);
+		# Enable all FEB/D to receive external sync
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 10, 1)
+		# Enable DAQ card (also generates sync to FEB/Ds
+		self._daqdMode(2);
+		# Inhibit all FEB/Ds from receiving external sync
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 10, 0)
 
 		# Check the status from all the ASICs
 		for portID, slaveID in self.getActiveFEBDs():
@@ -400,6 +409,8 @@ class ATB:
 
 	## Returns an array with the active ports (PAB only has port 0)
 	def getActivePorts(self):
+		if self.__activePorts == []:
+			self.__activePorts = self.__getActivePorts()
 		return self.__activePorts
 
 	def __getActivePorts(self):
@@ -417,6 +428,8 @@ class ATB:
 
 	## Returns an array of (portID, slaveID) for the active FEB/Ds (PAB) 
 	def getActiveFEBDs(self):
+		if self.__activeFEBDs == []:
+			self.__activeFEBDs = self.__getActiveFEBDs()
 		return self.__activeFEBDs
 
 	def __getActiveFEBDs(self):
@@ -1106,7 +1119,7 @@ class ATB:
         # @param cWindow Coincidence window (in seconds) If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
 	# @param minToT Minimal ToT (in seconds) for events to be considered as a coincidence trigger candidate.
 	def openAcquisition(self, fileName, cWindow = 0, minToT = 0, writer = "TOFPET"):
-		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' }
+		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N', 'RAW' : 'R' }
 		if writer  not in writerModeDict.keys():
 			print "ERROR: when calling ATB::openAcquisition(), writer must be ", ", ".join(writerModeDict.keys())
 		

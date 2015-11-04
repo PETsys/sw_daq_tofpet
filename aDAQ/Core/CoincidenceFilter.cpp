@@ -99,9 +99,10 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		else {
 			continue;
 		}
-		
+
 		for(unsigned j = i; j > 0; j--) {	// Look for events before p1
 			RawPulse &p2 = inBuffer->get(j);
+			if(p1.region != p2.region) continue;			// Only search within trigger's region
 			if(p2.time < (p1.time - cWindow - overlap)) break;	// No point in looking further
 			if(p2.time < (p1.time - cWindow)) continue;		// Doesn't meet cWindow
 			accepted[j] = true;
@@ -109,6 +110,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		
 		for (unsigned j = i; j < nEvents; j++) {// Look for events after p1
 			RawPulse &p2 = inBuffer->get(j);
+			if(p1.region != p2.region) continue;			// Only search within trigger's region
 			if(p2.time > (p1.time + dWindow + overlap)) break;	// No point in looking further
 			if(p2.time > (p1.time + dWindow)) continue;		// Doesn't meet dWindow
 			accepted[j] = true;
