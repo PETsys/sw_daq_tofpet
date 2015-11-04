@@ -196,6 +196,11 @@ void *DAQFrameServer::doWork()
 		unsigned frameSize = (firstWord >> 36) & 0x7FFF;
 		unsigned frameID = (firstWord ) & 0xFFFFFFFFF;
 		
+		if(frameSize > MaxDataFrameSize) {
+			fprintf(stderr, "Excessive frame size: %u\n word (max is %u)", frameSize, MaxDataFrameSize);
+			lastFrameWasBad = true; skippedLoops = 1000007; continue;
+		}
+		
 		dataFrame->data[0] = firstWord; //one word was already read
 		nWords = DP->getWords(dataFrame->data+1,frameSize-1);
 		if(nWords < 0) { lastFrameWasBad = true; skippedLoops = 1000004; continue; }
