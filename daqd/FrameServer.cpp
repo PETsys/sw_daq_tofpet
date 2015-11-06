@@ -120,11 +120,22 @@ FrameServer::~FrameServer()
 
 void FrameServer::startAcquisition(int mode)
 {
-	// Pause for 100 ms and wipe buffers
+	// NOTE: By the time we got here, the DAQ card has synced the system and we should be in the
+	// 100 ms sync'ing pause
+	
+	// Now we just have to wipe the buffers
+	// It should be done twice, because the FrameServer worker thread may be waiting for a frame slot
+	// and it may fill at least one slot
+	
 	pthread_mutex_lock(&lock);
+	dataFrameWritePointer = 0;
+	dataFrameReadPointer = 0;
 	acquisitionMode = 0;
 	pthread_mutex_unlock(&lock);
+	pthread_cond_signal(&condCleanDataFrame);
+
 	usleep(120000);
+	
 	pthread_mutex_lock(&lock);
 	dataFrameWritePointer = 0;
 	dataFrameReadPointer = 0;
