@@ -670,7 +670,7 @@ int main(int argc, char *argv[])
 		if(onlineMode)step=N-1;
 	
 		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);	
-
+		if(eventsBegin==eventsEnd)continue;
 		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 		if(N!=1){
 			if (strcmp(setupFileName, "none") == 0) {
