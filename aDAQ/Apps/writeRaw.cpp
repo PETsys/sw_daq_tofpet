@@ -55,14 +55,14 @@ int main(int argc, char *argv[])
 	DAQd::SHM *shm = new DAQd::SHM(shmObjectPath);
 	
 	AbstractRawPulseWriter *writer = NULL;
-	bool nullWriter = true;
+	bool pipeWriterIsNull = true;
 	if(outputType == 'T') {
 		writer = new TOFPET::RawWriterV3(outputFilePrefix);
-		nullWriter = false;
+		pipeWriterIsNull = false;
 	}
 	else if(outputType == 'E') {
 		writer = new ENDOTOFPET::RawWriterE(outputFilePrefix, 0);
-		nullWriter = false;
+		pipeWriterIsNull = false;
 	}
 	else if(outputType == 'R') {
 		writer = new NullRawPulseWriter();
@@ -71,10 +71,11 @@ int main(int argc, char *argv[])
 		sprintf(fName, "%s.rawf", outputFilePrefix);
 		rawFrameFile = fopen(fName, "wb");
 		assert(rawFrameFile != NULL);
+		pipeWriterIsNull = true;
 	}
 	else {
 		writer = new NullRawPulseWriter();
-		nullWriter = false;
+		pipeWriterIsNull = true;
 	}
 
 
@@ -91,7 +92,7 @@ int main(int argc, char *argv[])
 	
 	EventSink<RawPulse> *sink = NULL;
 	EventBuffer<RawPulse> *outBuffer = NULL;
-	long long maxFrameID = 0, lastMaxFrameID = 0;
+	long long minFrameID = 0x7FFFFFFFFFFFFFFFLL, maxFrameID = 0, lastMaxFrameID = 0;
 	
 	long long lastFrameID = -1;
 
@@ -102,7 +103,7 @@ int main(int argc, char *argv[])
 		
 		if(sink == NULL) {
 			writer->openStep(step1, step2);
-			if (nullWriter) {
+			if (pipeWriterIsNull) {
 				sink = new NullSink<RawPulse>();
 			}
 			else if (cWindow == 0) {
@@ -139,7 +140,17 @@ int main(int argc, char *argv[])
 					
 				
 			}
+			else if ((lastFrameID >= 0) && (frameID != (lastFrameID + 1))) {
+				// We have skipped one or more frame ID, so 
+				// we account them as lost
+				long long skippedFrames = (frameID - lastFrameID) - 1;
+				stepGoodFrames += skippedFrames;
+				stepLostFrames += skippedFrames;
+				stepLostFrames0 += skippedFrames;
+			}
+
 			lastFrameID = frameID;
+			minFrameID = minFrameID < frameID ? minFrameID : frameID;
 			maxFrameID = maxFrameID > frameID ? maxFrameID : frameID;
 			
 			// Simply dump the raw data frame
@@ -156,7 +167,7 @@ int main(int argc, char *argv[])
 				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE, NULL);
 			}
 			
-			for (int n = 0; !nullWriter && n < nEvents; n++) {
+			for (int n = 0; !pipeWriterIsNull && n < nEvents; n++) {
 				RawPulse &p = outBuffer->getWriteSlot();
 #ifdef __ENDOTOFPET__
 				int feType = shm->getEventType(index, n);
@@ -227,9 +238,6 @@ int main(int argc, char *argv[])
 			rdPointer = (rdPointer+1) % (2*bs);
 		}		
 		
-		fwrite(&rdPointer, sizeof(uint32_t), 1, stdout);
-		fflush(stdout);
-
 		if(blockHeader.endOfStep != 0) {
 			if(sink != NULL) {
 				if(outBuffer != NULL) {
@@ -264,6 +272,11 @@ int main(int argc, char *argv[])
 			stepLostFrames = 0;
 			stepLostFrames0 = 0;
 		}
+
+		fwrite(&rdPointer, sizeof(uint32_t), 1, stdout);
+		fflush(stdout);
+
+	
 	}
 
 	delete writer;
