@@ -139,8 +139,6 @@ void *DAQFrameServer::doWork()
 			//printf("skippedLoops = %d\n", skippedLoops);
 			skippedLoops = 0;
 			
-			// Trigger the conditions, to ensure clients don't get locked for ever
-			pthread_cond_signal(&m->condDirtyDataFrame);
 		}
 		
 		uint64_t firstWord;
@@ -222,7 +220,6 @@ void *DAQFrameServer::doWork()
 			m->dataFrameWritePointer = (m->dataFrameWritePointer + 1)  % (2*MaxDataFrameQueueSize);
 			pthread_mutex_unlock(&m->lock);
 		}
-		pthread_cond_signal(&m->condDirtyDataFrame);
 	}	
 	delete devNull;
 	printf("DAQFrameServer::runWorker exiting...\n");
