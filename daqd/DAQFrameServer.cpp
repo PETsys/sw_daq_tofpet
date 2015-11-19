@@ -178,7 +178,7 @@ void *DAQFrameServer::doWork()
 
 		// Drop most of lost frames (lost = 1, nEvents = 0) to avoid wasting buffer space
 		// Keep ~1% just to ensure software always has something
-		bool dropLostFrame = (nEvents = 0) && frameLost &&  (frameCount % 128 != 0);
+		bool dropLostFrame = (nEvents == 0) && frameLost &&  (frameCount % 128 != 0);
 		frameCount += 1;
 
 		DataFrame *dataFrame = devNull;
