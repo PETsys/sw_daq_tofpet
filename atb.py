@@ -940,21 +940,27 @@ class ATB:
 
         ## Discards all data frames which may have been generated before the function is called. Used to synchronize data reading with the effect of previous configuration commands.
 	def doSync(self, clearFrames=True):
-		targetFrameID = self.__getCurrentFrameID()
-		#print "Waiting for frame %1d" % targetFrameID
-		while True:
-			df = self.getDataFrame()
-			assert df != None
-			if df == None:
-				continue;
+		while True:	
+			targetFrameID = self.__getCurrentFrameID()
+			#print "Waiting for frame %1d" % targetFrameID
+			while True:
+				df = self.getDataFrame()
+				assert df != None
+				if df == None:
+					continue;
 
-			if  df['id'] > targetFrameID:
-				#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
+				if  df['id'] > targetFrameID:
+					#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
+					break
+
+				# Set the read pointer to write pointer, in order to consume all available frames in buffer
+				wrPointer, rdPointer = self.__getDataFrameWriteReadPointer();
+				self.__setDataFrameReadPointer(wrPointer);
+
+			# Do this until we took less than 100 ms to sync
+			currentFrameID = self.__getCurrentFrameID()
+			if (currentFrameID - targetFrameID) * self.__frameLength < 0.100:
 				break
-
-			# Set the read pointer to write pointer, in order to consume all available frames in buffer
-			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer();
-			self.__setDataFrameReadPointer(wrPointer);
 		
 
 		return
@@ -1148,6 +1154,7 @@ class ATB:
 		n1 = struct.calcsize(template1)
 		n2 = struct.calcsize(template2)
 
+		self.doSync()
 		wrPointer, rdPointer = (0, 0)
 		while wrPointer == rdPointer:
 			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
