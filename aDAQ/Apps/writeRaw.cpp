@@ -50,18 +50,34 @@ int main(int argc, char *argv[])
 	char outputType = argv[5][0];
 	char *outputFilePrefix = argv[6];
 	
+	FILE *rawFrameFile = NULL;
+
 	DAQd::SHM *shm = new DAQd::SHM(shmObjectPath);
 	
 	AbstractRawPulseWriter *writer = NULL;
+	bool pipeWriterIsNull = true;
 	if(outputType == 'T') {
 		writer = new TOFPET::RawWriterV3(outputFilePrefix);
+		pipeWriterIsNull = false;
 	}
 	else if(outputType == 'E') {
 		writer = new ENDOTOFPET::RawWriterE(outputFilePrefix, 0);
+		pipeWriterIsNull = false;
+	}
+	else if(outputType == 'R') {
+		writer = new NullRawPulseWriter();
+
+		char fName[1024];
+		sprintf(fName, "%s.rawf", outputFilePrefix);
+		rawFrameFile = fopen(fName, "wb");
+		assert(rawFrameFile != NULL);
+		pipeWriterIsNull = true;
 	}
 	else {
 		writer = new NullRawPulseWriter();
+		pipeWriterIsNull = true;
 	}
+
 
 	bool firstBlock = true;
 	float step1;
@@ -76,7 +92,7 @@ int main(int argc, char *argv[])
 	
 	EventSink<RawPulse> *sink = NULL;
 	EventBuffer<RawPulse> *outBuffer = NULL;
-	long long maxFrameID = 0, lastMaxFrameID = 0;
+	long long minFrameID = 0x7FFFFFFFFFFFFFFFLL, maxFrameID = 0, lastMaxFrameID = 0;
 	
 	long long lastFrameID = -1;
 
@@ -87,7 +103,7 @@ int main(int argc, char *argv[])
 		
 		if(sink == NULL) {
 			writer->openStep(step1, step2);
-			if (outputType == 'N') {
+			if (pipeWriterIsNull) {
 				sink = new NullSink<RawPulse>();
 			}
 			else if (cWindow == 0) {
@@ -98,7 +114,7 @@ int main(int argc, char *argv[])
 			}
 			else {
 				// Round up cWindow and minToT for use in CoincidenceFilter
-				float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD) + 1) * SYSTEM_PERIOD;
+				float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD)) * SYSTEM_PERIOD;
 				float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
 				sink =	new CoarseSorter(
 					new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
@@ -124,9 +140,26 @@ int main(int argc, char *argv[])
 					
 				
 			}
+			else if ((lastFrameID >= 0) && (frameID != (lastFrameID + 1))) {
+				// We have skipped one or more frame ID, so 
+				// we account them as lost
+				long long skippedFrames = (frameID - lastFrameID) - 1;
+				stepGoodFrames += skippedFrames;
+				stepLostFrames += skippedFrames;
+				stepLostFrames0 += skippedFrames;
+			}
+
 			lastFrameID = frameID;
+			minFrameID = minFrameID < frameID ? minFrameID : frameID;
 			maxFrameID = maxFrameID > frameID ? maxFrameID : frameID;
 			
+			// Simply dump the raw data frame
+			int frameSize = shm->getFrameSize(index);
+			if (rawFrameFile != NULL) {
+				DAQd::DataFrame *dataFrame = shm->getDataFrame(index);
+				fwrite((void *)dataFrame->data, sizeof(uint64_t), frameSize, rawFrameFile);
+			}
+
 			int nEvents = shm->getNEvents(index);
 			bool frameLost = shm->getFrameLost(index);
 			
@@ -134,7 +167,7 @@ int main(int argc, char *argv[])
 				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE, NULL);
 			}
 			
-			for (int n = 0; outputType != 'N' && n < nEvents; n++) {
+			for (int n = 0; !pipeWriterIsNull && n < nEvents; n++) {
 				RawPulse &p = outBuffer->getWriteSlot();
 #ifdef __ENDOTOFPET__
 				int feType = shm->getEventType(index, n);
@@ -205,9 +238,6 @@ int main(int argc, char *argv[])
 			rdPointer = (rdPointer+1) % (2*bs);
 		}		
 		
-		fwrite(&rdPointer, sizeof(uint32_t), 1, stdout);
-		fflush(stdout);
-
 		if(blockHeader.endOfStep != 0) {
 			if(sink != NULL) {
 				if(outBuffer != NULL) {
@@ -227,7 +257,7 @@ int main(int argc, char *argv[])
 				writer->closeStep();
 			}
 
-			fprintf(stderr, "writeRaw:: Step had %d frames with %d events; %f events/frame avg, %d event/frame max\n", 
+			fprintf(stderr, "writeRaw:: Step had %lld frames with %lld events; %f events/frame avg, %d event/frame max\n", 
 					stepGoodFrames, stepEvents, 
 					float(stepEvents)/stepGoodFrames,
 					stepMaxFrame); fflush(stderr);
@@ -242,9 +272,16 @@ int main(int argc, char *argv[])
 			stepLostFrames = 0;
 			stepLostFrames0 = 0;
 		}
+
+		fwrite(&rdPointer, sizeof(uint32_t), 1, stdout);
+		fflush(stdout);
+
+	
 	}
 
 	delete writer;
+	if(rawFrameFile != NULL)
+		fclose(rawFrameFile);
 	
 	return 0;
 }

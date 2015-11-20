@@ -465,7 +465,7 @@ int main(int argc, char *argv[])
 
 	float cWindow = 20E-9; // s
 	float gWindow = 100E-9; // s
-	int maxHits=16;
+	int maxHits=GammaPhoton::maxHits;
 	float gWindowRoot = 100E-9; // s
 	int maxHitsRoot=1;
 	float minEnergy = 150; // keV or ns (if energy=tot)
@@ -670,7 +670,7 @@ int main(int argc, char *argv[])
 		if(onlineMode)step=N-1;
 	
 		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);	
-
+		if(eventsBegin==eventsEnd)continue;
 		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 		if(N!=1){
 			if (strcmp(setupFileName, "none") == 0) {
@@ -685,7 +685,7 @@ int main(int argc, char *argv[])
 	
 		float gRadius = 20; // mm 
 		// Round up cWindow and minToT for use in CoincidenceFilter
-		float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD) + 1) * SYSTEM_PERIOD;
+		float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD)) * SYSTEM_PERIOD;
 		float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
 
 		EventSink<Coincidence> * writer = NULL;

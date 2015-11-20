@@ -7,15 +7,17 @@
 
 namespace DAQd {
 	
-static const int MaxDataFrameSize = 2048;
-static const unsigned MaxDataFrameQueueSize = 1024;
-static const int N_ASIC=16*1024;
+static const int MaxDataFrameSize = 1024;
+static const unsigned MaxDataFrameQueueSize = 16*1024;
+static const int N_ASIC=32*32*64; // defined by number of bits available in protocol
 
 
 struct DataFrame {
 		uint64_t data[MaxDataFrameSize];
+#ifndef __NO_CHANNEL_IDLE_TIME__
 		uint64_t channelIdleTime[MaxDataFrameSize];
 		uint64_t tacIdleTime[MaxDataFrameSize];
+#endif
 #ifdef __ENDOTOFPET__
 		int8_t feType[MaxDataFrameSize];
 #endif
@@ -37,6 +39,11 @@ public:
 		return (eventWord >> 36) & 0x7FFF;
 	};
 	
+	DataFrame *getDataFrame(int index) {
+		DataFrame *dataFrame = &shm[index];
+		return dataFrame;
+	}
+
 	unsigned long long getFrameWord(int index, int n) {
 		DataFrame *dataFrame = &shm[index];
 		uint64_t eventWord = dataFrame->data[n];
@@ -165,13 +172,21 @@ public:
 	};
 
 	long long getTACIdleTime(int index, int event) {
+#ifndef __NO_CHANNEL_IDLE_TIME__
 		DataFrame *dataFrame = &shm[index];
 		return dataFrame->tacIdleTime[event+2];
+#else
+		return 0;
+#endif
 	};
 
 	long long getChannelIdleTime(int index, int event) {
+#ifndef __NO_CHANNEL_IDLE_TIME__
 		DataFrame *dataFrame = &shm[index];
 		return dataFrame->channelIdleTime[event+2];
+#else
+		return 0;
+#endif
 	};
   
 

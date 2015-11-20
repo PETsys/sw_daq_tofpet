@@ -120,11 +120,22 @@ FrameServer::~FrameServer()
 
 void FrameServer::startAcquisition(int mode)
 {
-	// Pause for 100 ms and wipe buffers
+	// NOTE: By the time we got here, the DAQ card has synced the system and we should be in the
+	// 100 ms sync'ing pause
+	
+	// Now we just have to wipe the buffers
+	// It should be done twice, because the FrameServer worker thread may be waiting for a frame slot
+	// and it may fill at least one slot
+	
 	pthread_mutex_lock(&lock);
+	dataFrameWritePointer = 0;
+	dataFrameReadPointer = 0;
 	acquisitionMode = 0;
 	pthread_mutex_unlock(&lock);
+	pthread_cond_signal(&condCleanDataFrame);
+
 	usleep(120000);
+	
 	pthread_mutex_lock(&lock);
 	dataFrameWritePointer = 0;
 	dataFrameReadPointer = 0;
@@ -231,10 +242,12 @@ bool FrameServer::parseDataFrame(DataFrame *dataFrame)
 		
 #ifdef __ENDOTOFPET__
 		int feType = feTypeMap[asicID / 16];
+		dataFrame->feType[n] = feType;
 #else
 		const int feType = 0;
 #endif
-		
+
+#ifndef __NO_CHANNEL_IDLE_TIME__
 		unsigned tofpet_ChannelID = (eventWord >> 2) & 0x3F;
 		unsigned tofpet_TACID = (eventWord >> 0) & 0x3;
 		unsigned long long tofpet_EventTime = (1024ULL*frameID) + ((eventWord >> 38) & 0x3FF);
@@ -257,13 +270,9 @@ bool FrameServer::parseDataFrame(DataFrame *dataFrame)
 		int64_t tacIdleTime = eventTime - tacLastEventTime[tacIndex];
 		tacLastEventTime[tacIndex] = eventTime;
 
-#ifdef __ENDOTOFPET____
-		dataFrame->feType[n] = feType;
-#endif
 		dataFrame->channelIdleTime[n] = channelIdleTime;
 		dataFrame->tacIdleTime[n] = tacIdleTime;
-		
-	
+#endif
 	}
 	
 	return true;

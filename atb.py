@@ -23,7 +23,9 @@ import DSHM
 import tofpet
 import sticv3
 
-
+MAX_DAQ_PORTS = 32
+MAX_CHAIN_FEBD = 32
+MAX_FEBD_ASIC = 64
 
 ###	
 ## Required for compatibility with configuration files and older code
@@ -38,8 +40,8 @@ intToBin = tofpet.intToBin
 class BoardConfig:
         ## Constructor
 	def __init__(self):
-		maxASIC = 16*12
-		maxDAC = 8
+		maxASIC = MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC
+		maxDAC = MAX_DAQ_PORTS * MAX_CHAIN_FEBD * 2
                 self.asicConfigFile = [ "Default Configuration" for x in range(maxASIC) ]
                 self.asicBaselineFile = [ "None" for x in range(maxASIC) ]
                 self.HVDACParamsFile = "None"
@@ -309,8 +311,10 @@ class ATB:
 		#self.__shmmap = mmap.mmap(self.__shm.fd, self.__shm.size)
 		#os.close(self.__shm.fd)
 		self.config = None
-		self.__activeAsics = [ False for x in range(16*1024) ]
-		self.__asicType = [ None for x in range(16*1024) ]
+		self.__activePorts = []
+		self.__activeFEBDs = []
+		self.__activeAsics = [ False for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
+		self.__asicType = [ None for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
 		self.__asicConfigCache = {}		
 		return None
 
@@ -344,8 +348,17 @@ class ATB:
 		for portID, slaveID in self.getActiveFEBDs(): 
 			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 
-		# Now, start the DAQ!
-		self._daqdMode(2); # Start acquisition on daqd
+		# Start acquisition process
+		# Disable DAQ card
+		self._daqdMode(0);
+		# Enable all FEB/D to receive external sync
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 10, 1)
+		# Enable DAQ card (also generates sync to FEB/Ds
+		self._daqdMode(2);
+		# Inhibit all FEB/Ds from receiving external sync
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 10, 0)
 
 		# Check the status from all the ASICs
 		for portID, slaveID in self.getActiveFEBDs():
@@ -396,6 +409,11 @@ class ATB:
 
 	## Returns an array with the active ports (PAB only has port 0)
 	def getActivePorts(self):
+		if self.__activePorts == []:
+			self.__activePorts = self.__getActivePorts()
+		return self.__activePorts
+
+	def __getActivePorts(self):
 		template = "@HH"
 		n = struct.calcsize(template)
 		data = struct.pack(template, 0x06, n)
@@ -410,6 +428,11 @@ class ATB:
 
 	## Returns an array of (portID, slaveID) for the active FEB/Ds (PAB) 
 	def getActiveFEBDs(self):
+		if self.__activeFEBDs == []:
+			self.__activeFEBDs = self.__getActiveFEBDs()
+		return self.__activeFEBDs
+
+	def __getActiveFEBDs(self):
 		return [ (x, 0) for x in self.getActivePorts() ]
 
 	def __getPossibleFEBDs(self):
@@ -872,6 +895,8 @@ class ATB:
 	## Sends the entire configuration (needs to be assigned to the abstract ATB.config data structure) to the ASIC and starts to write data to the shared memory block
         # @param maxTries The maximum number of attempts to read a valid dataframe after uploading configuration 
 	def initialize(self, maxTries = 1):
+		self.__activePorts = self.__getActivePorts()
+		self.__activeFEBDs = self.__getActiveFEBDs()
 		assert self.config is not None
 		activePorts = self.getActivePorts()
 		print "INFO: active FEB/D on ports: ", (", ").join([str(x) for x in activePorts])
@@ -915,21 +940,27 @@ class ATB:
 
         ## Discards all data frames which may have been generated before the function is called. Used to synchronize data reading with the effect of previous configuration commands.
 	def doSync(self, clearFrames=True):
-		targetFrameID = self.__getCurrentFrameID()
-		#print "Waiting for frame %1d" % targetFrameID
-		while True:
-			df = self.getDataFrame()
-			assert df != None
-			if df == None:
-				continue;
+		while True:	
+			targetFrameID = self.__getCurrentFrameID()
+			#print "Waiting for frame %1d" % targetFrameID
+			while True:
+				df = self.getDataFrame()
+				assert df != None
+				if df == None:
+					continue;
 
-			if  df['id'] > targetFrameID:
-				#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
+				if  df['id'] > targetFrameID:
+					#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
+					break
+
+				# Set the read pointer to write pointer, in order to consume all available frames in buffer
+				wrPointer, rdPointer = self.__getDataFrameWriteReadPointer();
+				self.__setDataFrameReadPointer(wrPointer);
+
+			# Do this until we took less than 100 ms to sync
+			currentFrameID = self.__getCurrentFrameID()
+			if (currentFrameID - targetFrameID) * self.__frameLength < 0.100:
 				break
-
-			# Set the read pointer to write pointer, in order to consume all available frames in buffer
-			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer();
-			self.__setDataFrameReadPointer(wrPointer);
 		
 
 		return
@@ -1094,7 +1125,7 @@ class ATB:
         # @param cWindow Coincidence window (in seconds) If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
 	# @param minToT Minimal ToT (in seconds) for events to be considered as a coincidence trigger candidate.
 	def openAcquisition(self, fileName, cWindow = 0, minToT = 0, writer = "TOFPET"):
-		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N' }
+		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N', 'RAW' : 'R' }
 		if writer  not in writerModeDict.keys():
 			print "ERROR: when calling ATB::openAcquisition(), writer must be ", ", ".join(writerModeDict.keys())
 		
@@ -1116,47 +1147,72 @@ class ATB:
 	def acquire(self, step1, step2, acquisitionTime):
 		#print "Python:: acquiring %f %f"  % (step1, step2)
 		(pin, pout) = (self.__acquisitionPipe.stdin, self.__acquisitionPipe.stdout)
-		nFrames = 0
+		nRequiredFrames = int(acquisitionTime / self.__frameLength)
 
 		template1 = "@ffIIi"
 		template2 = "@I"
 		n1 = struct.calcsize(template1)
 		n2 = struct.calcsize(template2)
 
-		nRequiredFrames = acquisitionTime / self.__frameLength
+		self.doSync()
+		wrPointer, rdPointer = (0, 0)
+		while wrPointer == rdPointer:
+			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+		
+		bs = self.__dshm.getSizeInFrames()
+		index = rdPointer % bs
+		startFrame = self.__dshm.getFrameID(index)
+		stopFrame = startFrame + nRequiredFrames
+
                 t0 = time()
 		nBlocks = 0
-		bs = self.__dshm.getSizeInFrames()
-		while nFrames < nRequiredFrames:
+		currentFrame = startFrame
+		nFrames = 0
+		lastUpdateFrame = currentFrame
+		while currentFrame < stopFrame:
 			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+			while wrPointer == rdPointer:
+				wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+
+			nFramesInBlock = abs(wrPointer - rdPointer)
+			if nFramesInBlock > bs:
+				nFramesInBlock = 2*bs - nFramesInBlock
+
+			# Do not feed more than bs/2 frame blocks to writeRaw in a single call
+			# Because the entire frame block won't be freed until writeRaw is done, we can end up in a situation
+			# where writeRaw owns all frames and daqd has no buffer space, even if writeRaw has already processed 
+			# some/most of the frame block
+			if nFramesInBlock > bs/2:
+				wrPointer = (rdPointer + bs/2) % (2*bs)
+
 			data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 0)
 			pin.write(data); pin.flush()
 			
 			data = pout.read(n2)
-			rdPointer2,  = struct.unpack(template2, data)
-			self.__setDataFrameReadPointer(rdPointer2)
+			rdPointer,  = struct.unpack(template2, data)
 
-			nFramesInBlock1 = (rdPointer2 % bs) - (rdPointer % bs)
-			nFramesInBlock = nFramesInBlock1;
-			if nFramesInBlock < 0:
-				nFramesInBlock = nFramesInBlock + bs
-		
-			nFrames += nFramesInBlock
+			index = (rdPointer + bs - 1) % bs
+			currentFrame = self.__dshm.getFrameID(index)
+
+			self.__setDataFrameReadPointer(rdPointer)
+
+			nFrames = currentFrame - startFrame + 1
 			nBlocks += 1
-			if nBlocks % 100 == 0:
-				stdout.write("Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data\r" % (nFrames, time()-t0, nFrames * self.__frameLength))
+			if (currentFrame - lastUpdateFrame) * self.__frameLength > 0.1:
+				t1 = time()
+				stdout.write("Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data (delay = %4.1f)\r" % (nFrames, t1-t0, nFrames * self.__frameLength, (t1-t0) - nFrames * self.__frameLength))
 				stdout.flush()
+				lastUpdateFrame = currentFrame
 
-		wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+		print "Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data (delay = %4.1f)" % (nFrames, time()-t0, nFrames * self.__frameLength, (t1-t0) - nFrames * self.__frameLength)
+
 		data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 1)
 		pin.write(data); pin.flush()
-		
-		data = pout.read(n2)
-		rdPointer2,  = struct.unpack(template2, data)
-		self.__setDataFrameReadPointer(rdPointer2)
-	
 
-		print "Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
+		data = pout.read(n2)
+		rdPointer,  = struct.unpack(template2, data)
+		self.__setDataFrameReadPointer(rdPointer)
+
 		return None
 
 	## \internal

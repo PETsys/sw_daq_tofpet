@@ -85,7 +85,7 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 			
 			float u = hit.x - hit2.x;
 			float v = hit.y - hit2.y;
-			float w = hit.y - hit2.y;
+			float w = hit.z - hit2.z;
 			float d2 = u*u + v*v + w*w;
 
 
@@ -94,15 +94,25 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 
 			taken[j] = true;
 
-			if(nHits >= maxHits) continue;
-			hits[nHits] = &hit2;
-			nHits++;
+			if(nHits >= maxHits) {
+				// Increase the hit count but don't actually add a hit
+				nHits++;
+			}
+			else {
+				hits[nHits] = &hit2;
+				nHits++;
+			}
 
 			
 			
 		}
 		
-		if(nHits > maxHits) continue;				
+		if(nHits > maxHits) {
+			// This event had too many hits
+			// Count it and discard it
+			lHitsOverflow += 1;
+			continue;	
+		}
 		
 		// Buble sorting..
 		bool sorted = false;

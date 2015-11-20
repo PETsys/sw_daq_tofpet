@@ -164,8 +164,8 @@ int main(int argc, char *argv[])
 	float gWindow = 100E-9; // s
 	float minEnergy = 150; // keV or ns (if energy=tot)
 	float maxEnergy = 500; // keV or ns (if energy=tot)
-	int gMaxHits=16;
-	int gMaxHitsRoot=16;
+	int gMaxHits=GammaPhoton::maxHits;
+	int gMaxHitsRoot=GammaPhoton::maxHits;
 
 	int nOptArgs=0;
 	while(1) {
@@ -293,6 +293,7 @@ int main(int argc, char *argv[])
 		unsigned long long eventsEnd;
 		if(onlineMode)step=N-1;
 		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
+		if(eventsBegin==eventsEnd)continue;
 		if(!onlineMode)printf("Step %3d of %3d: %f %f (%llu to %llu)\n", step+1, scanner->getNSteps(), eventStep1, eventStep2, eventsBegin, eventsEnd);
 		if(N!=1){
 			if (strcmp(argv[1], "none") == 0) {

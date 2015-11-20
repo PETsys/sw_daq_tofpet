@@ -36,7 +36,6 @@ extern "C" {
 
 static const unsigned DMA_TRANS_BYTE_SIZE = 262144;
 static const unsigned wordBufferSize = DMA_TRANS_BYTE_SIZE / sizeof(uint64_t);
-static const int N_BUFFERS = 1;
 
 static const int txWrPointerReg = 320;
 static const int txRdPointerReg = 384;
@@ -63,35 +62,10 @@ DtFlyP::DtFlyP()
 	int status;
 	status = ReadAndCheck(txWrPointerReg * 4 , &txWrPointer, 1);
 	status = ReadAndCheck(rxRdPointerReg * 4 , &rxRdPointer, 1);
-// 	printf("DtFLYP:: Initial TX WR pointer: %08x\n", txWrPointer);
-// 	printf("DtFLYP:: Initial RX RD pointer: %08x\n", rxRdPointer);
-// 	
-// 	for(int i = 0; i < 4; i++) 
-// 		for(int j = 0; j < 3; j++)
-// 			printf("%d %d %016llx\n", i, j, getPortCounts(i, j));
-
-	// for(int i = 0; i < N_BUFFERS; i++)
-	// {
-	// 	Buffer_t * buffer = new Buffer_t();
-	// 	buffer->bufferIndex = i;
-	// 	buffer->buffer.ByteCount = DMA_TRANS_BYTE_SIZE;
-	// 	AllocateBuffer(i, &buffer->buffer);
-	// 	cleanBufferQueue.push(buffer);
-	// }
-
-	// buffers = new Buffer_t[N_BUFFERS];
-	// for(int i = 0; i < N_BUFFERS; i++) {
-	// 	buffers[i].bufferIndex = i;
-	// 	buffers[i].buffer.ByteCount = DMA_TRANS_BYTE_SIZE;
-	// 	AllocateBuffer(i, &(buffers[i].buffer));
-	// }
-	// tail = 0;
-	// head = 0; 
-
-	wordBuffer = new uint64_t[wordBufferSize];
-	wordBufferUsed = 0;
-	wordBufferStatus = 0;
 	
+	dmaBufferWrPtr = 0;
+	dmaBufferRdPtr = 0;
+
 	die = true;
 	hasWorker = false;
 
@@ -102,8 +76,6 @@ DtFlyP::DtFlyP()
 DtFlyP::~DtFlyP()
 {
 	stopWorker();
-
-	delete [] wordBuffer;
 
 	pthread_mutex_destroy(&hwLock);
 	pthread_cond_destroy(&condDirtyBuffer);
@@ -124,6 +96,17 @@ DtFlyP::~DtFlyP()
 
 const uint64_t idleWord = 0xFFFFFFFFFFFFFFFFULL;
 
+
+bool DtFlyP::dmaBufferQueueIsEmpty()
+{
+	return dmaBufferWrPtr == dmaBufferRdPtr;
+}
+
+bool DtFlyP::dmaBufferQueueIsFull()
+{
+	return (dmaBufferWrPtr != dmaBufferRdPtr) && ((dmaBufferWrPtr%NB) == (dmaBufferRdPtr%NB));
+}
+
 void *DtFlyP::runWorker(void *arg)
 {
 	const uint64_t idleWord = 0xFFFFFFFFFFFFFFFFULL;
@@ -131,59 +114,48 @@ void *DtFlyP::runWorker(void *arg)
 	printf("DtFlyP::runWorker launching...\n");
 	DtFlyP *p = (DtFlyP *)arg;
 
-	p->dmaBuffer.ByteCount = DMA_TRANS_BYTE_SIZE;
-	int r1 = AllocateBuffer(0, &p->dmaBuffer);
-	assert(r1 == 0);
+	for(int i = 0; i < NB; i++ ) {
+		p->dmaBuffer[i].ByteCount = DMA_TRANS_BYTE_SIZE;
+		int r1 = AllocateBuffer(i, &p->dmaBuffer[i]);
+		assert(r1 == 0);
+	}
 
-	//uint32_t	regData[7];
-	//int		regAddress;
-	//regAddress = 8;
-	//regData[0] =  0x00000000;//0x00000000
-	//int status = ReadWriteUserRegs(WRITE, 8, regData, 1);
-	
 	while(!p->die) {
 		
-//  		boost::posix_time::ptime startTime = boost::posix_time::microsec_clock::local_time();
-		//pthread_mutex_lock(&p->hwLock);
-		int status = ReceiveDMAbyBufIndex(DMA1, 0, 2);
-		//pthread_mutex_unlock(&p->hwLock);
-//  		boost::posix_time::ptime stopTime = boost::posix_time::microsec_clock::local_time();	
-//  		printf("receive DMA status is %d, %d\n", status, (stopTime - startTime).total_milliseconds());
-
 		pthread_mutex_lock(&p->lock);	
-		while(!p->die && (p->wordBufferUsed < p->wordBufferStatus)) {
-// 			pthread_mutex_unlock(&p->lock);	
-// 			pthread_cond_signal(&p->condDirtyBuffer);			
-// 			pthread_mutex_lock(&p->lock);	
+		while(!p->die && p->dmaBufferQueueIsFull()) {
 			pthread_cond_wait(&p->condCleanBuffer, &p->lock);
 		}
+		pthread_mutex_unlock(&p->lock);
+		int status = ReceiveDMAbyBufIndex(DMA1, p->dmaBufferWrPtr%NB, 2);
 	       
 		if(p->die) {
 			status = ENOWORDS;
 		}
-
-		if (status > 0) {
-			memcpy(p->wordBuffer, (void *)p->dmaBuffer.UserAddr, status);		
-			p->wordBufferUsed = 0;	
-			p->wordBufferStatus = status / sizeof(uint64_t);
+		else if (status > 0) {
+			p->wordBufferUsed[p->dmaBufferWrPtr%NB] = 0;
+			p->wordBufferStatus[p->dmaBufferWrPtr%NB] = status / sizeof(uint64_t);
 		}
 		else if(status == 0) {
-		  	p->wordBufferUsed = ENOWORDS - 1; // Set wordBufferUsed to some number smaller than status
-			p->wordBufferStatus = ENOWORDS;
-			printf("DtFlyP::worker wordBufferStatus set to %d\n", p->wordBufferStatus);
+			p->wordBufferUsed[p->dmaBufferWrPtr%NB] = ENOWORDS - 1; // Set wordBufferUsed to some number smaller than status
+			p->wordBufferStatus[p->dmaBufferWrPtr%NB] = ENOWORDS;
+			printf("DtFlyP::worker wordBufferStatus set to %d\n", p->wordBufferStatus[p->dmaBufferWrPtr%NB]);
 		}
 		else {
 			// Error
-			p->wordBufferUsed = status - 1; // Set wordBufferUsed to some number smaller than status
-			p->wordBufferStatus = status;
-			printf("DtFlyP::worker wordBufferStatus set to %d\n", p->wordBufferStatus);
+			p->wordBufferUsed[p->dmaBufferWrPtr%NB] = status - 1; // Set wordBufferUsed to some number smaller than status
+			p->wordBufferStatus[p->dmaBufferWrPtr%NB] = status;
+			printf("DtFlyP::worker wordBufferStatus set to %d\n", p->wordBufferStatus[p->dmaBufferWrPtr%NB]);
 		}
+		pthread_mutex_lock(&p->lock);
+		p->dmaBufferWrPtr = (p->dmaBufferWrPtr+1) % (2*NB);
 		pthread_mutex_unlock(&p->lock);
 	       	pthread_cond_signal(&p->condDirtyBuffer);
 	}
 	
-	ReleaseBuffer(0);
-	
+	for(int i = 0; i < NB; i++ ) {
+		ReleaseBuffer(i);
+	}
 	
 	printf("DtFlyP::runWorker exiting...\n");
 	return NULL;
@@ -207,45 +179,46 @@ int DtFlyP::getWords(uint64_t *buffer, int count)
 
 int DtFlyP::getWords_(uint64_t *buffer, int count)
 {
-	//printf("DtFlyP::getWords_(%p, %d) ", buffer, count);
-	int result = -1;
-	
-/*	printf("status = %d, used = %d\n", wordBufferStatus, wordBufferUsed);*/
-	
-	if(wordBufferUsed >= wordBufferStatus)
+	// If the DMA buffer queue is empty for reading, wait until we have something.
+	// Otherwise, proceed without even touching the lock.
+	if(dmaBufferQueueIsEmpty()) {
+		pthread_mutex_lock(&lock);
+		while(!die && dmaBufferQueueIsEmpty()) {
+			pthread_cond_wait(&condDirtyBuffer, &lock);
+		}
+		pthread_mutex_unlock(&lock);
+		if(die) return -1;
+	}
+
+	// If this buffer has been fully consumed, increase read pointer and return 0.
+	// getWords() will retry again.
+	if(wordBufferUsed[dmaBufferRdPtr%NB] >= wordBufferStatus[dmaBufferRdPtr%NB]) {
+		pthread_mutex_lock(&lock);
+		dmaBufferRdPtr = (dmaBufferRdPtr + 1) % (2*NB);
+		pthread_mutex_unlock(&lock);
 		pthread_cond_signal(&condCleanBuffer);
-	
-	pthread_mutex_lock(&lock);		
-	while(!die && (wordBufferUsed >= wordBufferStatus)) {
-// 		pthread_mutex_unlock(&lock);
-// 		pthread_cond_signal(&condCleanBuffer);
-// 		pthread_mutex_lock(&lock);
-		pthread_cond_wait(&condDirtyBuffer, &lock);
+		return 0;
 	}
 	
-	if (die) {
-		result = -1;
-	}
-	else if(wordBufferStatus < 0) {
-		printf("Buffer status was set to %d\n", wordBufferStatus);
-		wordBufferUsed = wordBufferStatus; // Set wordBufferUsed to some number equal or greater than status
-		result = wordBufferStatus;
+	int result = -1;
+	if(wordBufferStatus[dmaBufferRdPtr%NB] < 0) {
+		// This buffer had an error status
+		printf("Buffer status was set to %d\n", wordBufferStatus[dmaBufferRdPtr%NB]);
+		wordBufferUsed[dmaBufferRdPtr%NB] = wordBufferStatus[dmaBufferRdPtr%NB]; // Set wordBufferUsed to some number equal or greater than status
+		result = wordBufferStatus[dmaBufferRdPtr%NB];
 	}	
 	else {	
-		int wordsAvailable = wordBufferStatus - wordBufferUsed;
+		// This buffer has normal data
+		int wordsAvailable = wordBufferStatus[dmaBufferRdPtr%NB] - wordBufferUsed[dmaBufferRdPtr%NB];
 		result = count < wordsAvailable ? count : wordsAvailable;
 		if(result < 0) result = 0;
-		memcpy(buffer, wordBuffer + wordBufferUsed, result * sizeof(uint64_t));
-		wordBufferUsed += result;
+		uint64_t *wordBuffer = (uint64_t *) dmaBuffer[dmaBufferRdPtr%NB].UserAddr;
+		memcpy(buffer, wordBuffer + wordBufferUsed[dmaBufferRdPtr%NB], result * sizeof(uint64_t));
+		wordBufferUsed[dmaBufferRdPtr%NB] += result;
 	}
-	pthread_mutex_unlock(&lock);
-
-	// if(result <= 0 || emptied) {
-	// 	pthread_cond_signal(&condCleanBuffer);
-	// }
-	       
 
 	return result;
+	
 }
 
 void DtFlyP::startWorker()
@@ -336,9 +309,9 @@ int DtFlyP::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, i
 	do {
 		pthread_mutex_lock(&hwLock);
 		// Read the RD pointer
-		//printf("TX Read WR pointer: status is %2d, result is %08X\n", status, txWrPointer);	
+		//printf("TX Read WR pointer: status is %NBd, result is %08X\n", status, txWrPointer);
 		status = ReadAndCheck(txRdPointerReg * 4 , &txRdPointer, 1);
-		//printf("TX Read RD pointer: status is %2d, result is %08X\n", status, txRdPointer);
+		//printf("TX Read RD pointer: status is %NBd, result is %08X\n", status, txRdPointer);
 		pthread_mutex_unlock(&hwLock);
 
 		boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
@@ -381,7 +354,7 @@ int DtFlyP::recvReply(char *buffer, int bufferSize)
 		pthread_mutex_lock(&hwLock);
 		// Read the WR pointer
 		status = ReadAndCheck(rxWrPointerReg * 4 , &rxWrPointer, 1);
-		//printf("RX Read WR pointer: status is %d, result is %08X\n", status, rxWrPointer);	
+		//printf("RX Read WR pointer: status is %d, result is %08X\n", status, rxWrPointer);
 		//printf("RX Read RD pointer: status is %d, result is %08X\n", status, rxRdPointer);
 		pthread_mutex_unlock(&hwLock);
 
@@ -438,7 +411,7 @@ int DtFlyP::WriteAndCheck(int reg, uint32_t *data, int count) {
 		fail = false;
 		for(int i = 0; i < count; i++) fail |= (data[i] != readBackBuffer[i]);		
 // 		if(fail) 
-// 			printf("DtFlyP::WriteAndCheck(%3d, %8p, %2d) readback failed, retrying (%d)\n", 
+// 			printf("DtFlyP::WriteAndCheck(%3d, %8p, %NBd) readback failed, retrying (%d)\n",
 // 				reg, data, count,
 // 				iter);
 		iter++;
@@ -458,7 +431,7 @@ int DtFlyP::ReadAndCheck(int reg, uint32_t *data, int count) {
 		fail = false;
 		for(int i = 0; i < count; i++) fail |= (data[i] != readBackBuffer[i]);		
 // 		if(fail) 
-// 			printf("DtFlyP::ReadAndCheck(%3d, %8p, %2d) readback failed, retrying (%d)\n", 
+// 			printf("DtFlyP::ReadAndCheck(%3d, %8p, %NBd) readback failed, retrying (%d)\n",
 // 				reg, data, count,
 // 				iter);
 		iter++;
