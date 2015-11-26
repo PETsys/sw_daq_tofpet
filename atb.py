@@ -940,21 +940,27 @@ class ATB:
 
         ## Discards all data frames which may have been generated before the function is called. Used to synchronize data reading with the effect of previous configuration commands.
 	def doSync(self, clearFrames=True):
-		targetFrameID = self.__getCurrentFrameID()
-		#print "Waiting for frame %1d" % targetFrameID
-		while True:
-			df = self.getDataFrame()
-			assert df != None
-			if df == None:
-				continue;
+		while True:	
+			targetFrameID = self.__getCurrentFrameID()
+			#print "Waiting for frame %1d" % targetFrameID
+			while True:
+				df = self.getDataFrame()
+				assert df != None
+				if df == None:
+					continue;
 
-			if  df['id'] > targetFrameID:
-				#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
+				if  df['id'] > targetFrameID:
+					#print "Found frame %d (%f)" % (df['id'], df['id'] * self.__frameLength)
+					break
+
+				# Set the read pointer to write pointer, in order to consume all available frames in buffer
+				wrPointer, rdPointer = self.__getDataFrameWriteReadPointer();
+				self.__setDataFrameReadPointer(wrPointer);
+
+			# Do this until we took less than 100 ms to sync
+			currentFrameID = self.__getCurrentFrameID()
+			if (currentFrameID - targetFrameID) * self.__frameLength < 0.100:
 				break
-
-			# Set the read pointer to write pointer, in order to consume all available frames in buffer
-			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer();
-			self.__setDataFrameReadPointer(wrPointer);
 		
 
 		return
@@ -1141,47 +1147,72 @@ class ATB:
 	def acquire(self, step1, step2, acquisitionTime):
 		#print "Python:: acquiring %f %f"  % (step1, step2)
 		(pin, pout) = (self.__acquisitionPipe.stdin, self.__acquisitionPipe.stdout)
-		nFrames = 0
+		nRequiredFrames = int(acquisitionTime / self.__frameLength)
 
 		template1 = "@ffIIi"
 		template2 = "@I"
 		n1 = struct.calcsize(template1)
 		n2 = struct.calcsize(template2)
 
-		nRequiredFrames = acquisitionTime / self.__frameLength
+		self.doSync()
+		wrPointer, rdPointer = (0, 0)
+		while wrPointer == rdPointer:
+			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+		
+		bs = self.__dshm.getSizeInFrames()
+		index = rdPointer % bs
+		startFrame = self.__dshm.getFrameID(index)
+		stopFrame = startFrame + nRequiredFrames
+
                 t0 = time()
 		nBlocks = 0
-		bs = self.__dshm.getSizeInFrames()
-		while nFrames < nRequiredFrames:
+		currentFrame = startFrame
+		nFrames = 0
+		lastUpdateFrame = currentFrame
+		while currentFrame < stopFrame:
 			wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+			while wrPointer == rdPointer:
+				wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
+
+			nFramesInBlock = abs(wrPointer - rdPointer)
+			if nFramesInBlock > bs:
+				nFramesInBlock = 2*bs - nFramesInBlock
+
+			# Do not feed more than bs/2 frame blocks to writeRaw in a single call
+			# Because the entire frame block won't be freed until writeRaw is done, we can end up in a situation
+			# where writeRaw owns all frames and daqd has no buffer space, even if writeRaw has already processed 
+			# some/most of the frame block
+			if nFramesInBlock > bs/2:
+				wrPointer = (rdPointer + bs/2) % (2*bs)
+
 			data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 0)
 			pin.write(data); pin.flush()
 			
 			data = pout.read(n2)
-			rdPointer2,  = struct.unpack(template2, data)
-			self.__setDataFrameReadPointer(rdPointer2)
+			rdPointer,  = struct.unpack(template2, data)
 
-			nFramesInBlock1 = (rdPointer2 % bs) - (rdPointer % bs)
-			nFramesInBlock = nFramesInBlock1;
-			if nFramesInBlock < 0:
-				nFramesInBlock = nFramesInBlock + bs
-		
-			nFrames += nFramesInBlock
+			index = (rdPointer + bs - 1) % bs
+			currentFrame = self.__dshm.getFrameID(index)
+
+			self.__setDataFrameReadPointer(rdPointer)
+
+			nFrames = currentFrame - startFrame + 1
 			nBlocks += 1
-			if nBlocks % 100 == 0:
-				stdout.write("Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data\r" % (nFrames, time()-t0, nFrames * self.__frameLength))
+			if (currentFrame - lastUpdateFrame) * self.__frameLength > 0.1:
+				t1 = time()
+				stdout.write("Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data (delay = %4.1f)\r" % (nFrames, t1-t0, nFrames * self.__frameLength, (t1-t0) - nFrames * self.__frameLength))
 				stdout.flush()
+				lastUpdateFrame = currentFrame
+		t1 = time()
+		print "Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data (delay = %4.1f)" % (nFrames, time()-t0, nFrames * self.__frameLength, (t1-t0) - nFrames * self.__frameLength)
 
-		wrPointer, rdPointer = self.__getDataFrameWriteReadPointer()
 		data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 1)
 		pin.write(data); pin.flush()
-		
-		data = pout.read(n2)
-		rdPointer2,  = struct.unpack(template2, data)
-		self.__setDataFrameReadPointer(rdPointer2)
-	
 
-		print "Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data" % (nFrames, time()-t0, nFrames * self.__frameLength)
+		data = pout.read(n2)
+		rdPointer,  = struct.unpack(template2, data)
+		self.__setDataFrameReadPointer(rdPointer)
+
 		return None
 
 	## \internal

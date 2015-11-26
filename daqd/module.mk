@@ -3,6 +3,7 @@ CXXFLAGS := -g -O2  -std=c++0x
 LDFLAGS := $(LDFLAGS) -lpthread -lrt
 
 
+HEADERS := Client.hpp FrameServer.hpp UDPFrameServer.hpp DAQFrameServer.hpp DtFlyP.hpp Protocol.hpp SHM.hpp PFP_KX7.hpp
 OBJS := FrameServer.cpp.o  UDPFrameServer.cpp.o Client.cpp.o 
 ifeq (1, ${DTFLY})
 	OBJS := $(OBJS) DtFlyP.cpp.o DAQFrameServer.cpp.o
@@ -24,7 +25,6 @@ endif
 
 
 all: daqd SHM.o DSHM.so
-headers: Client.hpp FrameServer.hpp UDPFrameServer.hpp DAQFrameServer.hpp DtFlyP.hpp Protocol.hpp SHM.hpp PFP_KX7.hpp
 
 
 DSHM.so: SHM.cpp.o DSHM.cpp.o
@@ -37,7 +37,7 @@ daqd: daqd.cpp.o $(OBJS)
 	$(CXX) -o $@ daqd.cpp.o $(OBJS) $(LDFLAGS)
 
 
-%.cpp.o: %.cpp $(headers)
+%.cpp.o: %.cpp $(HEADERS)
 	$(CXX) -c -o $@ $< $(CXXFLAGS) $(CPPFLAGS) -fPIC
 
 clean: 

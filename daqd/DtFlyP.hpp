@@ -50,7 +50,7 @@ private:
 	pthread_cond_t condCleanBuffer;
 	pthread_cond_t condDirtyBuffer;
 	
-	static const unsigned NB = 4;
+	static const unsigned NB = 2;
 	unsigned dmaBufferRdPtr;
 	unsigned dmaBufferWrPtr;
 	bool dmaBufferQueueIsEmpty();
