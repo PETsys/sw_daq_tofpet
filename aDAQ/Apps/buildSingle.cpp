@@ -134,9 +134,9 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
-	bool onlineMode=false;
 	float readBackTime=-1;
 #endif
+	bool onlineMode=false;
 
 	int optionIndex = -1;
 	int nOptArgs=0;
@@ -281,7 +281,7 @@ int main(int argc, char *argv[])
 #else
 		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
 				new Sanity(100E-9,
-				new DAQ::ENDOTOFPET::Extract( new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
+				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.20, false, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new EventWriter(lmData, false,
