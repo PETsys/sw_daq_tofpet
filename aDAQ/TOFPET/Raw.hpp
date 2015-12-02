@@ -22,7 +22,7 @@ namespace DAQ { namespace TOFPET {
 		virtual ~RawWriter();
 		virtual void openStep(float step1, float step2)=0;
 		virtual void closeStep()=0;
-		virtual void addEvent(RawPulse &p)=0;
+		virtual  u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer) = 0;
 	};
 
 	
