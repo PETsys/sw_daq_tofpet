@@ -251,20 +251,29 @@ void RawWriterV3::closeStep()
 	fflush(outputIndexFile);
 }
 
-void RawWriterV3::addEvent(RawPulse &p)
+u_int32_t RawWriterV3::addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer)
 {
-	uint64_t frameID = p.time / (1024L * p.T);
-	RawEventV3 eventOut = 0;
-	eventOut |= RawEventV3(frameID & 0xFFFFFFFFFULL) << 92;
-	eventOut |= RawEventV3((p.channelID / 64) & 0x3FFF) << 78;
-	eventOut |= RawEventV3((p.channelID % 64) & 0x3F) << 72;
-	eventOut |= RawEventV3(p.d.tofpet.tac & 0x3) << 70;
-	eventOut |= RawEventV3(p.d.tofpet.tcoarse & 0x3FF) << 60;
-	eventOut |= RawEventV3(p.d.tofpet.ecoarse & 0x3FF) << 50;
-	eventOut |= RawEventV3(p.d.tofpet.tfine & 0x3FF) << 40;
-	eventOut |= RawEventV3(p.d.tofpet.efine & 0x3FF) << 30;
-	eventOut |= RawEventV3(uint16_t(p.channelIdleTime / 8192) & 0x7FFF) << 15;
-	eventOut |= RawEventV3(uint16_t(p.d.tofpet.tacIdleTime / 8192) & 0x7FFF) << 0;
+	u_int32_t lSingleRead = 0;
+	unsigned N = inBuffer->getSize();
+	for(unsigned i = 0; i < N; i++) {
+		RawPulse &p = inBuffer->get(i);
+		if((p.time < tMin) || (p.time >= tMax)) continue;
+		uint64_t frameID = p.time / (1024L * p.T);
+		
+		RawEventV3 eventOut = 0;
+		eventOut |= RawEventV3(frameID & 0xFFFFFFFFFULL) << 92;
+		eventOut |= RawEventV3((p.channelID / 64) & 0x3FFF) << 78;
+		eventOut |= RawEventV3((p.channelID % 64) & 0x3F) << 72;
+		eventOut |= RawEventV3(p.d.tofpet.tac & 0x3) << 70;
+		eventOut |= RawEventV3(p.d.tofpet.tcoarse & 0x3FF) << 60;
+		eventOut |= RawEventV3(p.d.tofpet.ecoarse & 0x3FF) << 50;
+		eventOut |= RawEventV3(p.d.tofpet.tfine & 0x3FF) << 40;
+		eventOut |= RawEventV3(p.d.tofpet.efine & 0x3FF) << 30;
+		eventOut |= RawEventV3(uint16_t(p.channelIdleTime / 8192) & 0x7FFF) << 15;
+		eventOut |= RawEventV3(uint16_t(p.d.tofpet.tacIdleTime / 8192) & 0x7FFF) << 0;
 
-	fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);
+		fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);
+		lSingleRead++;
+	}
+	return lSingleRead;
 }

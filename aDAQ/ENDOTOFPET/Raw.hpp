@@ -62,7 +62,8 @@ namespace DAQ { namespace ENDOTOFPET {
 			virtual ~RawWriterE();
 			virtual void openStep(float step1, float step2);
 			virtual void closeStep();
-			virtual void addEvent(RawPulse &p);
+			virtual u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer);
+			
 		private:
 			FILE *outputDataFile;
 			FILE *outputIndexFile;

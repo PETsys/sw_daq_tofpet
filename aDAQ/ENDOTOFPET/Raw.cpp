@@ -311,11 +311,16 @@ void RawWriterE::closeStep()
 	fflush(outputIndexFile);
 }
 
-void RawWriterE::addEvent(RawPulse &p)
+u_int32_t RawWriterE::addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer)
 {
-	uint64_t frameID = p.time / (1024L * p.T);
+	u_int32_t lSingleRead = 0;
+	unsigned N = inBuffer->getSize();
+	for(unsigned i = 0; i < N; i++) {
+		RawPulse &p = inBuffer->get(i);
+		if((p.time < tMin) || (p.time >= tMax)) continue;
+		uint64_t frameID = p.time / (1024L * p.T);
 
-	if(frameID > currentFrameID){
+		if(frameID > currentFrameID){
 			DAQ::ENDOTOFPET::FrameHeader FrHeaderOut = {
 				0x01,
 				frameID,
@@ -323,39 +328,42 @@ void RawWriterE::addEvent(RawPulse &p)
 			};				
 			fwrite(&FrHeaderOut, sizeof(DAQ::ENDOTOFPET::FrameHeader), 1, outputDataFile);
 			currentFrameID=frameID;
-	}	
-	
-	if (p.feType == RawPulse::TOFPET) {
-			DAQ::ENDOTOFPET::RawTOFPET eventOut = {
-			0x02,
-			p.d.tofpet.tac,
-			p.channelID,
-			p.d.tofpet.tcoarse,
-			p.d.tofpet.ecoarse,
-			p.d.tofpet.tfine,
-			p.d.tofpet.efine,
-			p.d.tofpet.tacIdleTime,
-			p.channelIdleTime
-		};
+		}	
 		
-		fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);	     
-	}
-	
-	else if (p.feType == RawPulse::STIC) {					\
-		DAQ::ENDOTOFPET::RawSTICv3 eventOut = {
-			0x03,
-			p.channelID,
-			p.d.stic.tcoarse,
-			p.d.stic.ecoarse,
-			p.d.stic.tfine,
-			p.d.stic.efine,
-			p.d.stic.tBadHit,
-			p.d.stic.eBadHit,
-			p.channelIdleTime};
+		if (p.feType == RawPulse::TOFPET) {
+				DAQ::ENDOTOFPET::RawTOFPET eventOut = {
+				0x02,
+				p.d.tofpet.tac,
+				p.channelID,
+				p.d.tofpet.tcoarse,
+				p.d.tofpet.ecoarse,
+				p.d.tofpet.tfine,
+				p.d.tofpet.efine,
+				p.d.tofpet.tacIdleTime,
+				p.channelIdleTime
+			};
+			
+			fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);	     
+		}
 		
-		fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);	     
+		else if (p.feType == RawPulse::STIC) {					\
+			DAQ::ENDOTOFPET::RawSTICv3 eventOut = {
+				0x03,
+				p.channelID,
+				p.d.stic.tcoarse,
+				p.d.stic.ecoarse,
+				p.d.stic.tfine,
+				p.d.stic.efine,
+				p.d.stic.tBadHit,
+				p.d.stic.eBadHit,
+				p.channelIdleTime};
+			
+			fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);	     
+		}
+
+		stepEnd++;
+
+		lSingleRead++;
 	}
-
-	stepEnd++;
-
+	return lSingleRead;
 }

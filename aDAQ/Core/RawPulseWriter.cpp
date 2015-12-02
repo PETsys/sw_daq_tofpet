@@ -24,14 +24,7 @@ EventBuffer<RawPulse> * RawPulseWriterHandler::handleEvents (EventBuffer<RawPuls
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	
-	u_int32_t lSingleRead = 0;
-	unsigned N = inBuffer->getSize();
-	for(unsigned i = 0; i < N; i++) {
-		RawPulse &p = inBuffer->get(i);
-		if((p.time < tMin) || (p.time >= tMax)) continue;
-		writer->addEvent(p);
-		lSingleRead++;
-	}
+	u_int32_t lSingleRead = writer->addEventBuffer(tMin, tMax, inBuffer);
 	atomicAdd(nSingleRead, lSingleRead);
 	return inBuffer;
 }
@@ -65,6 +58,7 @@ void NullRawPulseWriter::closeStep()
 {
 }
 
-void NullRawPulseWriter::addEvent(RawPulse &p)
+u_int32_t NullRawPulseWriter::addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer)
 {
+	return 0;
 }

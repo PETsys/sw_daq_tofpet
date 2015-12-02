@@ -15,7 +15,7 @@ namespace DAQ { namespace Core {
 		virtual ~AbstractRawPulseWriter();
 		virtual void openStep(float step1, float step2) = 0;
 		virtual void closeStep() = 0;
-		virtual void addEvent(RawPulse &p) = 0;
+		virtual u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer) = 0;
 	};
 	
 	class NullRawPulseWriter : public AbstractRawPulseWriter {
@@ -24,7 +24,7 @@ namespace DAQ { namespace Core {
 		virtual ~NullRawPulseWriter();
 		virtual void openStep(float step1, float step2);
 		virtual void closeStep();
-		virtual void addEvent(RawPulse &p);
+		virtual u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer);
 	};
 		
 
