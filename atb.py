@@ -285,6 +285,13 @@ class TMP104CommunicationError(Exception):
 		self.__dout = dout
 	def __str__(self):
 		return "TMP104 read error at port %d, slave %d. IN = %s, OUT = %s" % (self.__portID, self.__slaveID, [ hex(x) for x in self.__din ], [ hex(x) for x in self.__dout ])
+
+class ClockNotOK(Exception):
+	def __init__(self, portID, slaveID):
+		self.__portID = portID
+		self.__slaveID = slaveID
+	def __str__(self):
+		return "Clock not locked at port %d, slave %d" % (self.__portID, self.__slaveID)
 	
 ## A class that contains all methods related to connection, control and data transmission to/from the system via the "daqd" interface	
 class ATB:
@@ -905,6 +912,10 @@ class ATB:
 		sleep(0.5)
 
 		for portID, slaveID in self.getActiveFEBDs():
+			coreClockNotOK = self.readFEBDConfig(portID, slaveID, 0, 11)
+			if coreClockNotOK != 0x0:
+				raise ClockNotOK(portID, slaveID)
+
 			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
 			nTry = 0
 			while True:
