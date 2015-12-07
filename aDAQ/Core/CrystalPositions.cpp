@@ -61,9 +61,6 @@ CrystalPositions::~CrystalPositions()
 
 EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer)
 {
-	u_int32_t lEventsIn = 0;
-	u_int32_t lEventsOut = 0;
-	
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
@@ -71,6 +68,8 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
+	uint32_t lEventsIn = 0;
+	uint32_t lEventsOut = 0;
 	for(unsigned i = 0; i < nEvents; i++) {
 		RawHit &raw = inBuffer->get(i);
 		if(raw.time < tMin || raw.time >= tMax) continue;

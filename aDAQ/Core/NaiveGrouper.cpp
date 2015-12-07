@@ -14,6 +14,8 @@ NaiveGrouper::NaiveGrouper(float radius, double timeWindow1, float minEnergy, fl
 	for(int i = 0; i < GammaPhoton::maxHits; i++)
 		nHits[i] = 0;
 	nHitsOverflow = 0;
+	nPhotonsLowEnergy = 0;
+	nPhotonsHighEnergy = 0;
 }
 
 NaiveGrouper::~NaiveGrouper()
@@ -29,6 +31,8 @@ void NaiveGrouper::report()
 		nTotalHits += nHits[i] * (i+1);
 	}
 	nPhotons += nHitsOverflow;
+	nPhotons += nPhotonsLowEnergy;
+	nPhotons += nPhotonsHighEnergy;
 		
 	fprintf(stderr, ">> NaiveGrouper report\n");
 	fprintf(stderr, " photons passed\n");
@@ -36,6 +40,9 @@ void NaiveGrouper::report()
 	for(int i = 0; i < maxHits; i++) {
 		fprintf(stderr, "  %10u (%4.1f%%) with %d hits\n", nHits[i], 100.0*nHits[i]/nPhotons, i+1);
 	}
+	fprintf(stderr, " photons rejected\n");
+	fprintf(stderr, "  %10u (%4.1f%%) failed minimum energy\n", nPhotonsLowEnergy, 100.0*nPhotonsLowEnergy/nPhotons);
+	fprintf(stderr, "  %10u (%4.1f%%) failed maximim energy\n", nPhotonsHighEnergy, 100.0*nPhotonsHighEnergy/nPhotons);
 	fprintf(stderr, "  %10u (%4.1f%%) with more than %d hits\n", nHitsOverflow, 100.0*nHitsOverflow/nPhotons, maxHits);
 	fprintf(stderr, "  %4.1f average hits/photon\n", float(nTotalHits)/float(nPhotons));
 			
@@ -55,6 +62,8 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 	for(int i = 0; i < maxHits; i++)
 	lHits[i] = 0;
 	u_int32_t lHitsOverflow = 0;
+	uint32_t lPhotonsLowEnergy = 0;
+	uint32_t lPhotonsHighEnergy = 0;	
 
 	vector<bool> taken(nEvents, false);
 	for(unsigned i = 0; i < nEvents; i++) {
@@ -134,7 +143,14 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		photon.missingEnergy = 0;
 		photon.nMissing = 0;
 		
-		if((photon.energy < minEnergy) || (photon.energy > maxEnergy)) continue;
+		if(photon.energy < minEnergy) {
+			lPhotonsLowEnergy += 1;			
+			continue;
+		}
+		if(photon.energy >maxEnergy) {
+			lPhotonsHighEnergy += 1;			
+			continue;
+		}
 		
 
 
@@ -145,6 +161,8 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 	for(int i = 0; i < maxHits; i++)
 		atomicAdd(nHits[i], lHits[i]);
 	atomicAdd(nHitsOverflow, lHitsOverflow);
+	atomicAdd(nPhotonsLowEnergy, lPhotonsLowEnergy);
+	atomicAdd(nPhotonsHighEnergy, lPhotonsHighEnergy);
 	
 	return outBuffer;
 }
