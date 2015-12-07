@@ -1203,7 +1203,7 @@ class ATB:
 				stdout.write("Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data (delay = %4.1f)\r" % (nFrames, t1-t0, nFrames * self.__frameLength, (t1-t0) - nFrames * self.__frameLength))
 				stdout.flush()
 				lastUpdateFrame = currentFrame
-
+		t1 = time()
 		print "Python:: Acquired %d frames in %4.1f seconds, corresponding to %4.1f seconds of data (delay = %4.1f)" % (nFrames, time()-t0, nFrames * self.__frameLength, (t1-t0) - nFrames * self.__frameLength)
 
 		data = struct.pack(template1, step1, step2, wrPointer, rdPointer, 1)

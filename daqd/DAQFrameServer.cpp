@@ -176,6 +176,11 @@ void *DAQFrameServer::doWork()
 		unsigned long long nEvents = headerWords[1] & 0x7FFF;
 		bool frameLost = (headerWords[1] & 0x10000) != 0;
 
+		if(frameSize > MaxDataFrameSize) {
+			fprintf(stderr, "Excessive frame size: %u\n word (max is %u)", frameSize, MaxDataFrameSize);
+			lastFrameWasBad = true; skippedLoops = 1000007; continue;
+		}
+
 		// Drop most of lost frames (lost = 1, nEvents = 0) to avoid wasting buffer space
 		// Keep ~1% just to ensure software always has something
 		bool dropLostFrame = (nEvents == 0) && frameLost &&  (frameCount % 128 != 0);
