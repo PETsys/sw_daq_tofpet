@@ -912,9 +912,9 @@ class ATB:
 		sleep(0.5)
 
 		for portID, slaveID in self.getActiveFEBDs():
-			coreClockNotOK = self.readFEBDConfig(portID, slaveID, 0, 11)
-			if coreClockNotOK != 0x0:
-				raise ClockNotOK(portID, slaveID)
+#			coreClockNotOK = self.readFEBDConfig(portID, slaveID, 0, 11)
+#			if coreClockNotOK != 0x0:
+#				raise ClockNotOK(portID, slaveID)
 
 			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
 			nTry = 0
