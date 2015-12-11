@@ -23,9 +23,11 @@ import DSHM
 import tofpet
 import sticv3
 
-MAX_DAQ_PORTS = 32
-MAX_CHAIN_FEBD = 32
-MAX_FEBD_ASIC = 64
+# WARNING: non final
+MAX_DAQ_PORTS = 16
+MAX_CHAIN_FEBD = 2
+MAX_FEBD_ASIC = 16
+MAX_FEBD_HVCHANNEL = 64
 
 ###	
 ## Required for compatibility with configuration files and older code
@@ -40,14 +42,12 @@ intToBin = tofpet.intToBin
 class BoardConfig:
         ## Constructor
 	def __init__(self):
-		maxASIC = MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC
-		maxDAC = MAX_DAQ_PORTS * MAX_CHAIN_FEBD * 2
-                self.asicConfigFile = [ "Default Configuration" for x in range(maxASIC) ]
-                self.asicBaselineFile = [ "None" for x in range(maxASIC) ]
+                self.asicConfigFile = [ "Default Configuration" for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
+                self.asicBaselineFile = [ "None" for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
                 self.HVDACParamsFile = "None"
-                self.asicConfig = [ None for x in range(maxASIC) ]
-		self.hvBias = [ None for x in range(32*maxDAC) ]
-		self.hvParam = [ (1.0, 0.0) for x in range(32*maxDAC) ]
+                self.asicConfig = [ None for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
+		self.hvBias = [ None for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_HVCHANNEL) ]
+		self.hvParam = [ (1.0, 0.0) for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_HVCHANNEL)]
 		return None
         
         ## Writes formatted text file with all parameters and additional information regarding the state of the system  
@@ -440,10 +440,18 @@ class ATB:
 		return self.__activeFEBDs
 
 	def __getActiveFEBDs(self):
-		return [ (x, 0) for x in self.getActivePorts() ]
+		r = []
+		for portID in self.getActivePorts():
+			r.append((portID, 0))
+			slaveID = 0
+			while self.readFEBDConfig(portID, slaveID, 0, 12) != 0x0:
+				slaveID += 1
+				r.append((portID, slaveID))
+			
+		return r
 
 	def __getPossibleFEBDs(self):
-		return [ (x, 0) for x in range(4) ]
+		return [ (portID, slaveID) for portID in range(MAX_DAQ_PORTS) for slaveID in range(MAX_CHAIN_FEBD) ]
 
 	## Returns an array with the IDs of the active ASICS
 	def getActiveAsics(self):
@@ -473,15 +481,23 @@ class ATB:
 	# @param portID  DAQ port ID where the FEB/D is connected
 	# @param slaveID Slave ID on the FEB/D chain
 	def getFEBDCount1(self, portID, slaveID):
-		tx = self.readFEBDConfig(portID, slaveID, 1, 0)
-		rx = self.readFEBDConfig(portID, slaveID, 1, 1)
-		rxBad = self.readFEBDConfig(portID, slaveID, 1, 2)
-	
+		mtx = self.readFEBDConfig(portID, slaveID, 1, 0)
+		mrx = self.readFEBDConfig(portID, slaveID, 1, 1)
+		mrxBad = self.readFEBDConfig(portID, slaveID, 1, 2)
+
+		slaveOn = self.readFEBDConfig(portID, slaveID, 0, 12) != 0x0
+
+		stx = self.readFEBDConfig(portID, slaveID, 1, 3)
+		srx = self.readFEBDConfig(portID, slaveID, 1, 4)
+		srxBad = self.readFEBDConfig(portID, slaveID, 1, 5)
 		
-		tx = binToInt(grayToBin(intToBin(tx, 48)))
-		rx = binToInt(grayToBin(intToBin(rx, 48)))
-		rxBad = binToInt(grayToBin(intToBin(rxBad, 48)))
-		return (tx, rx, rxBad)
+		mtx = binToInt(grayToBin(intToBin(mtx, 48)))
+		mrx = binToInt(grayToBin(intToBin(mrx, 48)))
+		mrxBad = binToInt(grayToBin(intToBin(mrxBad, 48)))
+		stx = binToInt(grayToBin(intToBin(stx, 48)))
+		srx = binToInt(grayToBin(intToBin(srx, 48)))
+		srxBad = binToInt(grayToBin(intToBin(srxBad, 48)))
+		return (mtx, mrx, mrxBad, slaveOn, stx, srx, srxBad)
 
 	## Gets the current write and read pointer
 	def __getDataFrameWriteReadPointer(self):
@@ -716,20 +732,22 @@ class ATB:
 		
 		cmd = bytearray(byte0 + byte1 + byteX)
 
-		febID = asicID / 16
-		reply = self.sendCommand(febID, 0, 0x00, cmd)
+		portID, slaveID, lAsicID  = self.asicIDGlobalToTuple(asicID)
+
+
+		reply = self.sendCommand(portID, slaveID, 0x00, cmd)
 		if len(reply) < 2: raise tofpet.ConfigurationErrorBadReply(2, len(reply))
 		status = reply[1]
 			
 
 		if status == 0xE3:
-			raise tofpet.ConfigurationErrorBadAck(febID, 0, asicID % 16, 0)
+			raise tofpet.ConfigurationErrorBadAck(portID, slaveID, lAsicID, 0)
 		elif status == 0xE4:
-			raise tofpet.ConfigurationErrorBadCRC(febID, 0, asicID % 16)
+			raise tofpet.ConfigurationErrorBadCRC(portID, slaveID, lAsicID )
 		elif status == 0xE5:
-			raise tofpet.ConfigurationErrorBadAck(febID, 0, asicID % 16, 1)
+			raise tofpet.ConfigurationErrorBadAck(portID, slaveID, lAsicID, 1)
 		elif status != 0x00:
-			raise tofpet.ConfigurationErrorGeneric(febID, 0, asicID % 16, status)
+			raise tofpet.ConfigurationErrorGeneric(portID, slaveID, lAsicID , status)
 
 		if isRead:
 			#print [ "%02X" % x for x in reply ]
@@ -768,12 +786,17 @@ class ATB:
 	# @param portID  DAQ port ID where the FEB/D is connected
 	# @param slaveID Slave ID on the FEB/D chain
 	def getGlobalAsicIDsForFEBD(self, portID, slaveID):
-		return [x for x in range(16*portID, 16*portID + 16)]
+		n = slaveID * MAX_DAQ_PORTS + portID
+		return [x for x in range(n * MAX_FEBD_ASIC, (n+1) * MAX_FEBD_ASIC)]
 	
 	## Returns a tuple with the (portID, slaveID, localAsicID) for which an globalAsicID belongs
 	# @param asicID Global ASIC ID
 	def asicIDGlobalToTuple(self, asicID):
-		return (asicID / 16, 0, asicID % 16)
+		slaveID = asicID / (MAX_DAQ_PORTS * MAX_FEBD_ASIC)
+		r = asicID % (MAX_DAQ_PORTS * MAX_FEBD_ASIC)
+		portID = r / MAX_FEBD_ASIC
+		asicID = r % MAX_FEBD_ASIC
+		return (portID, slaveID, asicID)
 
 	
 	def __initializeFEBD_TOFPET(self, portID, slaveID):
@@ -819,7 +842,6 @@ class ATB:
 		deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
 		decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
 		
-		localAsicActive = [ False for x in localAsicIDList ]
 		for i, asicID in enumerate(localAsicIDList):
 			triplet = (localAsicConfigOK[i], deserializerStatus[i], decoderStatus[i])
 			self.__asicType[asicID] = 0x00010001
@@ -882,8 +904,7 @@ class ATB:
 
 		deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
 		decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
-		
-		localAsicActive = [ False for x in localAsicIDList ]
+
 		for i, asicID in enumerate(localAsicIDList):
 			self.__asicType[asicID] = 0x00020003
 			triplet = (localAsicConfigOK[i], deserializerStatus[i], decoderStatus[i])
@@ -912,9 +933,9 @@ class ATB:
 		sleep(0.5)
 
 		for portID, slaveID in self.getActiveFEBDs():
-#			coreClockNotOK = self.readFEBDConfig(portID, slaveID, 0, 11)
-#			if coreClockNotOK != 0x0:
-#				raise ClockNotOK(portID, slaveID)
+			coreClockNotOK = self.readFEBDConfig(portID, slaveID, 0, 11)
+			if coreClockNotOK != 0x0:
+				raise ClockNotOK(portID, slaveID)
 
 			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
 			nTry = 0
@@ -980,13 +1001,18 @@ class ATB:
 	## Returns a (portID, slaveID, localID) tuple for a globalHVChannel
 	# @param globalHVChannelID Global HV channel ID
 	def hvChannelGlobalToTulple(self, globalHVChannelID):
-		return (globalHVChannelID / 64, 0, globalHVChannelID % 64)
+		slaveID = globalHVChannelID / ( MAX_DAQ_PORTS * MAX_FEBD_HVCHANNEL) 
+		r = globalHVChannelID % ( MAX_DAQ_PORTS * MAX_FEBD_HVCHANNEL) 
+		portID = r / MAX_FEBD_HVCHANNEL
+		hvChannelID = r % MAX_FEBD_HVCHANNEL
+		return (portID, slaveID, hvChannelID)
 
 	## Return a list of global HV channel IDs for a FEB/D
 	# @param portID  DAQ port ID where the FEB/D is connected
 	# @param slaveID Slave ID on the FEB/D chain
 	def getGlobalHVChannelIDForFEBD(self, portID, slaveID):
-		return [ x for x in range(portID * 64, portID * 64 + 64) ]
+		n = slaveID * MAX_DAQ_PORTS + portID		
+		return [ x for x in range(n * MAX_FEBD_HVCHANNEL, (n+1) * MAX_FEBD_HVCHANNEL) ]
 
 	## Sets all HV channels
 	# @param voltageRequested Voltage to be set
@@ -1248,7 +1274,7 @@ class ATB:
 
         def __uploadConfigSTICv3(self, globalAsicID, asicConfig):
 		data = asicConfig.data
-		porID, slaveID, localAsicID = self.asicIDGlobalToTuple(globalAsicID);
+		portID, slaveID, localAsicID = self.asicIDGlobalToTuple(globalAsicID);
 
 		# Some padding
 		data = data + "\x00\x00\x00"
@@ -1334,8 +1360,7 @@ class ATB:
 			#stdout.write("CH %2dT " %n);stdout.flush()
 			
 
-		portID = asic / 16
-		slaveID = 0
+		portID, slaveID, lAsicID  = self.asicIDGlobalToTuple(asic)
 		nLinks = self.readFEBDConfig(portID, slaveID, 0, 1);
 		if nLinks == 1:
 			ac.globalConfig.setValue("tx_mode", 0)

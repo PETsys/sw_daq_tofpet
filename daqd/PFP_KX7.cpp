@@ -359,7 +359,7 @@ int PFP_KX7::sendCommand(int portID, int slaveID, char *buffer, int bufferSize, 
 
 	uint64_t header = 0;
 	header = header + (8ULL << 36);
-	header = header + (uint64_t(portID) << 60) + (uint64_t(slaveID) << 54);
+	header = header + (uint64_t(portID) << 59) + (uint64_t(slaveID) << 54);
 
 	outBuffer[0] = header;
 	outBuffer[1] = commandLength;

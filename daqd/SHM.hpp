@@ -9,7 +9,7 @@ namespace DAQd {
 	
 static const int MaxDataFrameSize = 1024;
 static const unsigned MaxDataFrameQueueSize = 16*1024;
-static const int N_ASIC=32*32*64; // defined by number of bits available in protocol
+static const int N_ASIC=2*16*16; // WARNING: non final! 16 ports, 2 FEB/D per port, 16 ASIC per FEB/D
 
 
 struct DataFrame {
@@ -124,7 +124,12 @@ public:
 	int getAsicID(int index, int event) {
 		DataFrame *dataFrame = &shm[index];
 		uint64_t eventWord = dataFrame->data[event+2];
-		return eventWord >> 48;
+		uint64_t idWord = eventWord >> 48;
+		uint64_t asicID = idWord & 0x3F;
+		uint64_t slaveID = (idWord >> 6) & 0x1F;
+		uint64_t portID = (idWord >> 11) & 0x1F;
+		// WARNING:this is to keep backward compatibility with current numbering scheme
+		return (slaveID & 0x1) * 16*16 + (portID & 0xF) * 16 + (asicID & 0xF);
 	};
 	
 	int getChannelID(int index, int event) {
