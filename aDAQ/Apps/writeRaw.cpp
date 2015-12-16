@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
 	long long minFrameID = 0x7FFFFFFFFFFFFFFFLL, maxFrameID = 0, lastMaxFrameID = 0;
 	
 	long long lastFrameID = -1;
+	long long stepFirstFrameID = -1;
 
 	while(fread(&blockHeader, sizeof(blockHeader), 1, stdin) == 1) {
 
@@ -131,6 +132,7 @@ int main(int argc, char *argv[])
 			unsigned index = rdPointer % bs;
 			
 			long long frameID = shm->getFrameID(index);
+			if(stepFirstFrameID == -1) stepFirstFrameID = frameID;
 			if(frameID <= lastFrameID) {
 				fprintf(stderr, "WARNING!! Frame ID reversal: %12lld -> %12lld | %04u %04u %04u\n", 
 					lastFrameID, frameID, 
@@ -271,6 +273,8 @@ int main(int argc, char *argv[])
 			stepMaxFrame = 0;
 			stepLostFrames = 0;
 			stepLostFrames0 = 0;
+			lastFrameID = -1;
+			stepFirstFrameID = -1;
 		}
 
 		fwrite(&rdPointer, sizeof(uint32_t), 1, stdout);
