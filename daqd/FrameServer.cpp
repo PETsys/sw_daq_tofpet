@@ -238,8 +238,14 @@ bool FrameServer::parseDataFrame(DataFrame *dataFrame)
 	
 	for(unsigned n = 2; n < frameSize; n++) {
 		uint64_t eventWord = (dataFrame->data[n]);
-		unsigned asicID = eventWord >> 48;		
 		
+		// TODO: Decoding of events should be unified into a single place (SHM.hpp)
+		uint64_t idWord = eventWord >> 48;
+		uint64_t asicID = idWord & 0x3F;
+		uint64_t slaveID = (idWord >> 6) & 0x1F;
+		uint64_t portID = (idWord >> 11) & 0x1F;
+		// WARNING:this is to keep backward compatibility with current numbering scheme
+		asicID = (slaveID & 0x1) * 16*16 + (portID & 0xF) * 16 + (asicID & 0xF);
 #ifdef __ENDOTOFPET__
 		int feType = feTypeMap[asicID / 16];
 		dataFrame->feType[n] = feType;
