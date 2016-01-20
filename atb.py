@@ -932,6 +932,7 @@ class ATB:
 		self.stop()		
 		sleep(0.5)
 
+		self.disableTriggerGating()
 		for portID, slaveID in self.getActiveFEBDs():
 			coreClockNotOK = self.readFEBDConfig(portID, slaveID, 0, 11)
 			if coreClockNotOK != 0x0:
@@ -1059,6 +1060,18 @@ class ATB:
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
 		dacBytes = bytearray(dacBits.tobytes())
 		return self.sendCommand(portID, slaveID, 0x01, dacBytes)
+
+	## Disables external gate function
+	def disableTriggerGating(self):
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 13, 0x00);
+
+	## Enabled external gate function
+	# @param delay Delay of the external gate signal, in clock periods
+	def enableTriggerGating(self, delay):
+		for portID, slaveID in self.getActiveFEBDs():
+			self.writeFEBDConfig(portID, slaveID, 0, 13, 1024 + delay);
+		
 	
         ## Disables test pulse 
 	def setTestPulseNone(self):
