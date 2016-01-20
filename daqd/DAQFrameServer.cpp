@@ -173,7 +173,7 @@ void *DAQFrameServer::doWork()
 		unsigned long long frameType = (headerWords[0] >> 51) & 0x7;
 		unsigned long long frameSize = (headerWords[0] >> 36) & 0x7FFF;
 		unsigned long long frameID = (headerWords[0] ) & 0xFFFFFFFFF;
-		unsigned long long nEvents = headerWords[1] & 0x7FFF;
+		unsigned long long nEvents = headerWords[1] & 0xFFFF;
 		bool frameLost = (headerWords[1] & 0x10000) != 0;
 
 		if(frameSize > MaxDataFrameSize) {
