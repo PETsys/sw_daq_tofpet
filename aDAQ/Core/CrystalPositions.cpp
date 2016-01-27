@@ -5,58 +5,16 @@ using namespace DAQ::Core;
 using namespace DAQ::Common;
 using namespace std;
 
-CrystalPositions::CrystalPositions(int nCrystals, const char *mapFileName, EventSink<Hit> *sink) :
-	nCrystals(nCrystals),
+CrystalPositions::CrystalPositions(SystemInformation *systemInformation, EventSink<Hit> *sink) :
+	systemInformation(systemInformation),
 	OverlappedEventHandler<RawHit, Hit>(sink)
 {
-	fprintf(stderr, "Loading map file: '%s' ... ", mapFileName); fflush(stderr);
-	map = new Entry[nCrystals];
-	for(int crystal = 0; crystal < nCrystals; crystal++) {
-		map[crystal].region = -1;
-		map[crystal].xi = -1;
-		map[crystal].yi = -1;
-		map[crystal].x = -INFINITY;
-		map[crystal].y = -INFINITY;
-	}
-	
-	FILE *mapFile = fopen(mapFileName, "r");
-	assert(mapFile != NULL);
-	
-	int crystal;
-	int region;
-	int xi;
-	int yi;
-	float x;
-	float y;
-	float z;
-	int hv;
-	
-	int nLoaded = 0;
-	while(fscanf(mapFile, "%d\t%d\t%d\t%d\t%f\t%f\t%f\t%d\n", &crystal, &region, &xi, &yi, &x, &y, &z, &hv) == 8) {
-		
-		assert(crystal < nCrystals);
-		
-		map[crystal].region = region;
-		map[crystal].xi = xi;
-		map[crystal].yi = yi;
-		map[crystal].x = x;
-		map[crystal].y = y;
-		map[crystal].z = z;
-		
-		nLoaded++;
-	}
-	
-	
-	fclose(mapFile);
-	fprintf(stderr, "%d valid crystal coordinates found\n", nLoaded);
-	
 	nEventsIn = 0;
 	nEventsOut = 0;
 }
 
 CrystalPositions::~CrystalPositions()
 {
-	delete [] map;
 }
 
 EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer)
@@ -76,7 +34,10 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 		lEventsIn += 1;
 		
 		int id = raw.crystalID;
-		if(map[id].region == -1) continue;
+		SystemInformation::ChannelInformation &channelInformation = systemInformation->getChannelInformation(id);
+		
+		int region = channelInformation.region;
+		if(region == -1) continue;
 		
 		Hit &hit = outBuffer->getWriteSlot();
 		hit.raw = &raw;
@@ -85,18 +46,13 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 		hit.missingEnergy = raw.missingEnergy;
 		hit.nMissing = raw.nMissing;
 
-		
-		hit.region = map[id].region;		
-		hit.x = map[id].x;
-		hit.y = map[id].y;
-		hit.z = map[id].z;
-		hit.xi	= map[id].xi;
-		hit.yi	= map[id].yi;
+		hit.region = region;
+		hit.x = channelInformation.x;
+		hit.y = channelInformation.y;
+		hit.z = channelInformation.z;
+		hit.xi	= channelInformation.xi;
+		hit.yi	= channelInformation.yi;
 
-/*		fprintf(stderr, "X1 %20lld %20lld => %8lld\n", 
-		       hit.raw.top.time, 
-		       hit.raw.top.timeEnd,
-		       (hit.raw.top.timeEnd - hit.raw.top.time) / 1000);*/
 		outBuffer->pushWriteSlot();
 		lEventsOut += 1;
 	}

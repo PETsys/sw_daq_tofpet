@@ -7,32 +7,11 @@ using namespace std;
 using namespace DAQ::Common;
 using namespace DAQ::Core;
 
-CoincidenceFilter::CoincidenceFilter(const char *mapFileName, float cWindow, float minToT,
+CoincidenceFilter::CoincidenceFilter(SystemInformation *systemInformation, float cWindow, float minToT,
 	EventSink<RawPulse> *sink)
-	: OverlappedEventHandler<RawPulse, RawPulse>(sink), cWindow((long long)(cWindow*1E12)), minToT((long long)(minToT*1E12))
-{
-	regionMap = std::vector<short>(SYSTEM_NCHANNELS, -1);
-	FILE *mapFile = fopen(mapFileName, "r");
-	assert(mapFile != NULL);
-	
-	int channel;
-	int region;
-	int xi;
-	int yi;
-	float x;
-	float y;
-	float z;
-	int hv;
-	
-	int nLoaded = 0;
-	while(fscanf(mapFile, "%d\t%d\t%d\t%d\t%f\t%f\t%f\t%d\n", &channel, &region, &xi, &yi, &x, &y, &z, &hv) == 8) {
-		assert(channel < SYSTEM_NCHANNELS);
-		regionMap[channel] = region;
-		nLoaded++;
-	}
-	fclose(mapFile);
-	fprintf(stderr, "%d valid channel coordinates found\n", nLoaded);	
-	
+	: OverlappedEventHandler<RawPulse, RawPulse>(sink), systemInformation(systemInformation), 
+	cWindow((long long)(cWindow*1E12)), minToT((long long)(minToT*1E12))
+{	
 	nEventsIn = 0;
 	nTriggersIn = 0;
 	nEventsOut = 0;
@@ -81,7 +60,10 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 			if((p2.time - p1.time) > (overlap + cWindow)) break;		// No point in looking further
 			if((p2.timeEnd - p2.time) < minToT) continue;			// Does not meet min ToT
 			if(tAbs(p2.time - p1.time) > cWindow) continue;			// Does not meet cWindow
-			if(regionMap[p1.channelID] == regionMap[p2.channelID]) continue;// Same region, no coincidence
+			
+			int region1 = systemInformation->getChannelInformation(p1.channelID).region;
+			int region2 = systemInformation->getChannelInformation(p2.channelID).region;
+			if(!systemInformation->isCoincidenceAllowed(region1, region2)) continue;
 
 			coincidenceMatched[i] = true;
 			coincidenceMatched[j] = true;

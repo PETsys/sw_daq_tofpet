@@ -5,7 +5,9 @@
 #include <set>
 #include <limits.h>
 #include <iostream>
-#include <assert.h>
+#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
 #include <Common/Constants.hpp>
 
 using namespace std;
@@ -21,6 +23,11 @@ RawReaderE::RawReaderE(char *dataFilePrefix, float T,  unsigned long long events
 	char dataFileName[512];
 	sprintf(dataFileName, "%s.rawE", dataFilePrefix);
 	dataFile = fopen(dataFileName, "rb");
+	if(dataFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s for reading' : %d %s\n", dataFileName, e, strerror(e));
+		exit(e);
+	}
 	this->eventsBegin = eventsBegin;
 	this->eventsEnd = eventsEnd;
 	start();
@@ -238,6 +245,11 @@ RawScannerE::RawScannerE(char *indexFilePrefix) :
 	char indexFileName[512];
 	sprintf(indexFileName, "%s.idxE", indexFilePrefix);
 	indexFile = fopen(indexFileName, "rb");
+	if(indexFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s for reading' : %d %s\n", indexFileName, e, strerror(e));
+		exit(e);
+	}
 	
 	while(fscanf(indexFile, "%f %f %llu %llu\n", &step1, &step2, &stepBegin, &stepEnd) == 4) {
 		Step step = { step1, step2, stepBegin, stepEnd };
@@ -277,14 +289,24 @@ RawWriterE::RawWriterE(char *fileNamePrefix, long long acqStartTime)
 	sprintf(dataFileName, "%s.rawE", fileNamePrefix);
 	sprintf(indexFileName, "%s.idxE", fileNamePrefix);
 	outputDataFile = fopen(dataFileName, "wb");
+	if(outputDataFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s for writing' : %d %s\n", dataFileName, e, strerror(e));
+		exit(e);
+	}
+	
 	outputIndexFile = fopen(indexFileName, "w");
+	if(outputIndexFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s for writing' : %d %s\n", indexFileName, e, strerror(e));
+		exit(e);
+	}
+	
 	DAQ::ENDOTOFPET::StartTime StartTimeOut = {
 			                0x00,
 							acqStartTime,
 	};
 	fwrite(&StartTimeOut, sizeof(StartTimeOut), 1, outputDataFile);
-	assert(outputDataFile != NULL);
-	assert(outputIndexFile != NULL);
 	stepBegin = 0;
 	stepEnd=0;
 	currentFrameID=0;
