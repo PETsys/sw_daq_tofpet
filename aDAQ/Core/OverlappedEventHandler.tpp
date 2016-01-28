@@ -120,6 +120,7 @@ OverlappedEventHandler<TEventInput, TEventOutput>::Worker::Worker(
 template <class TEventInput, class TEventOutput>
 OverlappedEventHandler<TEventInput, TEventOutput>::Worker::~Worker()
 {
+	delete job;
 }
 
 
