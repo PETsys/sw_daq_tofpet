@@ -8,6 +8,9 @@
 #include <limits.h>
 #include <iostream>
 #include <assert.h>
+#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
 
 using namespace std;
 using namespace DAQ::Core;
@@ -22,8 +25,13 @@ RawReaderV3::RawReaderV3(char *dataFilePrefix, float T, unsigned long long event
 	char dataFileName[512];
 	sprintf(dataFileName, "%s.raw3", dataFilePrefix);
 	dataFile = fopen(dataFileName, "rb");
+	if(dataFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s for reading' : %d %s\n", dataFileName, e, strerror(e));
+		exit(e);
+	}
 	
-    this->eventsBegin = eventsBegin;
+	this->eventsBegin = eventsBegin;
 	this->eventsEnd = eventsEnd;
 	start();
 }
@@ -185,6 +193,12 @@ RawScannerV3::RawScannerV3(char *indexFilePrefix) :
 	char indexFileName[512];
 	sprintf(indexFileName, "%s.idx3", indexFilePrefix);
 	indexFile = fopen(indexFileName, "rb");
+	if(indexFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s for reading' : %d %s\n", indexFileName, e, strerror(e));
+		exit(e);
+	}
+
 	while(fscanf(indexFile, "%f %f %llu %llu\n", &step1, &step2, &stepBegin, &stepEnd) == 4) {
 		Step step = { step1, step2, stepBegin, stepEnd };
 		steps.push_back(step);
@@ -224,9 +238,19 @@ RawWriterV3::RawWriterV3(char *fileNamePrefix)
 	sprintf(indexFileName, "%s.idx3", fileNamePrefix);
 
 	outputDataFile = fopen(dataFileName, "wb");
+	if(outputDataFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s' for writing : %d %s\n", dataFileName, e, strerror(e));
+		exit(1);
+	}
+
 	outputIndexFile = fopen(indexFileName, "w");
-	assert(outputDataFile != NULL);
-	assert(outputIndexFile != NULL);
+	if(outputIndexFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s' for writing : %d %s\n", indexFileName, e, strerror(e));
+		exit(1);
+	}
+
 	stepBegin = 0;
 }
 
@@ -272,7 +296,12 @@ u_int32_t RawWriterV3::addEventBuffer(long long tMin, long long tMax, EventBuffe
 		eventOut |= RawEventV3(uint16_t(p.channelIdleTime / 8192) & 0x7FFF) << 15;
 		eventOut |= RawEventV3(uint16_t(p.d.tofpet.tacIdleTime / 8192) & 0x7FFF) << 0;
 
-		fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);
+		int r = fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);
+		if(r != 1) {
+			int e = errno;
+			fprintf(stderr, "RawWriterV3:: error writing to data file : %d %s\n", 
+				e, strerror(e));
+		}
 		lSingleRead++;
 	}
 	return lSingleRead;

@@ -49,11 +49,16 @@ int main(int argc, char *argv[])
 	float minToT = boost::lexical_cast<float>(argv[4]);
 	char outputType = argv[5][0];
 	char *outputFilePrefix = argv[6];
+
+	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
+	if(cWindow != 0) {
+		systemInformation->loadMapFile(Common::getCrystalMapFileName());
+	}
 	
 	FILE *rawFrameFile = NULL;
 
 	DAQd::SHM *shm = new DAQd::SHM(shmObjectPath);
-	
+		
 	AbstractRawPulseWriter *writer = NULL;
 	bool pipeWriterIsNull = true;
 	if(outputType == 'T') {
@@ -118,7 +123,7 @@ int main(int argc, char *argv[])
 				float cWindowCoarse = (ceil(cWindow/SYSTEM_PERIOD)) * SYSTEM_PERIOD;
 				float minToTCoarse = (ceil(minToT/SYSTEM_PERIOD) + 2) * SYSTEM_PERIOD;
 				sink =	new CoarseSorter(
-					new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
+					new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
 					new RawPulseWriterHandler(writer,
 					new NullSink<RawPulse>()
 					)));
@@ -284,6 +289,7 @@ int main(int argc, char *argv[])
 	}
 
 	delete writer;
+	delete systemInformation;
 	if(rawFrameFile != NULL)
 		fclose(rawFrameFile);
 	

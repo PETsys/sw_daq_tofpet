@@ -4,13 +4,14 @@
 #include "OverlappedEventHandler.hpp"
 #include <vector>
 #include <Common/Instrumentation.hpp>
+#include <Common/SystemInformation.hpp>
 
 namespace DAQ { namespace Core {
 
 	using namespace std;
 	class CrystalPositions : public OverlappedEventHandler<RawHit, Hit> {
 	public: 
-		CrystalPositions(int nCrystals, const char *mapFileName,
+		CrystalPositions(DAQ::Common::SystemInformation *systemInformation,
 				EventSink<Hit> *sink);
 				
 		virtual ~CrystalPositions();
@@ -18,20 +19,10 @@ namespace DAQ { namespace Core {
 		void report();
 		
 	private:
-		int nCrystals;
-		struct Entry {
-			int	region;
-			int	xi;
-			int	yi;
-			float	x;
-			float	y;
-			float	z;
-		};
+		DAQ::Common::SystemInformation *systemInformation;
 		
-		Entry *map;
 		uint32_t nEventsIn;
 		uint32_t nEventsOut;
-			
 
 	protected:
 		virtual EventBuffer<Hit> * handleEvents(EventBuffer<RawHit> *inBuffer);

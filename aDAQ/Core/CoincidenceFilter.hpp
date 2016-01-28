@@ -4,13 +4,14 @@
 #include "Event.hpp"
 #include "OverlappedEventHandler.hpp"
 #include <Common/Instrumentation.hpp>
+#include <Common/SystemInformation.hpp>
 #include <vector>
 
 namespace DAQ { namespace Core {
 
 	class CoincidenceFilter : public OverlappedEventHandler<RawPulse, RawPulse> {
 	public:
-		CoincidenceFilter(const char *mapFileName, float cWindow, float minToT, EventSink<RawPulse> *sink);
+		CoincidenceFilter(DAQ::Common::SystemInformation *systemInformation, float cWindow, float minToT, EventSink<RawPulse> *sink);
 		~CoincidenceFilter();
 		virtual void report();
 		
@@ -20,7 +21,7 @@ namespace DAQ { namespace Core {
 		long long cWindow;
 		long long minToT;
 		
-		std::vector<short> regionMap;
+		DAQ::Common::SystemInformation *systemInformation;
 		
 		u_int32_t nEventsIn;
 		u_int32_t nTriggersIn;

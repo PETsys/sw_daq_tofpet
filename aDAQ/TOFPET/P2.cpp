@@ -6,6 +6,7 @@
 #include <libgen.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 #include <iostream>
 #include <boost/regex.hpp>
 
@@ -301,7 +302,15 @@ void P2::storeFile(int start, int end, const char *fName)
 				int index = getIndex(channel, tac, isT == 0);
 				TAC &te = table[index];
 				if(te.shape.m==0) continue;
-				else if(f==NULL) f = fopen(fName, "w");
+				else if(f==NULL) {
+					f = fopen(fName, "w");
+					if(f == NULL) {
+						int e = errno;
+						fprintf(stderr, "Could not open '%s' for writing : %d %s\n", 
+							fName, e, strerror(e));
+							exit(1);
+					}
+				}
 				fprintf(f, "%5d\t%c\t%d\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\t%10.6e\n", 
 					channel - start, isT == 0 ? 'T' : 'E', tac,
 					te.t0, 
@@ -317,6 +326,11 @@ void P2::storeFile(int start, int end, const char *fName)
 void P2::loadTDCFile(int start, int end, const char *fName)
 {
 	FILE *f = fopen(fName, "r");
+	if(f == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s' for reading : %d %s\n", fName, e, strerror(e));
+		exit(0);
+	}
 	int channel;
 	char tOrE;
 	int tac;
@@ -337,9 +351,14 @@ void P2::loadTDCFile(int start, int end, const char *fName)
 	fclose(f);
 
 }
-void P2::loadTQFile(int start, int end, const char *fTQName)
+void P2::loadTQFile(int start, int end, const char *fName)
 {
-	FILE *f = fopen(fTQName, "r");
+	FILE *f = fopen(fName, "r");
+	if(f == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s' for reading : %d %s\n", fName, e, strerror(e));
+		exit(0);
+	}
 	int  col1, col3, col4,  line_elems=5;
 	char col2[8];
 	float col6;
@@ -366,9 +385,14 @@ void P2::loadTQFile(int start, int end, const char *fTQName)
 	
 }
 
-void P2::loadTOTFile(int start, int end, const char *totFileName)
+void P2::loadTOTFile(int start, int end, const char *fName)
 {
-	FILE *f = fopen(totFileName, "r");
+	FILE *f = fopen(fName, "r");
+	if(f == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s' for reading : %d %s\n", fName, e, strerror(e));
+		exit(0);
+	}
 	int col1;
 	float col2;
 	float col3;
@@ -383,9 +407,14 @@ void P2::loadTOTFile(int start, int end, const char *totFileName)
 	
 }
 
-void P2::loadOffsetFile(int start, int end, const char *offsetFileName)
+void P2::loadOffsetFile(int start, int end, const char *fName)
 {
-	FILE *f = fopen(offsetFileName, "r");
+	FILE *f = fopen(fName, "r");
+	if(f == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s' for reading : %d %s\n", fName, e, strerror(e));
+		exit(0);
+	}
 	int col1;
 	float col2;
 	while(fscanf(f, "%d\t%f\n",&col1, &col2) == 2){
@@ -409,6 +438,11 @@ static void copySubMatch(char *dst, const char *start, const char *end)
 void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float step1, float step2)
 {
 	FILE * mapFile = fopen(mapFileName, "r");
+	if(mapFile == NULL) {
+		int e = errno;
+		fprintf(stderr, "Could not open '%s' for reading : %d %s\n", mapFileName, e, strerror(e));
+		exit(0);
+	}
 
 	char fileNameCopy[1024];
 	strncpy(fileNameCopy, mapFileName, 1024);

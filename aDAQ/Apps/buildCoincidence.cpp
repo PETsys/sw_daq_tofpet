@@ -602,6 +602,9 @@ int main(int argc, char *argv[])
 	else {
 		P2->loadFiles(setupFileName, true, false,0,0);
 	}
+	
+	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
+	systemInformation->loadMapFile(Common::getCrystalMapFileName());
 
 	if(useROOT){
 		sprintf(outputFileName,"%s.root",outputFilePrefix);
@@ -711,10 +714,10 @@ int main(int argc, char *argv[])
 		DAQ::TOFPET::RawReader *reader=NULL;
 
 #ifndef __ENDOTOFPET__	
-		EventSink<RawPulse> * pipeSink= new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
+		EventSink<RawPulse> * pipeSink= new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
 				new P2Extract(P2, false, 0.0, 0.20, true,
 				new SingleReadoutGrouper(
-				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
+				new CrystalPositions(systemInformation,
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
 				new CoincidenceGrouper(cWindow,
 				writer
@@ -726,10 +729,10 @@ int main(int argc, char *argv[])
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 #else
 			reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
-				new CoincidenceFilter(Common::getCrystalMapFileName(), cWindowCoarse, minToTCoarse,
+				new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
 				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new SingleReadoutGrouper(
-				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
+				new CrystalPositions(systemInformation,
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
 				new CoincidenceGrouper(cWindow,
 				writer
@@ -746,6 +749,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	delete scanner;
+	delete systemInformation;
 	if(useROOT)lmFile->Close();
 	return 0;
 	

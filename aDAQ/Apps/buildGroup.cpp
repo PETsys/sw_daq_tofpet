@@ -253,6 +253,9 @@ int main(int argc, char *argv[])
 	else {
 		P2->loadFiles(setupFileName, true, false,0,0);
 	}
+
+	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
+	systemInformation->loadMapFile(Common::getCrystalMapFileName());
 	
 	sprintf(outputFileName,"%s.root",outputFilePrefix);
 	TFile *lmFile = new TFile(outputFileName, "RECREATE");
@@ -310,7 +313,7 @@ int main(int argc, char *argv[])
 
 		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20, true,
 				new SingleReadoutGrouper(
-				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
+				new CrystalPositions(systemInformation,
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, gMaxHits,
 				new EventWriter(lmData, false, gWindow, gMaxHitsRoot,
 				new NullSink<GammaPhoton>()
@@ -333,7 +336,9 @@ int main(int argc, char *argv[])
 		
 	}
 	delete scanner;
+	delete systemInformation;
 	lmFile->Close();
+	
 	return 0;
 	
 }
