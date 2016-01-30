@@ -37,9 +37,6 @@ namespace DAQ { namespace Core {
 		double stepProcessingTime;
 		unsigned long long stepProcessingNInputEvents;
 
-					
-		EventBuffer<TEventInput> *lastBuffer;
-	
 		void extractWorker();
 
 		class Worker {

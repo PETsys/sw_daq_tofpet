@@ -4,7 +4,6 @@ OverlappedEventHandler<TEventInput, TEventOutput>::OverlappedEventHandler(EventS
 : EventSource<TEventOutput>(sink), singleWorker(singleWorker), threadPool(singleWorker ? new ThreadPool(1) : pool)
 {
 	threadPool->clientIncrease();
-	this->lastBuffer = NULL;
 
 	peakThreads = 0;
 	stepProcessingNBlocks = 0;
@@ -30,47 +29,16 @@ void OverlappedEventHandler<TEventInput, TEventOutput>::pushEvents(EventBuffer<T
 	stepProcessingNBlocks++;
 	peakThreads = workers.size() > peakThreads ? workers.size() : peakThreads;	
 	
+	Worker *worker = new Worker(this, buffer);	
+	workers.push_back(worker);
 	
 	while(workers.size() > 0 && workers.front()->isFinished()) {
 		extractWorker();
 	}
-
-	while(workers.size() > 0 && threadPool->isFull()) {
-                extractWorker();
-        }
-	
-        while(singleWorker && workers.size() > 0) {
-                extractWorker();
-        }
-	
-
-	if(lastBuffer != NULL) {	
-		long long tMax = lastBuffer->getTMax();
-
-		if(overlap > 0) {
-			for(unsigned i = 0; i < buffer->getSize(); i++) {
-				TEventInput &e = buffer->get(i);
-				if(e.time - tMax >= 2*overlap) break;
-				lastBuffer->push(e);
-			}
-		}
-		
-		
-		Worker *worker = new Worker(this, lastBuffer);	
-		workers.push_back(worker);
-	}
-	lastBuffer = buffer;
 }
-
 template <class TEventInput, class TEventOutput>
 void OverlappedEventHandler<TEventInput, TEventOutput>::finish()
 {
-	if(lastBuffer != NULL) {
-		Worker *worker = new Worker(this, lastBuffer);	
-		workers.push_back(worker);
-	}
-	lastBuffer = NULL;
-
 	while (workers.size() > 0) {
 		extractWorker();
 	}
@@ -82,8 +50,6 @@ void OverlappedEventHandler<TEventInput, TEventOutput>::report()
 {
 	fprintf(stderr, " thread pool\n");
 	fprintf(stderr, "   %10.4lf milliseconds/block\n", stepProcessingTime/stepProcessingNBlocks*1000);
-	fprintf(stderr, "   %10d peak threads\n", peakThreads);
-
 	this->sink->report();
 }
 

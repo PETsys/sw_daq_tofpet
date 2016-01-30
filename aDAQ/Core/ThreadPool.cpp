@@ -31,7 +31,9 @@ ThreadPool::ThreadPool(unsigned maxWorkers)
 ThreadPool::~ThreadPool()
 {
 	die = true;
+	pthread_mutex_lock(&lock);
 	pthread_cond_broadcast(&condJobQueued);
+	pthread_mutex_unlock(&lock);
 	for(unsigned i = 0; i <  workers.size(); i++) {
 		delete workers[i];
 	}
@@ -57,7 +59,9 @@ void ThreadPool::clientDecrease()
 	if(nClients > 0) return;
 	
 	die = true;
+	pthread_mutex_lock(&lock);
 	pthread_cond_broadcast(&condJobQueued);
+	pthread_mutex_unlock(&lock);
 	for(unsigned i = 0; i <  workers.size(); i++) {
 		delete workers[i];
 	}
@@ -78,11 +82,11 @@ ThreadPool::Job *ThreadPool::queueJob(void *(*start_routine)(void *), void *arg)
 
 	pthread_mutex_lock(&lock);
 	while(queue.size() >= maxQueueSize) {
-		pthread_cond_wait(&condJobStarted, &lock);	
+		pthread_cond_wait(&condJobStarted, &lock);
 	}	
-	queue.push_back(job);		
-	pthread_mutex_unlock(&lock);
+	queue.push_back(job);
 	pthread_cond_signal(&condJobQueued);
+	pthread_mutex_unlock(&lock);
 	return job;
 }
 
@@ -104,34 +108,30 @@ void *ThreadPool::Worker::run(void *arg)
 	Worker *w = (Worker *)arg;
 	ThreadPool *pool = w->pool;
 
-	
-	while(true) {
-		enum { IDLE, RUN, DIE } state = IDLE;
-		Job *job = NULL;
-		pthread_mutex_lock(&pool->lock);
-		while (state == IDLE) {
-			if(pool->die)
-				state = DIE;
-			else if(pool->queue.size() > 0) {
-				job = pool->queue.front();
-				pool->queue.pop_front();
-				state = RUN;		
-			}
-			else {
-				pthread_cond_wait(&pool->condJobQueued, &pool->lock);
-			}
+	pthread_mutex_lock(&pool->lock);
+	while(!pool->die) {
+		if(pool->queue.size()  == 0) {
+			pthread_cond_wait(&pool->condJobQueued, &pool->lock);
+			continue;
 		}
-		pthread_mutex_unlock(&pool->lock);
-		if(state == DIE) break;		
-	
-		job->start_routine(job->arg);
-		pthread_cond_signal(&pool->condJobStarted);
 		
+		Job *job = pool->queue.front();
+		pool->queue.pop_front();
+		pthread_cond_signal(&pool->condJobStarted);
+		pthread_mutex_unlock(&pool->lock);
+		// POOL LOCK RELEASE
+
+		job->start_routine(job->arg);
+
 		pthread_mutex_lock(&job->lock);
 		job->finished = true;
-		pthread_mutex_unlock(&job->lock);
 		pthread_cond_signal(&job->condJobFinished);
+		pthread_mutex_unlock(&job->lock);
+		
+		// POOL LOCK ACQUIRE
+		pthread_mutex_lock(&pool->lock);
 	}
+	pthread_mutex_unlock(&pool->lock);
 	
 	return NULL;	
 }
