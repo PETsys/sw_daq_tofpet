@@ -149,8 +149,8 @@ void *DtFlyP::runWorker(void *arg)
 		}
 		pthread_mutex_lock(&p->lock);
 		p->dmaBufferWrPtr = (p->dmaBufferWrPtr+1) % (2*NB);
-		pthread_mutex_unlock(&p->lock);
 	       	pthread_cond_signal(&p->condDirtyBuffer);
+		pthread_mutex_unlock(&p->lock);
 	}
 	
 	for(int i = 0; i < NB; i++ ) {
@@ -195,8 +195,8 @@ int DtFlyP::getWords_(uint64_t *buffer, int count)
 	if(wordBufferUsed[dmaBufferRdPtr%NB] >= wordBufferStatus[dmaBufferRdPtr%NB]) {
 		pthread_mutex_lock(&lock);
 		dmaBufferRdPtr = (dmaBufferRdPtr + 1) % (2*NB);
-		pthread_mutex_unlock(&lock);
 		pthread_cond_signal(&condCleanBuffer);
+		pthread_mutex_unlock(&lock);
 		return 0;
 	}
 	
@@ -243,8 +243,10 @@ void DtFlyP::stopWorker()
 	printf("DtFlyP::stopWorker() called...\n");
 
 	die = true;
+	pthread_mutex_lock(&lock);
 	pthread_cond_signal(&condCleanBuffer);
 	pthread_cond_signal(&condDirtyBuffer);
+	pthread_mutex_unlock(&lock);
 	if(hasWorker) {
 		hasWorker = false;
 

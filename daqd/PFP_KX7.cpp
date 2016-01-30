@@ -247,12 +247,14 @@ void *PFP_KX7::runWorker(void *arg)
 		
 		pthread_mutex_lock(&p->lock);
 		p->dmaBufferWrPtr = (p->dmaBufferWrPtr+1) % (2*NB);
-		pthread_mutex_unlock(&p->lock);
 		pthread_cond_signal(&p->condDirtyBuffer);
+		pthread_mutex_unlock(&p->lock);
 		
 		DMA_count++;
 	}
+	pthread_mutex_lock(&p->lock);
 	pthread_cond_signal(&p->condDirtyBuffer);
+	pthread_mutex_unlock(&p->lock);
 	
 	printf("PFP_KX7::runWorker exiting...\n");
 	return NULL;
@@ -292,8 +294,8 @@ int PFP_KX7::getWords_(uint64_t *buffer, int count)
 	if(wordBufferUsed[dmaBufferRdPtr%NB] >= wordBufferStatus[dmaBufferRdPtr%NB]) {
 		pthread_mutex_lock(&lock);
 		dmaBufferRdPtr = (dmaBufferRdPtr + 1) % (2*NB);
-		pthread_mutex_unlock(&lock);
 		pthread_cond_signal(&condCleanBuffer);
+		pthread_mutex_unlock(&lock);
 		return 0;
 	}
 	
@@ -333,8 +335,10 @@ void PFP_KX7::stopWorker()
 	printf("PFP_KX7::stopWorker() called...\n");
 	setAcquistionOnOff(false);
 	die = true;
+	pthread_mutex_lock(&lock);
 	pthread_cond_signal(&condCleanBuffer);
 	pthread_cond_signal(&condDirtyBuffer);
+	pthread_mutex_unlock(&lock);
 	if(hasWorker) {
 		hasWorker = false;
 

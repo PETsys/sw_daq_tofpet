@@ -131,12 +131,12 @@ void *UDPFrameServer::doWork()
 					memcpy(dataFrame->data, p, frameSize * sizeof(uint64_t));
 					if(!m->parseDataFrame(dataFrame)) break;
 					
+					pthread_mutex_lock(&m->lock);					
 					if(dataFrame != devNull) {
-						pthread_mutex_lock(&m->lock);					
 						m->dataFrameWritePointer = (m->dataFrameWritePointer + 1) % (2*MaxDataFrameQueueSize);
-						pthread_mutex_unlock(&m->lock);
 					}
 					pthread_cond_signal(&m->condDirtyDataFrame);
+					pthread_mutex_unlock(&m->lock);
 					p += frameSize;
 					
 				} while(p < dataBuffer + nWords);
@@ -147,7 +147,9 @@ void *UDPFrameServer::doWork()
 			printf("Worker: found an unknown frame (0x%02X) with %d bytes\n", unsigned(rxBuffer[0]), r);
 			
 		}
+		pthread_mutex_lock(&m->lock);					
 		pthread_cond_signal(&m->condReplyQueue);
+		pthread_mutex_unlock(&m->lock);					
 			
 		
 		

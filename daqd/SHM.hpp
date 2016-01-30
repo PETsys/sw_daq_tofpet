@@ -7,7 +7,7 @@
 
 namespace DAQd {
 	
-static const int MaxDataFrameSize = 1024;
+static const int MaxDataFrameSize = 2048;
 static const unsigned MaxDataFrameQueueSize = 16*1024;
 static const int N_ASIC=2*16*16; // WARNING: non final! 16 ports, 2 FEB/D per port, 16 ASIC per FEB/D
 

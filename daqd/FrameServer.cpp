@@ -131,8 +131,8 @@ void FrameServer::startAcquisition(int mode)
 	dataFrameWritePointer = 0;
 	dataFrameReadPointer = 0;
 	acquisitionMode = 0;
-	pthread_mutex_unlock(&lock);
 	pthread_cond_signal(&condCleanDataFrame);
+	pthread_mutex_unlock(&lock);
 
 	usleep(120000);
 	
@@ -140,8 +140,8 @@ void FrameServer::startAcquisition(int mode)
 	dataFrameWritePointer = 0;
 	dataFrameReadPointer = 0;
 	acquisitionMode = mode;
-	pthread_mutex_unlock(&lock);
 	pthread_cond_signal(&condCleanDataFrame);
+	pthread_mutex_unlock(&lock);
 }
 
 void FrameServer::stopAcquisition()
@@ -150,8 +150,8 @@ void FrameServer::stopAcquisition()
 	acquisitionMode = 0;
 	dataFrameWritePointer = 0;
 	dataFrameReadPointer = 0;
-	pthread_mutex_unlock(&lock);	
 	pthread_cond_signal(&condCleanDataFrame);
+	pthread_mutex_unlock(&lock);	
 }
 
 
@@ -181,8 +181,8 @@ void FrameServer::setDataFrameReadPointer(unsigned ptr)
 {
 	pthread_mutex_lock(&lock);
 	dataFrameReadPointer = ptr % (2*MaxDataFrameQueueSize);
-	pthread_mutex_unlock(&lock);
 	pthread_cond_signal(&condCleanDataFrame);
+	pthread_mutex_unlock(&lock);
 }
 
 void FrameServer::startWorker()
@@ -205,8 +205,10 @@ void FrameServer::stopWorker()
 	
 	die = true;
 	
+	pthread_mutex_lock(&lock);
 	pthread_cond_signal(&condCleanDataFrame);
 	pthread_cond_signal(&condDirtyDataFrame);
+	pthread_mutex_unlock(&lock);
 
 	if(hasWorker) {
 		hasWorker = false;
