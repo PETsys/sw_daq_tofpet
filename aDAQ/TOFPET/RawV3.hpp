@@ -77,7 +77,7 @@ namespace DAQ { namespace TOFPET {
 	private:
 		unsigned long eventsBegin;
 		unsigned long eventsEnd;
-		FILE *dataFile;
+		int dataFile;
 		double T;
 		float deltaTime;
 		bool onlineMode;

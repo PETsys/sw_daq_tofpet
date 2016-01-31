@@ -11,21 +11,22 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 using namespace std;
 using namespace DAQ::Core;
 using namespace DAQ::TOFPET;
 
 static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
-static const unsigned maxEventsPerFrame = 16*1024;
 
 RawReaderV3::RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, float deltaTime, bool onlineMode, EventSink<RawHit> *sink)
 	: EventSource<RawHit>(sink),T(T), deltaTime(deltaTime), onlineMode(onlineMode)
 {
 	char dataFileName[512];
 	sprintf(dataFileName, "%s.raw3", dataFilePrefix);
-	dataFile = fopen(dataFileName, "rb");
-	if(dataFile == NULL) {
+	dataFile = open(dataFileName, O_RDONLY);
+	if(dataFile == -1) {
 		int e = errno;
 		fprintf(stderr, "Could not open '%s for reading' : %d %s\n", dataFileName, e, strerror(e));
 		exit(e);
@@ -38,7 +39,7 @@ RawReaderV3::RawReaderV3(char *dataFilePrefix, float T, unsigned long long event
 
 RawReaderV3::~RawReaderV3()
 {
-	fclose(dataFile);
+	close(dataFile);
 }
 
 
@@ -46,30 +47,19 @@ RawReaderV3::~RawReaderV3()
 
 void RawReaderV3::run()
 {
-
-
-	
-
-	unsigned nWraps = 0;
-	
-	EventBuffer<RawHit> *outBuffer = NULL;
-	
-	int nEventsInFrame = 0;
-	
 	long long tMax = 0, lastTMax = 0;
 
 	sink->pushT0(0);
    	
-	int maxReadBlock = 1024*1024;
-	RawEventV3 *rawEvents = new RawEventV3[maxReadBlock];
+	RawEventV3 *rawEvents = new RawEventV3[outBlockSize];
 
 	if(onlineMode){		
-		eventsBegin=eventsEnd;
+		eventsBegin = eventsEnd;
 		RawEventV3 Event;
-		fseek(dataFile, -sizeof(RawEventV3), SEEK_END);
-		int r = fread(&Event, sizeof(RawEventV3), 1, dataFile);
-
-		eventsEnd=  ftell(dataFile) / sizeof(DAQ::TOFPET::RawEventV3);
+		lseek(dataFile, -sizeof(RawEventV3), SEEK_END);
+		int r = read(dataFile, &Event, sizeof(Event));
+		
+		eventsEnd = lseek(dataFile, 0, SEEK_CUR) / sizeof(DAQ::TOFPET::RawEventV3);
 
 		uint64_t frameID = (Event >> 92) & 0xFFFFFFFFFULL;
 		uint64_t tCoarse = (Event >> 60) & 0x3FF;
@@ -77,9 +67,9 @@ void RawReaderV3::run()
 		
 		
 		//long long nEventsStart=  ftell(dataFile) / sizeof(DAQ::TOFPET::RawEventV3);
-		if(deltaTime!=-1){
-			fseek(dataFile, eventsBegin * sizeof(RawEventV3), SEEK_SET); 
-			r = fread(&Event, sizeof(RawEventV3), 1, dataFile);		
+		if(deltaTime != -1){
+			lseek(dataFile, eventsBegin * sizeof(RawEventV3), SEEK_SET);
+			r = read(dataFile, &Event, sizeof(Event));
 			frameID = (Event >> 92) & 0xFFFFFFFFFULL;
 			tCoarse = (Event >> 60) & 0x3FF;
 			long long start_time= (1024LL * frameID + tCoarse) * T * 1E12;		
@@ -90,24 +80,23 @@ void RawReaderV3::run()
 	}
 	fprintf(stderr, "Reading %llu to %llu\n", eventsBegin, eventsEnd);
 
-	fseek(dataFile, eventsBegin*sizeof(RawEventV3), SEEK_SET);
+	lseek(dataFile, eventsBegin*sizeof(RawEventV3), SEEK_SET);
 	unsigned long long readPointer = eventsBegin;
 	unsigned long long nBlocks = 0;
 	while (readPointer < eventsEnd) {
 		unsigned long long count = eventsEnd - readPointer;
-		if(count > maxReadBlock) count = maxReadBlock;
-		int r = fread(rawEvents, sizeof(RawEventV3), count, dataFile);
+		if(count > outBlockSize) count = outBlockSize;
+		int r = read(dataFile, rawEvents, sizeof(RawEventV3) * count);
 		if(r <= 0) break;
+
+		r /= sizeof(RawEventV3);
 		readPointer += r;
+		readahead(dataFile, readPointer * sizeof(RawEventV3), outBlockSize * sizeof(RawEventV3));
 		
-		//printf("events extracted= %lld\r",readPointer-eventsBegin);
+		EventBuffer<RawHit> *outBuffer = new EventBuffer<RawHit>(outBlockSize, NULL);
 	
 		for(int j = 0; j < r; j++) {
 			RawEventV3 &r = rawEvents[j];
-
-			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawHit>(outBlockSize, NULL);
-			}
 
 			RawHit &p = outBuffer->getWriteSlot();
 			
@@ -137,42 +126,22 @@ void RawReaderV3::run()
 			p.d.tofpet.efine = eFine;
 			p.channelIdleTime = channelIdleTime;
 			p.d.tofpet.tacIdleTime = tacIdleTime;
-// 			fprintf(stderr, "%4d %d >> %4d %4d %4d %4d \n",
-// 				p.channelID, p.d.tofpet.tac,
-// 				p.d.tofpet.tcoarse,
-// 				p.d.tofpet.ecoarse,
-// 				p.d.tofpet.tfine,
-// 				p.d.tofpet.efine
-// 				);
 
 			if(p.time > tMax)
 				tMax = p.time;
 		
 			outBuffer->pushWriteSlot();
-		
-			if(outBuffer->getSize() >= outBlockSize) {
-				outBuffer->setTMin(lastTMax);
-				outBuffer->setTMax(tMax);
-				lastTMax=tMax;
-				sink->pushEvents(outBuffer);
-				outBuffer = NULL;
-				nBlocks += 1;
-			}
 		}
-	}
-	
-	delete [] rawEvents;
-
-	
-	if(outBuffer != NULL) {
+		
 		outBuffer->setTMin(lastTMax);
-		outBuffer->setTMax(tMax);		
+		outBuffer->setTMax(tMax);
+		lastTMax = tMax;
 		sink->pushEvents(outBuffer);
 		outBuffer = NULL;
 		nBlocks += 1;
-		
 	}
 	
+	delete [] rawEvents;
 	sink->finish();
 	
 	fprintf(stderr, "RawReaderV3 report\n");
