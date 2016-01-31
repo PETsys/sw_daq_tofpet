@@ -9,14 +9,14 @@
 
 namespace DAQ { namespace Core {
 
-	class CoincidenceFilter : public OverlappedEventHandler<RawPulse, RawPulse> {
+	class CoincidenceFilter : public OverlappedEventHandler<RawHit, RawHit> {
 	public:
-		CoincidenceFilter(DAQ::Common::SystemInformation *systemInformation, float cWindow, float minToT, EventSink<RawPulse> *sink);
+		CoincidenceFilter(DAQ::Common::SystemInformation *systemInformation, float cWindow, float minToT, EventSink<RawHit> *sink);
 		~CoincidenceFilter();
 		virtual void report();
 		
 	private:
-		virtual EventBuffer<RawPulse> * handleEvents(EventBuffer<RawPulse> *inBuffer);
+		virtual EventBuffer<RawHit> * handleEvents(EventBuffer<RawHit> *inBuffer);
 			
 		long long cWindow;
 		long long minToT;

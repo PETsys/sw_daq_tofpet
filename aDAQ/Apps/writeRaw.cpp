@@ -20,7 +20,7 @@
 #include <Core/Event.hpp>
 #include <Core/CoarseSorter.hpp>
 #include <Core/CoincidenceFilter.hpp>
-#include <Core/RawPulseWriter.hpp>
+#include <Core/RawHitWriter.hpp>
 #include <TOFPET/RawV3.hpp>
 #include <ENDOTOFPET/Raw.hpp>
 
@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
 
 	DAQd::SHM *shm = new DAQd::SHM(shmObjectPath);
 		
-	AbstractRawPulseWriter *writer = NULL;
+	AbstractRawHitWriter *writer = NULL;
 	bool pipeWriterIsNull = true;
 	if(outputType == 'T') {
 		writer = new TOFPET::RawWriterV3(outputFilePrefix);
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 		pipeWriterIsNull = false;
 	}
 	else if(outputType == 'R') {
-		writer = new NullRawPulseWriter();
+		writer = new NullRawHitWriter();
 
 		char fName[1024];
 		sprintf(fName, "%s.rawf", outputFilePrefix);
@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 		pipeWriterIsNull = true;
 	}
 	else {
-		writer = new NullRawPulseWriter();
+		writer = new NullRawHitWriter();
 		pipeWriterIsNull = true;
 	}
 
@@ -95,8 +95,8 @@ int main(int argc, char *argv[])
 	long long stepLostFrames = 0;
 	long long stepLostFrames0 = 0;
 	
-	EventSink<RawPulse> *sink = NULL;
-	EventBuffer<RawPulse> *outBuffer = NULL;
+	EventSink<RawHit> *sink = NULL;
+	EventBuffer<RawHit> *outBuffer = NULL;
 	long long minFrameID = 0x7FFFFFFFFFFFFFFFLL, maxFrameID = 0, lastMaxFrameID = 0;
 	
 	long long lastFrameID = -1;
@@ -110,12 +110,12 @@ int main(int argc, char *argv[])
 		if(sink == NULL) {
 			writer->openStep(step1, step2);
 			if (pipeWriterIsNull) {
-				sink = new NullSink<RawPulse>();
+				sink = new NullSink<RawHit>();
 			}
 			else if (cWindow == 0) {
 				sink =	new CoarseSorter(
-					new RawPulseWriterHandler(writer,
-					new NullSink<RawPulse>()
+					new RawHitWriterHandler(writer,
+					new NullSink<RawHit>()
 					));
 			}
 			else {
@@ -124,8 +124,8 @@ int main(int argc, char *argv[])
 				float minToTCoarse = (floor(minToT/SYSTEM_PERIOD) - 2) * SYSTEM_PERIOD;
 				sink =	new CoarseSorter(
 					new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
-					new RawPulseWriterHandler(writer,
-					new NullSink<RawPulse>()
+					new RawHitWriterHandler(writer,
+					new NullSink<RawHit>()
 					)));
 			}
 		}
@@ -171,24 +171,23 @@ int main(int argc, char *argv[])
 			bool frameLost = shm->getFrameLost(index);
 			
 			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawPulse>(EVENT_BLOCK_SIZE, NULL);
+				outBuffer = new EventBuffer<RawHit>(EVENT_BLOCK_SIZE, NULL);
 			}
 			
 			for (int n = 0; !pipeWriterIsNull && n < nEvents; n++) {
-				RawPulse &p = outBuffer->getWriteSlot();
+				RawHit &p = outBuffer->getWriteSlot();
 #ifdef __ENDOTOFPET__
 				int feType = shm->getEventType(index, n);
 #else
 				const int feType = 0;
 #endif
 				if (feType == 0) {
-					p.feType = RawPulse::TOFPET;
-					p.T = T;
+					p.feType = RawHit::TOFPET;
 					unsigned tCoarse = shm->getTCoarse(index, n);
 					unsigned eCoarse = shm->getECoarse(index, n);
-					p.time = (1024LL * frameID + tCoarse) * p.T;
-					p.timeEnd = (1024LL * frameID + eCoarse) * p.T;
-					if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
+					p.time = (1024LL * frameID + tCoarse) * T;
+					p.timeEnd = (1024LL * frameID + eCoarse) * T;
+					if((p.timeEnd - p.time) < -256*T) p.timeEnd += (1024LL * T);
 					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
 					p.d.tofpet.tac = shm->getTACID(index, n);
 					p.d.tofpet.tcoarse = tCoarse;
@@ -199,13 +198,12 @@ int main(int argc, char *argv[])
 					p.d.tofpet.tacIdleTime = shm->getTACIdleTime(index, n);
 				}
 				else if (feType == 1) {
-					p.feType = RawPulse::STIC;
-					p.T = T;
+					p.feType = RawHit::STIC;
 					unsigned tCoarse = shm->getTCoarse(index, n);
 					unsigned eCoarse = shm->getECoarse(index, n);
-					p.time = (1024LL * frameID + ((tCoarse>>2) & 0x3FF)) * p.T;
-					p.timeEnd = (1024LL * frameID + ((eCoarse>>2) & 0x3FF)) * p.T;
-					if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
+					p.time = (1024LL * frameID + ((tCoarse>>2) & 0x3FF)) * T;
+					p.timeEnd = (1024LL * frameID + ((eCoarse>>2) & 0x3FF)) * T;
+					if((p.timeEnd - p.time) < -256*T) p.timeEnd += (1024LL * T);
 					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
 					p.d.stic.tcoarse = tCoarse;
 					p.d.stic.ecoarse = eCoarse;

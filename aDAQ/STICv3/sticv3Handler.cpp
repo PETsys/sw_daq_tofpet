@@ -1,4 +1,5 @@
 #include "sticv3Handler.hpp"
+#include <Common/SystemInformation.hpp>
 #include <stdio.h>
 
 using namespace DAQ::Core;
@@ -10,20 +11,19 @@ Sticv3Handler::Sticv3Handler()
 	nPassed=0;
 }
 
- bool Sticv3Handler::handleEvent(RawPulse &raw, Pulse &pulse)
+ bool Sticv3Handler::handleEvent(RawHit &raw, Hit &pulse)
 {
 	// if event is good return true
 	// if event is not good (see examples below), return false
 	
 	atomicAdd(nEvent, 1);
-	if(raw.feType != RawPulse::STIC) return false;
+	if(raw.feType != RawHit::STIC) return false;
 
         pulse.raw = &raw;
+	long long T = SYSTEM_PERIOD * 1E12;
         // WARNING: rounding sensitive!
-        pulse.time = raw.time + (raw.d.stic.tfine * raw.T / (4*32));  
-        pulse.timeEnd = raw.timeEnd;
-        pulse.region = raw.region;
-        pulse.channelID = raw.channelID;
+        pulse.time = raw.time + (raw.d.stic.tfine * T / (4*32));
+	pulse.timeEnd = raw.timeEnd - (raw.d.stic.efine * T / (4*32));
         pulse.energy = 1E-3*(pulse.timeEnd - pulse.time);
 		
 	//printf("%lld %lld %f\n", pulse.time, pulse.timeEnd, pulse.energy);

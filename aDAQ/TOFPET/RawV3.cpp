@@ -19,8 +19,8 @@ using namespace DAQ::TOFPET;
 static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 static const unsigned maxEventsPerFrame = 16*1024;
 
-RawReaderV3::RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, float deltaTime, bool onlineMode, EventSink<RawPulse> *sink)
-	: EventSource<RawPulse>(sink),T(T), deltaTime(deltaTime), onlineMode(onlineMode)
+RawReaderV3::RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, float deltaTime, bool onlineMode, EventSink<RawHit> *sink)
+	: EventSource<RawHit>(sink),T(T), deltaTime(deltaTime), onlineMode(onlineMode)
 {
 	char dataFileName[512];
 	sprintf(dataFileName, "%s.raw3", dataFilePrefix);
@@ -52,7 +52,7 @@ void RawReaderV3::run()
 
 	unsigned nWraps = 0;
 	
-	EventBuffer<RawPulse> *outBuffer = NULL;
+	EventBuffer<RawHit> *outBuffer = NULL;
 	
 	int nEventsInFrame = 0;
 	
@@ -106,10 +106,10 @@ void RawReaderV3::run()
 			RawEventV3 &r = rawEvents[j];
 
 			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
+				outBuffer = new EventBuffer<RawHit>(outBlockSize, NULL);
 			}
 
-			RawPulse &p = outBuffer->getWriteSlot();
+			RawHit &p = outBuffer->getWriteSlot();
 			
 			uint64_t frameID = (r >> 92) & 0xFFFFFFFFFULL;
 			uint64_t asicID = (r >> 78) & 0x3FFF;
@@ -123,13 +123,13 @@ void RawReaderV3::run()
 			uint64_t tacIdleTime = ((r >> 0) & 0x7FFF) * 8192;
 			
 // Carefull with the float/double/integer conversions here..
-			p.T = T * 1E12;
-			p.time = (1024LL * frameID + tCoarse) * p.T;
-			p.timeEnd = (1024LL * frameID + eCoarse) * p.T;
-			if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
+			long long pT = T * 1E12;
+			p.time = (1024LL * frameID + tCoarse) * pT;
+			p.timeEnd = (1024LL * frameID + eCoarse) * pT;
+			if((p.timeEnd - p.time) < -256*pT) p.timeEnd += (1024LL * pT);
 			p.channelID = (64 * asicID) + channelID;
 			p.channelIdleTime = channelIdleTime;
-			p.feType = RawPulse::TOFPET;
+			p.feType = RawHit::TOFPET;
 			p.d.tofpet.tac = tacID;
 			p.d.tofpet.tcoarse = tCoarse;
 			p.d.tofpet.ecoarse = eCoarse;
@@ -275,14 +275,15 @@ void RawWriterV3::closeStep()
 	fflush(outputIndexFile);
 }
 
-u_int32_t RawWriterV3::addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer)
+u_int32_t RawWriterV3::addEventBuffer(long long tMin, long long tMax, EventBuffer<RawHit> *inBuffer)
 {
 	u_int32_t lSingleRead = 0;
 	unsigned N = inBuffer->getSize();
 	for(unsigned i = 0; i < N; i++) {
-		RawPulse &p = inBuffer->get(i);
+		RawHit &p = inBuffer->get(i);
 		if((p.time < tMin) || (p.time >= tMax)) continue;
-		uint64_t frameID = p.time / (1024L * p.T);
+		long long T = SYSTEM_PERIOD * 1E12;
+		uint64_t frameID = p.time / (1024L * T);
 		
 		RawEventV3 eventOut = 0;
 		eventOut |= RawEventV3(frameID & 0xFFFFFFFFFULL) << 92;

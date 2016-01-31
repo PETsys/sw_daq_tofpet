@@ -7,7 +7,7 @@ using namespace std;
 
 CrystalPositions::CrystalPositions(SystemInformation *systemInformation, EventSink<Hit> *sink) :
 	systemInformation(systemInformation),
-	OverlappedEventHandler<RawHit, Hit>(sink)
+	OverlappedEventHandler<Hit, Hit>(sink)
 {
 	nEventsIn = 0;
 	nEventsOut = 0;
@@ -17,35 +17,25 @@ CrystalPositions::~CrystalPositions()
 {
 }
 
-EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer)
+EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<Hit> *inBuffer)
 {
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Hit> * outBuffer = new EventBuffer<Hit>(nEvents, inBuffer);
-	outBuffer->setTMin(tMin);
-	outBuffer->setTMax(tMax);		
 	
 	uint32_t lEventsIn = 0;
 	uint32_t lEventsOut = 0;
 	for(unsigned i = 0; i < nEvents; i++) {
-		RawHit &raw = inBuffer->get(i);
-		if(raw.time < tMin || raw.time >= tMax) continue;
+		Hit &hit = inBuffer->get(i);
+		if(hit.time < tMin || hit.time >= tMax) continue;
 		lEventsIn += 1;
 		
-		int id = raw.crystalID;
+		int id = hit.raw->channelID;
 		SystemInformation::ChannelInformation &channelInformation = systemInformation->getChannelInformation(id);
 		
 		int region = channelInformation.region;
 		if(region == -1) continue;
 		
-		Hit &hit = outBuffer->getWriteSlot();
-		hit.raw = &raw;
-		hit.time = raw.time;
-		hit.energy = raw.energy;
-		hit.missingEnergy = raw.missingEnergy;
-		hit.nMissing = raw.nMissing;
-
 		hit.region = region;
 		hit.x = channelInformation.x;
 		hit.y = channelInformation.y;
@@ -53,14 +43,13 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<RawHit> *inBuffer
 		hit.xi	= channelInformation.xi;
 		hit.yi	= channelInformation.yi;
 
-		outBuffer->pushWriteSlot();
 		lEventsOut += 1;
 	}
 	
 	atomicAdd(nEventsIn, lEventsIn);
 	atomicAdd(nEventsOut, lEventsOut);
 	
-	return outBuffer;
+	return inBuffer;
 }
 
 void CrystalPositions::report()
@@ -70,5 +59,5 @@ void CrystalPositions::report()
 	fprintf(stderr, "  %10u\n", nEventsIn);
 	fprintf(stderr, " hits passed\n");
 	fprintf(stderr, "  %10u\n", nEventsOut);
-	OverlappedEventHandler<RawHit, Hit>::report();
+	OverlappedEventHandler<Hit, Hit>::report();
 }

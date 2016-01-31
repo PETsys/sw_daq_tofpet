@@ -2,7 +2,6 @@
 #include <TNtuple.h>
 #include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
-#include <TOFPET/Sanity.hpp>
 #include <ENDOTOFPET/Raw.hpp>
 #include <ENDOTOFPET/Extract.hpp>
 #include <STICv3/sticv3Handler.hpp>
@@ -10,7 +9,6 @@
 #include <TOFPET/P2.hpp>
 #include <Common/Constants.hpp>
 #include <Common/Utils.hpp>
-#include <Core/SingleReadoutGrouper.hpp>
 #include <Core/CrystalPositions.hpp>
 #include <assert.h>
 #include <math.h>
@@ -65,26 +63,23 @@ public:
 		for(unsigned i = 0; i < nEvents; i++) {
 			Hit &hit = buffer->get(i);
 			
-			RawHit &raw= *(hit.raw);
-			bool isBadEvent=raw.top->badEvent;
+			bool isBadEvent = hit.badEvent;
 			if(writeBadEvents==false && isBadEvent)continue;
-			long long T = raw.top->raw->T;
-			eventTime = raw.time;
-			eventChannel = raw.top->channelID;
-			eventToT = 1E-3*(raw.top->timeEnd - raw.top->time);
-			eventEnergy=raw.top->energy;
-			eventTac = raw.top->raw->d.tofpet.tac;
-			eventChannelIdleTime = raw.top->raw->channelIdleTime * T * 1E-12;
-			eventTacIdleTime = raw.top->raw->d.tofpet.tacIdleTime * T * 1E-12;
-			eventTQT = raw.top->tofpet_TQT;
-			eventTQE = raw.top->tofpet_TQE;
+			long long T = SYSTEM_PERIOD * 1E12;
+			eventTime = hit.time;
+			eventChannel = hit.raw->channelID;
+			eventToT = 1E-3*(hit.timeEnd - hit.time);
+			eventEnergy = hit.energy;
+			eventTac = hit.raw->d.tofpet.tac;
+			eventChannelIdleTime = hit.raw->channelIdleTime * T * 1E-12;
+			eventTacIdleTime = hit.raw->d.tofpet.tacIdleTime * T * 1E-12;
+			eventTQT = hit.tofpet_TQT;
+			eventTQE = hit.tofpet_TQE;
 			eventX = hit.x;
 			eventY = hit.y;
 			eventZ = hit.z;
 			eventXi = hit.xi;
 			eventYi = hit.yi;
-			
-			//printf("%lld %e %f\n", raw.top->raw->d.tofpet.tacIdleTime, eventTacIdleTime, eventTQ);
 			
 			lmDataTuple->Fill();
 		}
@@ -269,13 +264,12 @@ int main(int argc, char *argv[])
 		DAQ::TOFPET::RawReader *reader=NULL;	
 
 #ifndef __ENDOTOFPET__	
-		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
+		EventSink<RawHit> * pipeSink = 	
 				new P2Extract(P2, false, 0.0, 0.20, false,
-				new SingleReadoutGrouper(
 				new CrystalPositions(systemInformation,
 				new EventWriter(lmData, false,
 				new NullSink<Hit>()
-		        )))));
+		        )));
 	
 		if(rawV[0]=='3') 
 			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, readBackTime, onlineMode,pipeSink);
@@ -283,13 +277,11 @@ int main(int argc, char *argv[])
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 #else
 		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
-				new Sanity(100E-9,
 				new DAQ::ENDOTOFPET::Extract( new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
-				new SingleReadoutGrouper(
 				new CrystalPositions(SYSTEM_NCRYSTALS, Common::getCrystalMapFileName(),
 				new EventWriter(lmData, false,
 				new NullSink<Hit>()
-				))))));		
+				))));		
 #endif
 
 

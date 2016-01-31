@@ -140,8 +140,6 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		photon.y = photon.hits[0]->y;		
 		photon.z = photon.hits[0]->z;		
 		photon.energy = photon.hits[0]->energy;
-		photon.missingEnergy = 0;
-		photon.nMissing = 0;
 		
 		if(photon.energy < minEnergy) {
 			lPhotonsLowEnergy += 1;			

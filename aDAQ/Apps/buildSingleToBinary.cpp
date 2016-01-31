@@ -4,10 +4,6 @@
 #include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
 #include <TOFPET/P2Extract.hpp>
-#include <Core/SingleReadoutGrouper.hpp>
-#include <Core/FakeCrystalPositions.hpp>
-#include <Core/ComptonGrouper.hpp>
-#include <Core/CoincidenceGrouper.hpp>
 #include <assert.h>
 #include <math.h>
 #include <string.h>
@@ -29,10 +25,10 @@ struct EventOut {
 } __attribute__((packed));
 
 
-class EventWriter : public EventSink<Pulse>, EventSource<Pulse> {
+class EventWriter : public EventSink<Hit>, EventSource<Hit> {
 public:
-	EventWriter(FILE *dataFile, float step1, float step2, EventSink<Pulse> *sink) 
-	:  EventSource<Pulse>(sink), dataFile(dataFile), step1(step1), step2(step2) {
+	EventWriter(FILE *dataFile, float step1, float step2, EventSink<Hit> *sink) 
+	:  EventSource<Hit>(sink), dataFile(dataFile), step1(step1), step2(step2) {
 		
 	};
 	
@@ -40,15 +36,15 @@ public:
 		
 	};
 
-	void pushEvents(EventBuffer<Pulse> *buffer) {
+	void pushEvents(EventBuffer<Hit> *buffer) {
 		if(buffer == NULL) return;	
 		
 		unsigned nEvents = buffer->getSize();
 		for(unsigned i = 0; i < nEvents; i++) {
-			Pulse & p = buffer->get(i);
+			Hit & p = buffer->get(i);
 			EventOut e = { step1, step2, 
 				p.time, 
-				(unsigned short)(p.channelID), 
+				(unsigned short)(p.raw->channelID), 
 				p.energy, 
 				(unsigned char)(p.raw->d.tofpet.tac), 
 				(unsigned char)(p.badEvent ? 1 : 0) };
@@ -195,9 +191,9 @@ int main(int argc, char *argv[])
 		}
 
 		
-		EventSink<RawPulse> * pipeSink = 		new P2Extract(lut, false, 0.0, 0.20, false,
+		EventSink<RawHit> * pipeSink = 		new P2Extract(lut, false, 0.0, 0.20, false,
 				new EventWriter(lmFile, step1, step2, 
-				new NullSink<Pulse>()
+				new NullSink<Hit>()
 		));
 
 		DAQ::TOFPET::RawReader *reader=NULL;

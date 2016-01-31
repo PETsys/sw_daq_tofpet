@@ -8,8 +8,6 @@
 #include <ENDOTOFPET/Extract.hpp>
 #include <STICv3/sticv3Handler.hpp>
 #include <TOFPET/P2Extract.hpp>
-#include <Core/PulseFilter.hpp>
-#include <Core/SingleReadoutGrouper.hpp>
 #include <Core/CrystalPositions.hpp>
 #include <Core/NaiveGrouper.hpp>
 #include <Core/CoincidenceGrouper.hpp>
@@ -98,9 +96,9 @@ public:
 					Hit &hit1 = *c.photons[0]->hits[j1];
 					Hit &hit2 = *c.photons[1]->hits[j2];
 					
-					long long T = hit1.raw->top->raw->T;
-					bool isBadEvent1=hit1.raw->top->badEvent;
-					bool isBadEvent2=hit2.raw->top->badEvent;
+					long long T = SYSTEM_PERIOD * 1E12;
+					bool isBadEvent1=hit1.badEvent;
+					bool isBadEvent2=hit2.badEvent;
 					if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 					
 					float dt1 = hit1.time - t0_1;
@@ -114,14 +112,14 @@ public:
 					event1N = c.photons[0]->nHits;
 					event1DeltaT = dt1;
 					event1Time = hit1.time;
-					event1Channel = hit1.raw->top->channelID;
-					event1ToT = 1E-3*(hit1.raw->top->timeEnd - hit1.raw->top->time);
-					event1Energy=hit1.raw->top->energy;
-					event1Tac = hit1.raw->top->raw->d.tofpet.tac;
-					event1ChannelIdleTime = hit1.raw->top->raw->channelIdleTime * T * 1E-12;
-					event1TacIdleTime = hit1.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
-					event1TQT = hit1.raw->top->tofpet_TQT;
-					event1TQE = hit1.raw->top->tofpet_TQE;
+					event1Channel = hit1.raw->channelID;
+					event1ToT = 1E-3*(hit1.timeEnd - hit1.time);
+					event1Energy=hit1.energy;
+					event1Tac = hit1.raw->d.tofpet.tac;
+					event1ChannelIdleTime = hit1.raw->channelIdleTime * T * 1E-12;
+					event1TacIdleTime = hit1.raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = hit1.tofpet_TQT;
+					event1TQE = hit1.tofpet_TQE;
 					event1X = hit1.x;
 					event1Y = hit1.y;
 					event1Z = hit1.z;
@@ -132,14 +130,14 @@ public:
 					event2N = c.photons[1]->nHits;
 					event2DeltaT = dt2;
 					event2Time = hit2.time;
-					event2Channel = hit2.raw->top->channelID;
-					event2ToT = 1E-3*(hit2.raw->top->timeEnd - hit2.raw->top->time);
-					event2Energy=hit2.raw->top->energy;
-					event2Tac = hit2.raw->top->raw->d.tofpet.tac;
-					event2ChannelIdleTime = hit2.raw->top->raw->channelIdleTime * T * 1E-12;
-					event2TacIdleTime = hit2.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
-					event2TQT = hit2.raw->top->tofpet_TQT;
-					event2TQE = hit2.raw->top->tofpet_TQE;
+					event2Channel = hit2.raw->channelID;
+					event2ToT = 1E-3*(hit2.timeEnd - hit2.time);
+					event2Energy=hit2.energy;
+					event2Tac = hit2.raw->d.tofpet.tac;
+					event2ChannelIdleTime = hit2.raw->channelIdleTime * T * 1E-12;
+					event2TacIdleTime = hit2.raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = hit2.tofpet_TQT;
+					event2TQE = hit2.tofpet_TQE;
 					event2X = hit2.x;
 					event2Y = hit2.y;
 					event2Z = hit2.z;
@@ -197,16 +195,16 @@ public:
 					Hit &hit1 = *c.photons[0]->hits[j1];
 					Hit &hit2 = *c.photons[1]->hits[j2];
 					
-					long long T = hit1.raw->top->raw->T;
+					long long T = SYSTEM_PERIOD * 1E12;
 
-					bool isBadEvent1=hit1.raw->top->badEvent;
-					bool isBadEvent2=hit2.raw->top->badEvent;
+					bool isBadEvent1=hit1.badEvent;
+					bool isBadEvent2=hit2.badEvent;
 					if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 
 					if(j1==0 && j2==0){
 						long long time = hit1.time + hit2.time;
 						long long deltaTime=hit1.time - hit2.time;
-						fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw->top->energy, hit2.raw->top->energy, c.photons[0]->nHits, c.photons[1]->nHits, float(1e-12*deltaTime), ctr); 
+						fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.energy, hit2.energy, c.photons[0]->nHits, c.photons[1]->nHits, float(1e-12*deltaTime), ctr); 
 					}
 					
 					float dt1 = hit1.time - t0_1;
@@ -220,14 +218,14 @@ public:
 					event1N = c.photons[0]->nHits;
 					event1DeltaT = dt1;
 					event1Time = hit1.time;
-					event1Channel = hit1.raw->top->channelID;
-					event1ToT = 1E-3*(hit1.raw->top->timeEnd - hit1.raw->top->time);
-					event1Energy=hit1.raw->top->energy;
-					event1Tac = hit1.raw->top->raw->d.tofpet.tac;
-					event1ChannelIdleTime = hit1.raw->top->raw->channelIdleTime * T * 1E-12;
-					event1TacIdleTime = hit1.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
-					event1TQT = hit1.raw->top->tofpet_TQT;
-					event1TQE = hit1.raw->top->tofpet_TQE;
+					event1Channel = hit1.raw->channelID;
+					event1ToT = 1E-3*(hit1.timeEnd - hit1.time);
+					event1Energy=hit1.energy;
+					event1Tac = hit1.raw->d.tofpet.tac;
+					event1ChannelIdleTime = hit1.raw->channelIdleTime * T * 1E-12;
+					event1TacIdleTime = hit1.raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event1TQT = hit1.tofpet_TQT;
+					event1TQE = hit1.tofpet_TQE;
 					event1X = hit1.x;
 					event1Y = hit1.y;
 					event1Z = hit1.z;
@@ -238,14 +236,14 @@ public:
 					event2N = c.photons[1]->nHits;
 					event2DeltaT = dt2;
 					event2Time = hit2.time;
-					event2Channel = hit2.raw->top->channelID;
-					event2ToT = 1E-3*(hit2.raw->top->timeEnd - hit2.raw->top->time);
-					event2Energy=hit2.raw->top->energy;
-					event2Tac = hit2.raw->top->raw->d.tofpet.tac;
-					event2ChannelIdleTime = hit2.raw->top->raw->channelIdleTime * T * 1E-12;
-					event2TacIdleTime = hit2.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
-					event2TQT = hit2.raw->top->tofpet_TQT;
-					event2TQE = hit2.raw->top->tofpet_TQE;
+					event2Channel = hit2.raw->channelID;
+					event2ToT = 1E-3*(hit2.timeEnd - hit2.time);
+					event2Energy=hit2.energy;
+					event2Tac = hit2.raw->d.tofpet.tac;
+					event2ChannelIdleTime = hit2.raw->channelIdleTime * T * 1E-12;
+					event2TacIdleTime = hit2.raw->d.tofpet.tacIdleTime * T * 1E-12;
+					event2TQT = hit2.tofpet_TQT;
+					event2TQE = hit2.tofpet_TQE;
 					event2X = hit2.x;
 					event2Y = hit2.y;
 					event2Z = hit2.z;
@@ -305,9 +303,8 @@ public:
 			Hit &hit1 = *c.photons[0]->hits[0];
 			Hit &hit2 = *c.photons[1]->hits[0];
 			
-			long long T = hit1.raw->top->raw->T;
-			bool isBadEvent1=hit1.raw->top->badEvent;
-			bool isBadEvent2=hit2.raw->top->badEvent;
+			bool isBadEvent1=hit1.badEvent;
+			bool isBadEvent2=hit2.badEvent;
 			if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 			//float dt1 = hit1.time - t0_1;
 			//if(dt1 > maxDeltaT) continue;
@@ -318,7 +315,7 @@ public:
 			//if(j1!=0 || j2!=0)continue;
 			long long time = hit1.time + hit2.time;
 			long long deltaTime=hit1.time - hit2.time;
-			fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.raw->top->energy, hit2.raw->top->energy, c.photons[0]->nHits, c.photons[1]->nHits, float(1e-12*deltaTime), ctr); 
+			fprintf(listFile, "%10.6e\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%d\t%d\t%10.6e\t%10.6e\n", float(0.5E-12*time), angle, hit1.x, hit1.y, hit1.z, hit2.x, hit2.y, hit2.z, hit1.energy, hit2.energy, c.photons[0]->nHits, c.photons[1]->nHits, float(1e-12*deltaTime), ctr); 
 					
 
 		}
@@ -359,9 +356,8 @@ public:
 			Hit &hit1 = c.photons[0].hits[0];
 			Hit &hit2 = c.photons[1].hits[0];
 
-			long long T = hit1.raw->top->raw->T;
-			bool isBadEvent1=hit1.raw->top->badEvent;
-			bool isBadEvent2=hit2.raw->top->badEvent;
+			bool isBadEvent1=hit1.badEvent;
+			bool isBadEvent2=hit2.badEvent;
 			if(writeBadEvents==false && (isBadEvent1 || isBadEvent2))continue;
 			int xi1 = hit1.xi;	// External plate
 			int yi1 = hit1.yi;
@@ -714,14 +710,13 @@ int main(int argc, char *argv[])
 		DAQ::TOFPET::RawReader *reader=NULL;
 
 #ifndef __ENDOTOFPET__	
-		EventSink<RawPulse> * pipeSink= new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
+		EventSink<RawHit> * pipeSink= new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
 				new P2Extract(P2, false, 0.0, 0.20, true,
-				new SingleReadoutGrouper(
 				new CrystalPositions(systemInformation,
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
 				new CoincidenceGrouper(cWindow,
 				writer
-			    ))))));
+			    )))));
 	
 		if(rawV[0]=='3') 
 			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , readBackTime, onlineMode, pipeSink);
@@ -731,12 +726,11 @@ int main(int argc, char *argv[])
 			reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
 				new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
 				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
-				new SingleReadoutGrouper(
 				new CrystalPositions(systemInformation,
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
 				new CoincidenceGrouper(cWindow,
 				writer
-			)))))));
+			))))));
 		
 #endif		
 		reader->wait();

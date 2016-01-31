@@ -4,7 +4,7 @@
 #include <TOFPET/Raw.hpp>
 #include <Core/EventSourceSink.hpp>
 #include <Core/Event.hpp>
-#include <Core/RawPulseWriter.hpp>
+#include <Core/RawHitWriter.hpp>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -37,7 +37,7 @@ namespace DAQ { namespace TOFPET {
 		virtual ~RawWriterV3();
 		virtual void openStep(float step1, float step2);
 		virtual void closeStep();
-		virtual u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer);
+		virtual u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawHit> *inBuffer);
 	private:
 		FILE *outputDataFile;
 		FILE *outputIndexFile;
@@ -66,10 +66,10 @@ namespace DAQ { namespace TOFPET {
 		
 	};
 	
-	class RawReaderV3 : public RawReader, public EventSource<RawPulse> {
+	class RawReaderV3 : public RawReader, public EventSource<RawHit> {
 	
 	public:
-		RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, float deltaTime, bool onlineMode, EventSink<RawPulse> *sink);
+		RawReaderV3(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, float deltaTime, bool onlineMode, EventSink<RawHit> *sink);
 		~RawReaderV3();
 		
 		virtual void run();

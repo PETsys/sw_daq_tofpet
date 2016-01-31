@@ -16,8 +16,8 @@ using namespace DAQ::TOFPET;
 static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 static const unsigned maxEventsPerFrame = 16*1024;
 
-RawReaderV2::RawReaderV2(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink)
-	: EventSource<RawPulse>(sink), T(T)
+RawReaderV2::RawReaderV2(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawHit> *sink)
+	: EventSource<RawHit>(sink), T(T)
 {
 	char dataFileName[512];
 	sprintf(dataFileName, "%s.raw2", dataFilePrefix);
@@ -35,7 +35,7 @@ RawReaderV2::~RawReaderV2()
 
 struct SortEntry {
 	short tCoarse;
-	RawPulse *event;	
+	RawHit *event;	
 };
 static bool operator< (SortEntry lhs, SortEntry rhs) { return lhs.tCoarse < rhs.tCoarse; }
 
@@ -118,7 +118,7 @@ void RawReaderV2::run()
 
 	unsigned nWraps = 0;
 	
-	EventBuffer<RawPulse> *outBuffer = NULL;
+	EventBuffer<RawHit> *outBuffer = NULL;
 	
 	int nEventsInFrame = 0;
 	
@@ -149,21 +149,20 @@ void RawReaderV2::run()
 			RawEventV2 &rawEvent = rawEvents[j];
 
 			if(outBuffer == NULL) {
-				outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
+				outBuffer = new EventBuffer<RawHit>(outBlockSize, NULL);
 			}
 		
 
-			RawPulse &p = outBuffer->getWriteSlot();
+			RawHit &p = outBuffer->getWriteSlot();
 			
 			// Carefull with the float/double/integer conversions here..
-			p.T = T * 1E12;
-			p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * p.T;
-			p.timeEnd = (1024LL * rawEvent.frameID + rawEvent.eCoarse) * p.T;
-			if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
+			long long pT = T * 1E12;
+			p.time = (1024LL * rawEvent.frameID + rawEvent.tCoarse) * pT;
+			p.timeEnd = (1024LL * rawEvent.frameID + rawEvent.eCoarse) * pT;
+			if((p.timeEnd - p.time) < -256*pT) p.timeEnd += (1024LL * pT);
 			p.channelID = (64 * rawEvent.asicID) + rawEvent.channelID;
 			p.channelIdleTime = rawEvent.channelIdleTime;
-			p.region = (64 * rawEvent.asicID + rawEvent.channelID) / 16;
-			p.feType = RawPulse::TOFPET;
+			p.feType = RawHit::TOFPET;
 			p.d.tofpet.tac = rawEvent.tacID;
 			p.d.tofpet.tcoarse = rawEvent.tCoarse;
 			p.d.tofpet.ecoarse = rawEvent.eCoarse;
@@ -286,9 +285,10 @@ void RawWriterV2::closeStep()
 	fflush(outputIndexFile);
 }
 
-void RawWriterV2::addEvent(RawPulse &p)
+void RawWriterV2::addEvent(RawHit &p)
 {
-	uint32_t frameID = p.time / (1024L * p.T);
+	long long T = SYSTEM_PERIOD * 1E12;
+	uint32_t frameID = p.time / (1024L * T);
 	DAQ::TOFPET::RawEventV2 eventOut = {
 		frameID,
 		uint16_t(p.channelID / 64),

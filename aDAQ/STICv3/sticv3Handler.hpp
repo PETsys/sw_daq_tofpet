@@ -17,7 +17,7 @@ namespace DAQ { namespace STICv3 {
 
 		void printReport(); //report at the end of handling events
 
-		bool handleEvent(RawPulse &rawPulse, Pulse &Pulse); 
+		bool handleEvent(RawHit &rawHit, Hit &Hit); 
 
 
 	private:

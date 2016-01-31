@@ -9,7 +9,7 @@
 namespace DAQ { namespace Core {
 
 	using namespace std;
-	class CrystalPositions : public OverlappedEventHandler<RawHit, Hit> {
+	class CrystalPositions : public OverlappedEventHandler<Hit, Hit> {
 	public: 
 		CrystalPositions(DAQ::Common::SystemInformation *systemInformation,
 				EventSink<Hit> *sink);
@@ -25,7 +25,7 @@ namespace DAQ { namespace Core {
 		uint32_t nEventsOut;
 
 	protected:
-		virtual EventBuffer<Hit> * handleEvents(EventBuffer<RawHit> *inBuffer);
+		virtual EventBuffer<Hit> * handleEvents(EventBuffer<Hit> *inBuffer);
 
 	};
 }}

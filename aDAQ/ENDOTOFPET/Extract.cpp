@@ -8,9 +8,9 @@ using namespace DAQ::STICv3;
 using namespace DAQ::DSIPM;
 using namespace DAQ::ENDOTOFPET;
 
-Extract::Extract(DAQ::TOFPET::P2Extract *tofpetH, DAQ::STICv3::Sticv3Handler *sticv3H, DAQ::DSIPM::DsipmHandler *dsipmH,  EventSink<Pulse> *sink) :
+Extract::Extract(DAQ::TOFPET::P2Extract *tofpetH, DAQ::STICv3::Sticv3Handler *sticv3H, DAQ::DSIPM::DsipmHandler *dsipmH,  EventSink<Hit> *sink) :
 	tofpetH(tofpetH), sticv3H(sticv3H), dsipmH(dsipmH), 
-	OverlappedEventHandler<RawPulse, Pulse>(sink)
+	OverlappedEventHandler<RawHit, Hit>(sink)
 {
 	nEvent = 0;
 	nPassed = 0;
@@ -18,12 +18,12 @@ Extract::Extract(DAQ::TOFPET::P2Extract *tofpetH, DAQ::STICv3::Sticv3Handler *st
 
 
 
-EventBuffer<Pulse> * Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
+EventBuffer<Hit> * Extract::handleEvents (EventBuffer<RawHit> *inBuffer)
 {
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents, inBuffer);
+	EventBuffer<Hit> * outBuffer = new EventBuffer<Hit>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);	
 
@@ -34,23 +34,23 @@ EventBuffer<Pulse> * Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 	for(unsigned i = 0; i < nEvents; i++) {
 		
 		
-		RawPulse &raw = inBuffer->get(i);
+		RawHit &raw = inBuffer->get(i);
 	   	if(raw.time < tMin || raw.time >= tMax)continue; 
 		lEvent++;  
-		Pulse &p = outBuffer->getWriteSlot();
-		if (raw.feType == RawPulse::TOFPET &&  tofpetH != NULL){
+		Hit &p = outBuffer->getWriteSlot();
+		if (raw.feType == RawHit::TOFPET &&  tofpetH != NULL){
 			if (tofpetH->handleEvent(raw, p)){
 				outBuffer->pushWriteSlot();
 				lPassed++;
 			}
 		}
-		else if (raw.feType == RawPulse::STIC &&  sticv3H != NULL){
+		else if (raw.feType == RawHit::STIC &&  sticv3H != NULL){
 			if (sticv3H->handleEvent(raw, p)){
 				outBuffer->pushWriteSlot();
 				lPassed++;
 			}
 		}
-		else if (raw.feType == RawPulse::DSIPM && dsipmH != NULL){
+		else if (raw.feType == RawHit::DSIPM && dsipmH != NULL){
 			if (dsipmH->handleEvent(raw, p)){
 				outBuffer->pushWriteSlot();	
 				lPassed++;
@@ -80,5 +80,5 @@ EventBuffer<Pulse> * Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
 		if (dsipmH != NULL){
 			dsipmH->printReport();
 		}	
-	OverlappedEventHandler<RawPulse, Pulse>::report();
+	OverlappedEventHandler<RawHit, Hit>::report();
 }

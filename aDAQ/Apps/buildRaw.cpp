@@ -19,10 +19,10 @@ using namespace DAQ::TOFPET;
 using namespace std;
 
 
-class EventReport : public OverlappedEventHandler<RawPulse, RawPulse> {
+class EventReport : public OverlappedEventHandler<RawHit, RawHit> {
 public:
-	EventReport(TNtuple *data, float step1, float step2, EventSink<RawPulse> *sink) 
-	: 	OverlappedEventHandler<RawPulse, RawPulse>(sink, true),
+	EventReport(TNtuple *data, float step1, float step2, EventSink<RawHit> *sink) 
+	: 	OverlappedEventHandler<RawHit, RawHit>(sink, true),
 		data(data), step1(step1), step2(step2) 
 	{
 		
@@ -32,13 +32,13 @@ public:
 		
 	};
 
-	EventBuffer<RawPulse> * handleEvents(EventBuffer<RawPulse> *inBuffer) {
+	EventBuffer<RawHit> * handleEvents(EventBuffer<RawHit> *inBuffer) {
 		long long tMin = inBuffer->getTMin();
 		long long tMax = inBuffer->getTMax();
 		unsigned nEvents =  inBuffer->getSize();
 	
 		for(unsigned i = 0; i < nEvents; i++) {
-			RawPulse & raw = inBuffer->get(i);
+			RawHit & raw = inBuffer->get(i);
 			
 			
 			if(raw.time < tMin || raw.time >= tMax)
@@ -179,8 +179,8 @@ int main(int argc, char *argv[])
 		
 		DAQ::TOFPET::RawReader *reader=NULL;
 
-		EventSink<RawPulse> * pipeSink = new EventReport(data, step1, step2,
-						                 new NullSink<RawPulse>());
+		EventSink<RawHit> * pipeSink = new EventReport(data, step1, step2,
+						                 new NullSink<RawHit>());
 
 #ifndef __ENDOTOFPET__
 		if(rawV[0]=='3') 

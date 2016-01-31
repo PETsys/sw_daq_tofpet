@@ -20,7 +20,8 @@ ThreadPool::ThreadPool(unsigned maxWorkers)
 		maxWorkers = nCPUs;
 	this->maxWorkers = maxWorkers;
 	
-	maxQueueSize = 2;
+	maxQueueSize = maxWorkers/4;
+	maxQueueSize = maxQueueSize > 0 ? maxQueueSize : 1;
 	
 	die = true;
 	pthread_mutex_init(&lock, NULL);

@@ -16,16 +16,16 @@ namespace DAQ { namespace ENDOTOFPET {
 		using namespace DAQ::STICv3;
 		using namespace DAQ::DSIPM;
 	
-		class Extract : public OverlappedEventHandler<RawPulse, Pulse> {
+		class Extract : public OverlappedEventHandler<RawHit, Hit> {
 		public:
-			Extract(DAQ::TOFPET::P2Extract *tofpetH, DAQ::STICv3::Sticv3Handler *sticv3H, DAQ::DSIPM::DsipmHandler *dsipmH,  EventSink<Pulse> *sink);
+			Extract(DAQ::TOFPET::P2Extract *tofpetH, DAQ::STICv3::Sticv3Handler *sticv3H, DAQ::DSIPM::DsipmHandler *dsipmH,  EventSink<Hit> *sink);
 			
 			virtual void report();
 		
 		protected:
 			
 			
-			virtual EventBuffer<Pulse> * handleEvents (EventBuffer<RawPulse> *inBuffer); 
+			virtual EventBuffer<Hit> * handleEvents (EventBuffer<RawHit> *inBuffer); 
 		   		
 			
 		private:

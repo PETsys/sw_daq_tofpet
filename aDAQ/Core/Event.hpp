@@ -9,13 +9,11 @@ namespace DAQ { namespace Core {
 
 	inline long long tAbs(long long x) { return x >= 0 ? x : - x; };
 
-	struct RawPulse {
+	struct RawHit {
 		enum Type { TOFPET, STIC, DSIPM };
 	  
-		unsigned short T;
 		long long time;
 		long long timeEnd;
-		short region;
 		int channelID;
 		long long channelIdleTime;
 
@@ -43,23 +41,23 @@ namespace DAQ { namespace Core {
 		  } dsipm;
 		} d;
 
-		RawPulse() {
+		RawHit() {
 			time = -1;
-			timeEnd = -1;
-			channelID = -1;
-			region = -1;
-			channelIdleTime = 0;
 		};
 	};
 
-	struct Pulse {
-		RawPulse *raw;
+	struct Hit {
+		RawHit *raw;
 		long long time;
 		long long timeEnd;
-		short region;
-		
-		int channelID;
 		float energy;
+
+		short region;
+		short xi;
+		short yi;
+		float x;
+		float y;
+		float z;
 		
 		bool badEvent;
 		float tofpet_TQT;
@@ -67,88 +65,24 @@ namespace DAQ { namespace Core {
 
 
 		
-		Pulse() {
-			time = -1;
-			timeEnd = -1;
-			channelID = -1;
-			energy = 0;
-			region = -1;
-			raw = NULL;
-			badEvent = true;
-		};
-	};
-
-	struct RawHit {
-		Pulse *bottom;
-		Pulse *top;
-		long long time;
-		short region;
-		int crystalID;
-		float energy;
-		float asymmetry;
-		float missingEnergy;
-		short nMissing;
-
-		RawHit() {
-			time = -1;
-			region = -1;
-			crystalID = -1;
-			energy = 0;
-			asymmetry = 0;
-			missingEnergy = 0;
-			nMissing = 0;
-			bottom = NULL;
-			top = NULL;
-		};
-	};
-
-	struct Hit {
-		RawHit *raw;
-		long long time;
-		short region;
-		float x;
-		float y;
-		float z;
-		int xi;
-		int yi;
-		float energy;
-		float missingEnergy;
-		short nMissing;
-
 		Hit() {
 			time = -1;
-			region = -1;
-			x = 0;
-			y = 0;
-			z = 0;
-			xi = -1;
-			yi = -1;
-			energy = 0;
-			missingEnergy = 0;
-			nMissing = 0;
 			raw = NULL;
+			badEvent = true;
 		};
 	};
 
 	struct GammaPhoton {
 		static const int maxHits = 16;
 		long long time;
-		short region;
 		float energy;
+		short region;
 		float x, y, z;
-		float missingEnergy;
-		short nMissing;
 		int nHits;
 		Hit *hits[maxHits];		
 
 		GammaPhoton() {
 			time = -1;
-			region = -1;
-			energy = 0;
-			missingEnergy = 0;
-			nMissing = 0;
-			x = y = z = 0;
-			nHits = 0;			
 			for(int i = 0; i < maxHits; i++)
 				hits[i] = NULL;
 		};
@@ -156,6 +90,7 @@ namespace DAQ { namespace Core {
 
 	struct Coincidence {
 		static const int maxPhotons = 2;
+		long long time;
 		int nPhotons;
 		GammaPhoton *photons[maxPhotons];
 		

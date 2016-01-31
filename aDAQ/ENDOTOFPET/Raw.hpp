@@ -2,7 +2,7 @@
 #define __DAQ__ENDOTOFPET__RAW_HPP__DEFINED__
 #include <Common/Task.hpp>
 #include <Core/EventSourceSink.hpp>
-#include <Core/RawPulseWriter.hpp>
+#include <Core/RawHitWriter.hpp>
 #include <Core/Event.hpp>
 #include <TOFPET/Raw.hpp>
 #include <stdio.h>
@@ -62,7 +62,7 @@ namespace DAQ { namespace ENDOTOFPET {
 			virtual ~RawWriterE();
 			virtual void openStep(float step1, float step2);
 			virtual void closeStep();
-			virtual u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer);
+			virtual u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawHit> *inBuffer);
 			
 		private:
 			FILE *outputDataFile;
@@ -93,9 +93,9 @@ namespace DAQ { namespace ENDOTOFPET {
 			
 		};
 			
-		class RawReaderE : public TOFPET::RawReader, public EventSource<RawPulse> {	  
+		class RawReaderE : public TOFPET::RawReader, public EventSource<RawHit> {	  
 		public:
-			RawReaderE(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawPulse> *sink);
+			RawReaderE(char *dataFilePrefix, float T, unsigned long long eventsBegin, unsigned long long eventsEnd, EventSink<RawHit> *sink);
 
 			~RawReaderE();
 				  

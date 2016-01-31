@@ -3,7 +3,7 @@
 #include <Common/Task.hpp>
 #include <Core/EventSourceSink.hpp>
 #include <Core/Event.hpp>
-#include <Core/RawPulseWriter.hpp>
+#include <Core/RawHitWriter.hpp>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -16,13 +16,13 @@ namespace DAQ { namespace TOFPET {
 	using namespace std;
 
 	
-	class RawWriter : public AbstractRawPulseWriter {
+	class RawWriter : public AbstractRawHitWriter {
 	public:
 	
 		virtual ~RawWriter();
 		virtual void openStep(float step1, float step2)=0;
 		virtual void closeStep()=0;
-		virtual  u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer) = 0;
+		virtual  u_int32_t addEventBuffer(long long tMin, long long tMax, EventBuffer<RawHit> *inBuffer) = 0;
 	};
 
 	

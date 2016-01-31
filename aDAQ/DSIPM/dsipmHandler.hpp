@@ -16,7 +16,7 @@ namespace DAQ { namespace DSIPM {
 		~DsipmHandler();
 		void printReport(); //report at the end of handling events
 
-		bool handleEvent(RawPulse &raw, Pulse &Pulse); 		
+		bool handleEvent(RawHit &raw, Hit &Hit); 		
 		  
 
 	private:

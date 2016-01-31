@@ -8,8 +8,8 @@ using namespace DAQ::Common;
 using namespace DAQ::Core;
 
 CoincidenceFilter::CoincidenceFilter(SystemInformation *systemInformation, float cWindow, float minToT,
-	EventSink<RawPulse> *sink)
-	: OverlappedEventHandler<RawPulse, RawPulse>(sink), systemInformation(systemInformation), 
+	EventSink<RawHit> *sink)
+	: OverlappedEventHandler<RawHit, RawHit>(sink), systemInformation(systemInformation), 
 	cWindow((long long)(cWindow*1E12)), minToT((long long)(minToT*1E12))
 {	
 	nEventsIn = 0;
@@ -29,10 +29,10 @@ void CoincidenceFilter::report()
 	fprintf(stderr, "  %10u events received\n", nEventsIn);
 	fprintf(stderr, "  %10u (%5.1f%%) events met minimum ToT \n", nTriggersIn, 100.0 * nTriggersIn / nEventsIn);
 	fprintf(stderr, "  %10u (%5.1f%%) events passed\n", nEventsOut, 100.0 * nEventsOut / nEventsIn);
-	OverlappedEventHandler<RawPulse, RawPulse>::report();
+	OverlappedEventHandler<RawHit, RawHit>::report();
 }
 
-EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *inBuffer)
+EventBuffer<RawHit> * CoincidenceFilter::handleEvents(EventBuffer<RawHit> *inBuffer)
 {
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
@@ -44,8 +44,15 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 	
 	vector<bool> meetsMinToT(nEvents, false);
 	vector<bool> coincidenceMatched(nEvents, false);
+	vector<short> region(nEvents, -1);
+
 	for(unsigned i = 0; i < nEvents; i++) {
-		RawPulse &p1 = inBuffer->get(i);
+		RawHit &p1 = inBuffer->get(i);
+		region[i] = systemInformation->getChannelInformation(p1.channelID).region;
+	}
+
+	for(unsigned i = 0; i < nEvents; i++) {
+		RawHit &p1 = inBuffer->get(i);
 
 		if((p1.timeEnd - p1.time) >= minToT) {
 			meetsMinToT[i] = true;
@@ -56,14 +63,12 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		}
 		
 		for (unsigned j = i+1; j < nEvents; j++) {
-			RawPulse &p2 = inBuffer->get(j);
+			RawHit &p2 = inBuffer->get(j);
 			if((p2.time - p1.time) > (overlap + cWindow)) break;		// No point in looking further
 			if((p2.timeEnd - p2.time) < minToT) continue;			// Does not meet min ToT
 			if(tAbs(p2.time - p1.time) > cWindow) continue;			// Does not meet cWindow
 			
-			int region1 = systemInformation->getChannelInformation(p1.channelID).region;
-			int region2 = systemInformation->getChannelInformation(p2.channelID).region;
-			if(!systemInformation->isCoincidenceAllowed(region1, region2)) continue;
+			if(!systemInformation->isCoincidenceAllowed(region[i], region[j])) continue;
 
 			coincidenceMatched[i] = true;
 			coincidenceMatched[j] = true;
@@ -73,7 +78,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 	vector<bool> accepted(nEvents, false);	
 	const long long dWindow = 100000; // 100 ns acceptance window for events which come after the first
 	for(unsigned i = 0; i < nEvents; i++) {
-		RawPulse &p1 = inBuffer->get(i);
+		RawHit &p1 = inBuffer->get(i);
 
 		if(coincidenceMatched[i]) {
 			accepted[i] = true;
@@ -83,16 +88,16 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 		}
 
 		for(unsigned j = i; j > 0; j--) {	// Look for events before p1
-			RawPulse &p2 = inBuffer->get(j);
-			if(p1.region != p2.region) continue;			// Only search within trigger's region
+			RawHit &p2 = inBuffer->get(j);
+			if(!systemInformation->isMultihitAllowed(region[i], region[j])) continue;
 			if(p2.time < (p1.time - cWindow - overlap)) break;	// No point in looking further
 			if(p2.time < (p1.time - cWindow)) continue;		// Doesn't meet cWindow
 			accepted[j] = true;
 		}
 		
 		for (unsigned j = i; j < nEvents; j++) {// Look for events after p1
-			RawPulse &p2 = inBuffer->get(j);
-			if(p1.region != p2.region) continue;			// Only search within trigger's region
+			RawHit &p2 = inBuffer->get(j);
+			if(!systemInformation->isMultihitAllowed(region[i], region[j])) continue;
 			if(p2.time > (p1.time + dWindow + overlap)) break;	// No point in looking further
 			if(p2.time > (p1.time + dWindow)) continue;		// Doesn't meet dWindow
 			accepted[j] = true;
@@ -101,7 +106,7 @@ EventBuffer<RawPulse> * CoincidenceFilter::handleEvents(EventBuffer<RawPulse> *i
 	
 	// Filter unaccepted events by setting their time to -1
 	for(unsigned i = 0; i < nEvents; i++) {
-		RawPulse &p1 = inBuffer->get(i);
+		RawHit &p1 = inBuffer->get(i);
 		if(p1.time < tMin || p1.time >= tMax) {
 			p1.time = -1;
 			continue;

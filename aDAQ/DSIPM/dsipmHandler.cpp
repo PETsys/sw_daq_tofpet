@@ -9,16 +9,16 @@ DsipmHandler::DsipmHandler()
 	
 }
 
-bool DsipmHandler::handleEvent(RawPulse &raw, Pulse &pulse)
+bool DsipmHandler::handleEvent(RawHit &raw, Hit &pulse)
 {
 	// if event is good return true
 	// if event is not good (see example below), return false
    
 	
-	if(raw.feType != RawPulse::DSIPM) return false;
+	if(raw.feType != RawHit::DSIPM) return false;
 
 
-	// extract data from rawPulse as you see fit
+	// extract data from rawHit as you see fit
 
 
 	return true; 

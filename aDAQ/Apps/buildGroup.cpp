@@ -3,10 +3,7 @@
 #include <TOFPET/RawV3.hpp>
 #include <TOFPET/RawV2.hpp>
 #include <TOFPET/P2Extract.hpp>
-#include <Core/PulseFilter.hpp>
-#include <Core/SingleReadoutGrouper.hpp>
 #include <Core/CrystalPositions.hpp>
-#include <Core/ComptonGrouper.hpp>
 #include <Core/NaiveGrouper.hpp>
 #include <Core/CoincidenceFilter.hpp>
 #include <Core/CoincidenceGrouper.hpp>
@@ -69,24 +66,24 @@ public:
 			long long t0 = e.hits[0]->time;
 			for(int j1 = 0; (j1 < e.nHits) && (j1 < maxN); j1 ++) {
 				Hit &hit = *e.hits[j1];
-				bool isBadEvent=hit.raw->top->badEvent;
-				if(writeBadEvents==false && isBadEvent)continue;
+				bool isBadEvent = hit.badEvent;
+				if(writeBadEvents == false && isBadEvent) continue;
 				float dt = hit.time - t0;
 				if(dt > maxDeltaT) continue;
 				
-				long long T = hit.raw->top->raw->T;
+				long long T = SYSTEM_PERIOD * 1E12;
 				eventJ = j1;
 				eventN = e.nHits;
 				eventDeltaT = dt;
 				eventTime = hit.time;
-				eventChannel = hit.raw->top->channelID;
-				eventToT = 1E-3*(hit.raw->top->timeEnd - hit.raw->top->time);
-				eventEnergy = hit.raw->top->energy;
-				eventTac = hit.raw->top->raw->d.tofpet.tac;
-				eventChannelIdleTime = hit.raw->top->raw->channelIdleTime * T * 1E-12;
-				eventTacIdleTime = hit.raw->top->raw->d.tofpet.tacIdleTime * T * 1E-12;
-				eventTQT = hit.raw->top->tofpet_TQT;
-				eventTQE = hit.raw->top->tofpet_TQE;
+				eventChannel = hit.raw->channelID;
+				eventToT = 1E-3*(hit.timeEnd - hit.time);
+				eventEnergy = hit.energy;
+				eventTac = hit.raw->d.tofpet.tac;
+				eventChannelIdleTime = hit.raw->channelIdleTime * T * 1E-12;
+				eventTacIdleTime = hit.raw->d.tofpet.tacIdleTime * T * 1E-12;
+				eventTQT = hit.tofpet_TQT;
+				eventTQE = hit.tofpet_TQE;
 				eventX = hit.x;
 				eventY = hit.y;
 				eventZ = hit.z;
@@ -311,13 +308,12 @@ int main(int argc, char *argv[])
 	
 		float gRadius = 20; // mm
 
-		EventSink<RawPulse> * pipeSink =new P2Extract(P2, false, 0.0, 0.20, true,
-				new SingleReadoutGrouper(
+		EventSink<RawHit> * pipeSink =new P2Extract(P2, false, 0.0, 0.20, true,
 				new CrystalPositions(systemInformation,
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, gMaxHits,
 				new EventWriter(lmData, false, gWindow, gMaxHitsRoot,
 				new NullSink<GammaPhoton>()
-			)))));
+			))));
 
 		DAQ::TOFPET::RawReader *reader=NULL;
 	

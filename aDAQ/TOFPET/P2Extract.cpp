@@ -2,14 +2,15 @@
 #include <math.h>
 #include <stdio.h>
 #include <assert.h>
+#include <Common/SystemInformation.hpp>
 
 using namespace DAQ::Common;
 using namespace DAQ::Core;
 using namespace DAQ::TOFPET;
 
-P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTolerance, float eDenormalTolerance, bool killDenormal, EventSink<Pulse> *sink) : 
+P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTolerance, float eDenormalTolerance, bool killDenormal, EventSink<Hit> *sink) : 
 	lut(lut), killZeroToT(killZeroToT), tDenormalTolerance(tDenormalTolerance), eDenormalTolerance(eDenormalTolerance), killDenormal(killDenormal),
-	OverlappedEventHandler<RawPulse, Pulse>(sink)
+	OverlappedEventHandler<RawHit, Hit>(sink)
 {
 	nEvent = 0;
 	nZeroToT = 0;
@@ -17,7 +18,7 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	nNotNormal = 0;
 }
 
- bool P2Extract::handleEvent(RawPulse &raw, Pulse &pulse)
+ bool P2Extract::handleEvent(RawHit &raw, Hit &pulse)
 {
 	// if event is true return good
 	// if event is not good, use atomicIncrement() and return false
@@ -25,7 +26,7 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	//if(raw.time < tMin || raw.time >= tMax) return false;
 	//atomicAdd(nEvent, 1);
 	atomicAdd(nEvent, 1);
-	if(raw.feType != RawPulse::TOFPET) return false;
+	if(raw.feType != RawHit::TOFPET) return false;
 
 	short tCoarse = raw.d.tofpet.tcoarse;
 	short eCoarse = raw.d.tofpet.ecoarse;
@@ -54,14 +55,14 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 // 	}
    
 	pulse.raw = &raw;
-	pulse.region = raw.region;
-	pulse.channelID = raw.channelID;
 
-	pulse.tofpet_TQT = lut->getQ(raw.channelID, raw.d.tofpet.tac, true, tfine, tacIdleTime, coarseToT*raw.T/1000);
-	pulse.tofpet_TQE = lut->getQ(raw.channelID, raw.d.tofpet.tac, false, efine, tacIdleTime, coarseToT*raw.T/1000);
+	long long T = SYSTEM_PERIOD * 1E12;
+
+	pulse.tofpet_TQT = lut->getQ(raw.channelID, raw.d.tofpet.tac, true, tfine, tacIdleTime, coarseToT*T/1000);
+	pulse.tofpet_TQE = lut->getQ(raw.channelID, raw.d.tofpet.tac, false, efine, tacIdleTime, coarseToT*T/1000);
 	// WARNING: P2::geT() returns time with coarse value already added!
-	float f_T = lut->getT(raw.channelID, raw.d.tofpet.tac, true, tfine, tCoarse, tacIdleTime, coarseToT*raw.T/1000.0) - tCoarse;
-	float f_E = lut->getT(raw.channelID, raw.d.tofpet.tac, false, efine, eCoarse, tacIdleTime, coarseToT*raw.T/1000.0) - eCoarse;
+	float f_T = lut->getT(raw.channelID, raw.d.tofpet.tac, true, tfine, tCoarse, tacIdleTime, coarseToT*T/1000.0) - tCoarse;
+	float f_E = lut->getT(raw.channelID, raw.d.tofpet.tac, false, efine, eCoarse, tacIdleTime, coarseToT*T/1000.0) - eCoarse;
 	
 	pulse.badEvent = false;
 	if(pulse.tofpet_TQT < (1.0 - tDenormalTolerance) || pulse.tofpet_TQT > (3.0 + tDenormalTolerance) ||  pulse.tofpet_TQE < (1.0 - eDenormalTolerance) || pulse.tofpet_TQE > (3.0 + eDenormalTolerance)) {
@@ -73,32 +74,31 @@ P2Extract::P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTole
 	}
 	else {
 		// WARNING: rounding sensitive!
-		pulse.time = raw.time + (long long)((f_T * raw.T) + lut->timeOffset[raw.channelID]*1e12);
-		pulse.timeEnd = raw.timeEnd + (long long)((f_E * raw.T) + lut->timeOffset[raw.channelID]*1e12);
+		pulse.time = raw.time + (long long)((f_T * T) + lut->timeOffset[raw.channelID]*1e12);
+		pulse.timeEnd = raw.timeEnd + (long long)((f_E * T) + lut->timeOffset[raw.channelID]*1e12);
 	}
 	
-   	//printf("tot=%f energy = %e\n", 1E-3*(pulse.timeEnd - pulse.time), lut->timeOffset[raw.channelID]);
 	pulse.energy = lut->getEnergy(raw.channelID, 1E-3*(pulse.timeEnd - pulse.time));
 
 	atomicAdd(nPassed, 1); 
 	return true; 
 }
 
-EventBuffer<Pulse> * P2Extract::handleEvents (EventBuffer<RawPulse> *inBuffer)
+EventBuffer<Hit> * P2Extract::handleEvents (EventBuffer<RawHit> *inBuffer)
 {
 	long long tMin = inBuffer->getTMin();
 	long long tMax = inBuffer->getTMax();
 	unsigned nEvents =  inBuffer->getSize();
-	EventBuffer<Pulse> * outBuffer = new EventBuffer<Pulse>(nEvents, inBuffer);
+	EventBuffer<Hit> * outBuffer = new EventBuffer<Hit>(nEvents, inBuffer);
 	outBuffer->setTMin(tMin);
 	outBuffer->setTMax(tMax);		
 	
 
 	for(unsigned i = 0; i < nEvents; i++) {
                         
-		RawPulse &raw = inBuffer->get(i);
+		RawHit &raw = inBuffer->get(i);
 		if(raw.time < tMin || raw.time >= tMax)continue; 
-		Pulse &p = outBuffer->getWriteSlot();
+		Hit &p = outBuffer->getWriteSlot();
 		if (handleEvent(raw, p)){
 			outBuffer->pushWriteSlot();
 		}	
@@ -123,5 +123,5 @@ void P2Extract::printReport()
 void P2Extract::report()
 {
 	printReport();	
-	OverlappedEventHandler<RawPulse, Pulse>::report();
+	OverlappedEventHandler<RawHit, Hit>::report();
 }

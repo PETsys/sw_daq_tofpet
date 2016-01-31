@@ -11,12 +11,10 @@
 #include <ENDOTOFPET/Raw.hpp>
 #include <ENDOTOFPET/Extract.hpp>
 #include <STICv3/sticv3Handler.hpp>
-#include <TOFPET/Sanity.hpp>
 #include <TOFPET/P2Extract.hpp>
 #include <TOFPET/P2.hpp>
 #include <Common/Constants.hpp>
 #include <Common/Utils.hpp>
-#include <Core/SingleReadoutGrouper.hpp>
 #include <Core/CrystalPositions.hpp>
 #include <assert.h>
 #include <math.h>
@@ -41,13 +39,13 @@ static float		eventToT;
 static float		eventTQT;
 static float		eventTQE;
 
-class TQCorrWriter : public EventSink<Pulse>, public EventSource<Pulse>{
+class TQCorrWriter : public EventSink<Hit>, public EventSource<Hit>{
 
 
 
 public:
-	TQCorrWriter(FILE *tQcalFile, bool writeBadEvents, P2 *lut, EventSink<Pulse> *sink) 
-		: EventSource<Pulse>(sink), tQcalFile(tQcalFile), lut(lut), writeBadEvents(writeBadEvents){
+	TQCorrWriter(FILE *tQcalFile, bool writeBadEvents, P2 *lut, EventSink<Hit> *sink) 
+		: EventSource<Hit>(sink), tQcalFile(tQcalFile), lut(lut), writeBadEvents(writeBadEvents){
 		
 		start_t = 1.;
 		end_t = 3.;
@@ -84,21 +82,21 @@ public:
 		fclose(tQcalFile);
 	};
 
-	void pushEvents(EventBuffer<Pulse> *buffer) {
+	void pushEvents(EventBuffer<Hit> *buffer) {
 		if(buffer == NULL) return;	
 		
 		unsigned nEvents = buffer->getSize();
 		for(unsigned i = 0; i < nEvents; i++) {
-			Pulse &e = buffer->get(i);
+			Hit &e = buffer->get(i);
 			
 			
 			bool isBadEvent=e.badEvent;
 			if(writeBadEvents==false && isBadEvent)continue;
 
-			long long T = e.raw->T;
+			long long T = SYSTEM_PERIOD * 1E12;
 			
 			eventTime = e.time;
-			eventChannel = e.channelID;
+			eventChannel = e.raw->channelID;
 			eventToT = 1E-3*(e.timeEnd - e.time);
 			eventTQT = e.tofpet_TQT;
 			eventTQE = e.tofpet_TQE;
@@ -295,11 +293,11 @@ int main(int argc, char *argv[])
 
 		DAQ::TOFPET::RawReader *reader=NULL;
 #ifndef __ENDOTOFPET__	
-		EventSink<RawPulse> * pipeSink = 	new Sanity(100E-9, 		      
+		EventSink<RawHit> * pipeSink = 
 				new P2Extract(P2, false, 0.0, 0.20, true,
 				new TQCorrWriter(f, false, P2,
-				new NullSink<Pulse>()
-        )));
+				new NullSink<Hit>()
+        ));
 
 		if(rawV[0]=='3') 
 			reader = new DAQ::TOFPET::RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, readBackTime, onlineMode, pipeSink);
@@ -307,11 +305,10 @@ int main(int argc, char *argv[])
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 #else
 		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
-				new Sanity(100E-9,								 
 				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new TQCorrWriter(f, false, P2,
-				new NullSink<Pulse>()
-				))));
+				new NullSink<Hit>()
+				)));
 #endif
 	
 		reader->wait();

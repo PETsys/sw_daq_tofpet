@@ -17,8 +17,8 @@ using namespace DAQ::Common;
 
 static const unsigned outBlockSize = EVENT_BLOCK_SIZE;
 
-RawReaderE::RawReaderE(char *dataFilePrefix, float T,  unsigned long long eventsBegin, unsigned long long eventsEnd,EventSink<RawPulse> *sink)
-	: EventSource<RawPulse>(sink), dataFile(dataFile), T(T)
+RawReaderE::RawReaderE(char *dataFilePrefix, float T,  unsigned long long eventsBegin, unsigned long long eventsEnd,EventSink<RawHit> *sink)
+	: EventSource<RawHit>(sink), dataFile(dataFile), T(T)
 {
 	char dataFileName[512];
 	sprintf(dataFileName, "%s.rawE", dataFilePrefix);
@@ -40,7 +40,7 @@ RawReaderE::~RawReaderE()
 
 struct SortEntry {
 	short tCoarse;
-	RawPulse *event;	
+	RawHit *event;	
 };
 static bool operator< (SortEntry lhs, SortEntry rhs) { return lhs.tCoarse < rhs.tCoarse; }
 
@@ -51,7 +51,7 @@ void RawReaderE::run()
 
 	unsigned nWraps = 0;
 	
-	EventBuffer<RawPulse> *outBuffer = NULL;
+	EventBuffer<RawHit> *outBuffer = NULL;
 	
 	int nEventsInFrame = 0;
 	
@@ -99,23 +99,22 @@ void RawReaderE::run()
 				bytes=fread(&rawEvent, sizeof(RawTOFPET), 1, dataFile);
 				//fprintf(stderr, "tof.struct=%d\n %d\n %d\n %ld\n %ld\n %ld\n %lld\n %lld\n \n\n", rawEvent.code, rawEvent.tac, rawEvent.channelID,rawEvent.tCoarse,  rawEvent.eCoarse, rawEvent.tFine , rawEvent.eFine , rawEvent.tacIdleTime , rawEvent.channelIdleTime );
 				if(outBuffer == NULL) {
-					  outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
+					  outBuffer = new EventBuffer<RawHit>(outBlockSize, NULL);
 				}
 				
 			
-				RawPulse &p = outBuffer->getWriteSlot();
+				RawHit &p = outBuffer->getWriteSlot();
 				
 
 
 				// Carefull with the float/double/integer conversions here..
-				p.T = T * 1E12;
-				p.time = (1024LL * CurrentFrameID + rawEvent.tCoarse) * p.T;
-				p.timeEnd = (1024LL * CurrentFrameID + rawEvent.eCoarse) * p.T;
-				if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
+				long long pT = T * 1E12;
+				p.time = (1024LL * CurrentFrameID + rawEvent.tCoarse) * pT;
+				p.timeEnd = (1024LL * CurrentFrameID + rawEvent.eCoarse) * pT;
+				if((p.timeEnd - p.time) < -256*pT) p.timeEnd += (1024LL * pT);
 				p.channelID = rawEvent.channelID;
 				p.channelIdleTime = rawEvent.channelIdleTime;
-				p.region = rawEvent.channelID / 16;
-				p.feType = RawPulse::TOFPET;
+				p.feType = RawHit::TOFPET;
 				p.d.tofpet.tac = rawEvent.tac;
 				p.d.tofpet.tcoarse = rawEvent.tCoarse;
 				p.d.tofpet.ecoarse = rawEvent.eCoarse;
@@ -148,11 +147,11 @@ void RawReaderE::run()
 				fread(&rawEvent2, sizeof(RawSTICv3), 1, dataFile);
 				
 				if(outBuffer == NULL) {
-					  outBuffer = new EventBuffer<RawPulse>(outBlockSize, NULL);
+					  outBuffer = new EventBuffer<RawHit>(outBlockSize, NULL);
 				}
 				
 				
-				RawPulse &p = outBuffer->getWriteSlot();
+				RawHit &p = outBuffer->getWriteSlot();
 			
 				//long long clocksElapsed = CurrentFrameID *1024*4ULL;
 				long long clocksElapsed = (CurrentFrameID%256) *1024*4ULL;	// Periodic reset every 256 frames
@@ -175,15 +174,15 @@ void RawReaderE::run()
 				//printf("tCoarse: %6lu %6lu\n", rawEvent2.tCoarse, tCoarse);
 
 			
-				p.T = T * 1E12;
-				p.time = 1024LL * CurrentFrameID * p.T + tCoarse * p.T/4;
-				p.timeEnd = 1024LL * CurrentFrameID * p.T + eCoarse * p.T/4;
-				if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
+				long long pT = T * 1E12;
+				p.time = 1024LL * CurrentFrameID * pT + tCoarse * pT/4;
+				p.timeEnd = 1024LL * CurrentFrameID * pT + eCoarse * pT/4;
+				if((p.timeEnd - p.time) < -256*pT) p.timeEnd += (1024LL * pT);
 				p.channelID = rawEvent2.channelID;
 				p.channelIdleTime = rawEvent2.channelIdleTime;
 				
 				
-				p.feType = RawPulse::STIC;
+				p.feType = RawHit::STIC;
 				p.d.stic.tcoarse = rawEvent2.tCoarse;
 				p.d.stic.ecoarse = rawEvent2.eCoarse;
 				p.d.stic.tfine =  rawEvent2.tFine;
@@ -333,14 +332,15 @@ void RawWriterE::closeStep()
 	fflush(outputIndexFile);
 }
 
-u_int32_t RawWriterE::addEventBuffer(long long tMin, long long tMax, EventBuffer<RawPulse> *inBuffer)
+u_int32_t RawWriterE::addEventBuffer(long long tMin, long long tMax, EventBuffer<RawHit> *inBuffer)
 {
 	u_int32_t lSingleRead = 0;
 	unsigned N = inBuffer->getSize();
 	for(unsigned i = 0; i < N; i++) {
-		RawPulse &p = inBuffer->get(i);
+		RawHit &p = inBuffer->get(i);
 		if((p.time < tMin) || (p.time >= tMax)) continue;
-		uint64_t frameID = p.time / (1024L * p.T);
+		long long T = SYSTEM_PERIOD * 1E12;
+		uint64_t frameID = p.time / (1024L * T);
 
 		if(frameID > currentFrameID){
 			DAQ::ENDOTOFPET::FrameHeader FrHeaderOut = {
@@ -352,7 +352,7 @@ u_int32_t RawWriterE::addEventBuffer(long long tMin, long long tMax, EventBuffer
 			currentFrameID=frameID;
 		}	
 		
-		if (p.feType == RawPulse::TOFPET) {
+		if (p.feType == RawHit::TOFPET) {
 				DAQ::ENDOTOFPET::RawTOFPET eventOut = {
 				0x02,
 				p.d.tofpet.tac,
@@ -368,7 +368,7 @@ u_int32_t RawWriterE::addEventBuffer(long long tMin, long long tMax, EventBuffer
 			fwrite(&eventOut, sizeof(eventOut), 1, outputDataFile);	     
 		}
 		
-		else if (p.feType == RawPulse::STIC) {					\
+		else if (p.feType == RawHit::STIC) {					\
 			DAQ::ENDOTOFPET::RawSTICv3 eventOut = {
 				0x03,
 				p.channelID,

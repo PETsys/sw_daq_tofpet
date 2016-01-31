@@ -12,11 +12,11 @@ namespace DAQ { namespace TOFPET {
 	using namespace DAQ::Common;
 	using namespace DAQ::Core;
 	
-	class P2Extract : public OverlappedEventHandler<RawPulse, Pulse> {
+	class P2Extract : public OverlappedEventHandler<RawHit, Hit> {
 	public:
-		P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTolerance, float eDenormalTolerance, bool killDenormal, EventSink<Pulse> *sink);
+		P2Extract(DAQ::TOFPET::P2 *lut, bool killZeroToT, float tDenormalTolerance, float eDenormalTolerance, bool killDenormal, EventSink<Hit> *sink);
 		
-		bool handleEvent(RawPulse &raw, Pulse &Pulse);
+		bool handleEvent(RawHit &raw, Hit &Hit);
 
 		virtual void report();
 
@@ -24,7 +24,7 @@ namespace DAQ { namespace TOFPET {
 
 	protected:
   
-		virtual EventBuffer<Pulse> * handleEvents (EventBuffer<RawPulse> *inBuffer); 
+		virtual EventBuffer<Hit> * handleEvents (EventBuffer<RawHit> *inBuffer); 
 	
 		  
 
