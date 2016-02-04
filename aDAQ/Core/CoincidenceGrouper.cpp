@@ -37,6 +37,7 @@ EventBuffer<Coincidence> * CoincidenceGrouper::handleEvents(EventBuffer<GammaPho
 		
 		for(unsigned j = i+1; j < nEvents; j++) {
 			GammaPhoton &photon2 = inBuffer->get(j);			
+			if(photon2.time < tMin || photon2.time >= tMax) continue;
 			if ((photon2.time - photon1.time) > (overlap + cWindow)) break;
 						
 			if(photon1.region == photon2.region) continue;

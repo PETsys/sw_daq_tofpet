@@ -34,7 +34,10 @@ EventBuffer<Hit> * CrystalPositions::handleEvents (EventBuffer<Hit> *inBuffer)
 		SystemInformation::ChannelInformation &channelInformation = systemInformation->getChannelInformation(id);
 		
 		int region = channelInformation.region;
-		if(region == -1) continue;
+		if(region == -1) {
+			hit.time = -1;
+			continue;
+		}
 		
 		hit.region = region;
 		hit.x = channelInformation.x;

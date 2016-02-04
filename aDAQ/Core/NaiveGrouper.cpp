@@ -67,9 +67,10 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 
 	vector<bool> taken(nEvents, false);
 	for(unsigned i = 0; i < nEvents; i++) {
-		if (taken[i]) continue;
-		
 		Hit &hit = inBuffer->get(i);
+		if(hit.time < tMin || hit.time >= tMax) continue;
+	
+		if (taken[i]) continue;
 		taken[i] = true;
 			
 		Hit * hits[maxHits];
@@ -78,10 +79,11 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 				
 		for(int j = i+1; j < nEvents; j++) {
 			Hit &hit2 = inBuffer->get(j);
-			if(taken[j]) continue;			
+			if(hit2.time < tMin || hit2.time >= tMax) continue;
+			if(taken[j]) continue;
 			
 			if(hit2.region != hit.region) continue;
-			if((hit2.time - hit.time) > (overlap + timeWindow1)) break;			
+			if((hit2.time - hit.time) > (overlap + timeWindow1)) break;
 			
 			float u = hit.x - hit2.x;
 			float v = hit.y - hit2.y;
@@ -130,8 +132,9 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		
 		
 		GammaPhoton &photon = outBuffer->getWriteSlot();
-		for(int k = 0; k < nHits; k++)
+		for(int k = 0; k < nHits; k++) {
 			photon.hits[k] = hits[k];
+		}
 		
 		photon.nHits = nHits;		
 		photon.region = photon.hits[0]->region;
@@ -140,7 +143,7 @@ EventBuffer<GammaPhoton> * NaiveGrouper::handleEvents(EventBuffer<Hit> *inBuffer
 		photon.y = photon.hits[0]->y;		
 		photon.z = photon.hits[0]->z;		
 		photon.energy = photon.hits[0]->energy;
-		
+
 		if(photon.energy < minEnergy) {
 			lPhotonsLowEnergy += 1;			
 			continue;
