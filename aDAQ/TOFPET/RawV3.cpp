@@ -116,7 +116,7 @@ void RawReaderV3::run()
 			p.time = (1024LL * frameID + tCoarse) * pT;
 			p.timeEnd = (1024LL * frameID + eCoarse) * pT;
 			if((p.timeEnd - p.time) < -256*pT) p.timeEnd += (1024LL * pT);
-			p.channelID = (64 * asicID) + channelID;
+			p.channelID = ((64 * asicID) + channelID) % SYSTEM_NCHANNELS; // Truncate channel ID to software limit
 			p.channelIdleTime = channelIdleTime;
 			p.feType = RawHit::TOFPET;
 			p.d.tofpet.tac = tacID;
