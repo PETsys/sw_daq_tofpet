@@ -867,14 +867,16 @@ class ATB:
 		for i in range(16): # Apply the ALL_OFF configuration to all chips in FEB/D
 			self.sendCommand(portID, slaveID, 0x00, bytearray([0x01, i]))
 			self.sendCommand(portID, slaveID, 0x00, bytearray([0x01, i]))
-#			readBackData = self.readConfigSTICv3(portID, slaveID)
-#
-#
-#			nBytesToCompare = min(len(allOff.data), len(readBackData))
-#			if readBackData[0:nBytesToCompare] != allOff.data[0:nBytesToCompare]:
-#				print "Config mismatch for P%02d S%02d A%02d" % (portID, slaveID, i)
-#				print "Wrote ", [ "%02x" % ord(x) for x in allOff.data[0:nBytesToCompare]]
-#				print "Read  ", [ "%02x" % ord(x) for x in readBackData[0:nBytesToCompare]]
+			readBackData = self.readConfigSTICv3(portID, slaveID)
+
+
+			nBytesToCompare = min(len(allOff.data), len(readBackData))
+			readBackData[nBytesToCompare-1]=readBackData[nBytesToCompare-1] & 0x01
+
+			if readBackData[0:nBytesToCompare] != allOff.data[0:nBytesToCompare]:
+				print "Config mismatch for P%02d S%02d A%02d" % (portID, slaveID, i)
+				print "Wrote ", [ "%02x" % ord(x) for x in allOff.data[0:nBytesToCompare]]
+				print "Read  ", [ "%02x" % ord(x) for x in str(readBackData[0:nBytesToCompare])]
 
 			sleep(0.010)
 
@@ -1244,7 +1246,7 @@ class ATB:
 		return None
 
 	## \internal
-        def readConfigSTICv3(self):
+        def readConfigSTICv3(self, portID, slaveID):
 
 		# Some padding
 		#data = data + "\x00\x00\x00"
@@ -1253,7 +1255,7 @@ class ATB:
                 for i in range(0, 146):
 			msb = (memAddr >> 8) & 0xFF
 			lsb = memAddr & 0xFF
-			return_data=self.sendCommand(0, 0, 0x00, bytearray([0x02, msb, lsb]))
+			return_data=self.sendCommand(portID, slaveID, 0x00, bytearray([0x02, msb, lsb]))
 			#print [hex(x) for x in return_data[2:6]]
 
 			data = data+return_data[2:6];
