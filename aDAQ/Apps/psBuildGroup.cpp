@@ -40,7 +40,7 @@ void displayHelp(char *program)
 	"\npositional arguments:\n"
 	"  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n"
 	"  rawfiles_prefix \t\t Raw data files prefix\n"
-	"  output_file_prefix \t\t Output file containing coincidence event data (extensions .root or/and .list will be created automatically)\n"
+	"  output_file \t\t Output file containing coincidence event data\n"
 	);
 }
 
@@ -98,7 +98,7 @@ class EventWriter : public OverlappedEventHandler<GammaPhoton, GammaPhoton> {
 					
 					fwrite(&eo, sizeof(eo), 1, dataFile);
 					
-					}
+				}
 			}
 			
 			return inBuffer;
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Empty input file, bailing out\n");
 		return 1;
 	}
-	
+	eventsEnd=194522323/10;
 	FILE * dataFile = fopen(outputFilePrefix, "wb");
 	if(dataFile == NULL) {
 		int e = errno;
