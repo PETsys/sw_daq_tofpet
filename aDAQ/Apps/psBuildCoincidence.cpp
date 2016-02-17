@@ -22,12 +22,12 @@ using namespace DAQ::Common;
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file_prefix\n", program);
+	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 }
 
 void displayHelp(char *program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file_prefix\n", program);
+	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
 	fprintf(stderr, 
 	
 	"\noptional arguments:\n"
