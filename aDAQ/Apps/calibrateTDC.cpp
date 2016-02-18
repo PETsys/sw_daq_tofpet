@@ -121,7 +121,7 @@ static double aperiodicF1 (double x, double x0, double b, double m)
 }
 static Double_t periodicF1 (Double_t *xx, Double_t *pp)
 {
-	float x = fmod(4.0 + xx[0] - pp[0], 2.0);	
+	float x = fmod(1024.0 + xx[0] - pp[0], 2.0);	
 	return pp[1] + pp[2]*2 - pp[2]*x;
 }
 
@@ -142,7 +142,7 @@ static Double_t periodicF2 (Double_t *xx, Double_t *pp)
 	double m = pp[2];
 	double p2 = pp[3];
 	
-	double tQ = 3 - fmod(4.0 + tDelay - tEdge, 2.0);
+	double tQ = 3 - fmod(1024.0 + tDelay - tEdge, 2.0);
 	double tFine = m * (tQ - tB) + p2 * (tQ - tB) * (tQ - tB);
 	return tFine;
 }
@@ -151,7 +151,7 @@ static const int nPar3 = 4;
 const char *paramNames3[nPar3] = { "x0", "b", "m", "p2" };
 static Double_t periodicF3 (Double_t *xx, Double_t *pp)
 {
-	double x = fmod(4.0 + xx[0] - pp[0], 2.0);	
+	double x = fmod(1024.0 + xx[0] - pp[0], 2.0);	
 	return  pp[1] + pp[2]*x + pp[3]*x*x;
 }
 static Double_t aperiodicF3 (double x, double x0, double b, double m, double p2)
@@ -559,7 +559,9 @@ int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *t
 					} while((currChi2 <= 0.95*prevChi2) && (nTry < 10) && (estimatedT0 < upperT0));
 					
 					if(prevChi2 > 1E6) {
-						fprintf(stderr, "WARNING: No or very bad fit. Skipping TAC.\n");
+						fprintf(stderr, "WARNING: NO FIT OR VERY BAD FIT. Skipping TAC. (A: %4d %2d %d %c)\n",
+							asic, channel, tac, isT  ? 'T' : 'E'
+						);
 						delete pf;
 						continue;
 					}
@@ -597,14 +599,17 @@ int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *t
 					
 					
 					if(prevChi2 > 1E6) {
-						fprintf(stderr, "WARNING: No or very bad fit. Skipping TAC.\n");
+						fprintf(stderr, "WARNING: NO FIT OR VERY BAD FIT. Skipping TAC. (A: %4d %2d %d %c)\n",
+							asic, channel, tac, isT  ? 'T' : 'E'
+						);
 						delete pf;
 						delete pf2;
 						continue;
 					}
 					if(prevChi2 > 10) {						
-						fprintf(stderr, "WARNING: BAD FIT\n");
-						
+						fprintf(stderr, "WARNING: Poor fit. (A: %4d %2d %d %c)\n",
+							asic, channel, tac, isT  ? 'T' : 'E'
+						);
 					}
 					
 					ti.shape.tEdge = tEdge = pf2->GetParameter(0);
@@ -656,7 +661,7 @@ int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *t
 					}
 					// We use the same delay for all (ASIC, TAC, branch) combinations for a given channel
 					float x = hTPoint->GetBinContent(channel + 1);
-					float tQ = 3 - fmod(4.0 + x - ti.shape.tEdge, 2.0);
+					float tQ = 3 - fmod(1024.0 + x - ti.shape.tEdge, 2.0);
 					
 					char hName[128];
 					sprintf(hName, isT ? "htFineB_%03d_%02d_%1d" : "heFineB_%03d_%02d_%1d", asic, channel, tac);
@@ -668,18 +673,43 @@ int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *t
 					sprintf(hName, isT ? "C%03d_%02d_%d_B_T_pFine_X" : "C%03d_%02d_%d_B_E_pFine_X", asic, channel, tac);
 					TProfile *pB_Fine = hB_Fine->ProfileX(hName, 1, -1, "s");
 					
+					int nBinsX = hB_Fine->GetXaxis()->GetNbins();
+					float xMin = hB_Fine->GetXaxis()->GetXmin();
+					float xMax = hB_Fine->GetXaxis()->GetXmax();
+					
+					TF1 *pl1 = new TF1("pl1", "[0]+[1]*x", xMin, xMax);		
+					pl1->SetParameter(0, 200);
+					pl1->SetParameter(1, 0.01);
+					pl1->SetParLimits(0, 0, 1024);
+					pl1->SetParLimits(1, -1.0, 1.0);
+					pl1->SetNpx(256 * (xMax - xMin));
+					
 					int nTry = 0;
 					while(nTry < 10){
-						pB_Fine->Fit("pol1", "Q");
-						TF1 *fit = pB_Fine->GetFunction("pol1");
+						pB_Fine->Fit("pl1", "Q");
+						TF1 *fit = pB_Fine->GetFunction("pl1");
 						if(fit == NULL) break;
 						float chi2 = fit->GetChisquare();
 						float ndf = fit->GetNDF();
 						if(chi2/ndf < 2.0) break;
 						nTry += 1;
 					}
-					TF1 *fit = pB_Fine->GetFunction("pol1");
-					if(fit == NULL) continue;
+					
+					
+					TF1 *fit = pB_Fine->GetFunction("pl1");
+					if(fit == NULL) {
+						fprintf(stderr, "WARNING: NO FIT! Skipping TAC. (B: %4d %2d %d %c)\n",
+							asic, channel, tac, isT  ? 'T' : 'E'
+						);
+						continue;
+					}
+					float chi2 = fit->GetChisquare();
+					float ndf = fit->GetNDF();
+					if(chi2/ndf > 10.0) {
+						fprintf(stderr, "WARNING: Poor fit! (B: %4d %2d %d %c)\n",
+							asic, channel, tac, isT  ? 'T' : 'E'
+						);
+					}
 					
 					ti.leakage.tQ = tQ;
 					ti.leakage.a0 = fit->GetParameter(0);
@@ -688,10 +718,7 @@ int calibrate(int start, int end, TFile *tDataFile, TFile *eDataFile, TacInfo *t
 					
 					myP2.setLeakageParameters((64 * asic + channel), tac, isT, ti.leakage.tQ, ti.leakage.a0, ti.leakage.a1, ti.leakage.a2);
 
-					int nBinsX = hB_Fine->GetXaxis()->GetNbins();
-					float xMin = hB_Fine->GetXaxis()->GetXmin();
-					float xMax = hB_Fine->GetXaxis()->GetXmax();
-					
+				
 					sprintf(hName, isT ? "C%03d_%02d_%d_B_T_control_pADC_E" : "C%03d_%02d_%d_B_E_control_pADC_E", 
 							asic, channel, tac);
 					ti.pB_ControlADC_E = new TProfile(hName, hName, nBinsX, xMin, xMax, "s");
@@ -806,7 +833,7 @@ void qualityControl(int start, int end, TFile *tDataFile, TFile *eDataFile, TacI
 				//TF1 * f = ti.pA_Fine->GetFunction("periodicF2");
 
 				float t = fStep2;				
-				float t_ = fmod(4.0 + t - ti.shape.tEdge, 2.0);
+				float t_ = fmod(1024.0 + t - ti.shape.tEdge, 2.0);
 				float adcEstimate = aperiodicF2(t_, 0, ti.shape.tB, ti.shape.m, ti.shape.p2);
 				
 				float adcError = fFine - adcEstimate;

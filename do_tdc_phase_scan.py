@@ -112,8 +112,6 @@ if args.asics == None:
 else:
   activeAsics= args.asics
 
-print activeAsics
-
 activeChannels = [ x for x in range(0,64) ]
 systemAsics = [ i for i in range(max(activeAsics) + 1) ]
 
@@ -128,6 +126,8 @@ for c, v in enumerate(atbConfig.hvBias):
 
 uut.config = atbConfig
 uut.config.writeParams(args.OutputFilePrefix, args.comments)
+
+print "Active ASICs ID: ", activeAsics
 
 for tChannel in activeChannels:
 	atbConfig = loadLocalConfig(useBaseline=False)
@@ -221,65 +221,51 @@ for tChannel in activeChannels:
 		print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
 
 	rootData1.write()
-	#continue
 	
-	edgesX = [ -1.0 for x in systemAsics ]
-	print activeAsics
-	for n in activeAsics:
-
-		minADCY = 1024
-		minADCX = 0
-		minADCJ = 0
-                minADCE = 1E6
-
-		h = hTFine[n][0]
-		p =  h.ProfileX(h.GetName()+"_px", 1, -1, "s")
-	
-		for j in range(1, nBins+1):
-			y = p.GetBinContent(j);
-			e = p.GetBinError(j);
-			x = p.GetBinCenter(j)
-			nc = p.GetBinEntries(j);
-			#print  "PREV", minADCJ, minADCX, minADCY
-			#print  "CURR", nc, j, x, y, e
-
-			if nc < minEventsA/(10*len(activeAsics)) : continue # not enough events
-			if x < 1.0: continue # too early
-			if e < 0.10: continue # yeah, righ!
-			if e > 2.0: continue # too noisy
-                        if y < 0.5 * nominal_m: continue; # out of range
-
-			if y < minADCY:
-				minADCY = y
-				minADCJ = j
-				minADCX = x
-                                minADCE = e
-
-		if minADCJ == 0: 
-			print "Min point not found for ASIC %d" % n
-			continue
+	histograms = [ hTFine[n][tac] for n in activeAsics for tac in range(4) ]
+	if tdcaMode:
+		histograms = [ hEFine[n][tac] for n in activeAsics for tac in range(4) ]
 		
-		print "ASIC %d Found min ADC point at %f, %f with RMS %f" % (n, minADCX, minADCY, minADCE)
-		while minADCX > 2.0: minADCX -= 2.0
-		edgesX[n] = minADCX
+	profiles = [ h.ProfileX(h.GetName()+"_px", 1, -1, "s") for h in histograms ]
+	
+	maxE = 2.0
+	minE = 0.1
+	minList = [ 1024 for j in range(0, nBins+1) ]
+	for j in range(1, nBins):
+		try:		
+			errors = [ p.GetBinError(i) for p in profiles for i in range(j-1, j+1) ]
+			maxADC = max([p.GetBinContent(j) for p in profiles if min(errors) > minE and max(errors) < maxE ])
+			minList[j] = maxADC			
+		except ValueError as e:
+			pass
 
-	edgesX = [x for x in edgesX if x >= 0 ]
-	if edgesX == []: continue # Didn't find edges for any ASIC
-
+	minList2 = [v for v in minList]
+	for j in range(1, nBins):
+		minList2[j] = max(minList[j-1:j+1])
+		
+	minADC = min(minList2)
+	if minADC == 1024: continue # Could not find a suitable point for any channel	
+	minADCJ = minList.index(minADC)
+	
 	
 	intervals = [ x for x in range(frameInterval, 1000, 40) ]
 	nIntervals = len(intervals)
 
 	hTFine = [[ ROOT.TH2F("htFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1024) for tac in range(4) ] for tAsic in systemAsics ]
 	hEFine = [[ ROOT.TH2F("heFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1014) for tac in range(4) ] for tAsic in systemAsics ]
+	
+	
+	minADCX = profiles[0].GetBinCenter(minADCJ)
+	while minADCX > 2.0: minADCX -= 2.0
 
-
-	for nStep, stepDelta in enumerate([-0.35]): # Pick points for the scan from the edge
-		x = min(edgesX) + stepDelta
-		while x < 0: x += 2.0
-		phaseStep = sumProfile.FindBin(x) * K 
+	profiles = profiles[::4] # Get only profiles for TAC 0
+	for nStep, x in enumerate([minADCX]): # Old code from where we scanned multiple steps
+		j = profiles[0].FindBin(x)
+		phaseStep = (j - 1) * K
 		step2 = float(phaseStep)/M + binWidth/2
-		#print minADCX, nStep, stepDelta, phaseStep, step2
+		print "Phase selection: %5.4f clk" % (step2)
+		for i, n in enumerate(activeAsics):
+			print "ASIC %4d Channnel %d TAC 0 T ADC value is %5.1f mean %3.3f RMS" % (n, tChannel, profiles[i].GetBinContent(j), profiles[i].GetBinError(j))
 
 		if nStep == 0:
 			hTPoint.SetBinContent(tChannel+1, step2);

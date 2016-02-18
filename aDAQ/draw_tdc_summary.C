@@ -28,7 +28,7 @@
 			Double_t max_y = hT->GetBinContent(max_i);
 			mygauss->SetParameter(0, max_y);	mygauss->SetParLimits(0, max_y*0.80, max_y*1.20);
 			mygauss->SetParameter(1, max_t);	mygauss->SetParLimits(1, max_t-0.1, max_t+0.1);
-			mygauss->SetParameter(2, 1.0/128);	mygauss->SetParLimits(2, 1.0/256, 1.0);
+			mygauss->SetParameter(2, hT->GetRMS());	mygauss->SetParLimits(2, 0.001, 5.0);
 			hT->Fit("mygauss", "", "", -0.5, 0.5);
 			
 			TF1 * gaussianFit = hT->GetFunction("mygauss");
@@ -67,7 +67,6 @@
 	hCounts->GetXaxis()->SetTitle("Channel");
 	hCounts->Draw();
 	
-	
 	c = new TCanvas();
 	TGraphErrors *gSummary = new TGraphErrors(128);
 	TH1 * hSummary = new TH1F("summary2", "summary", 1000, 0, 500E-12);
@@ -93,9 +92,9 @@
 			Int_t max_i = hT->GetMaximumBin();
 			Double_t max_t = hT->GetBinCenter(max_i);
 			Double_t max_y = hT->GetBinContent(max_i);
-			mygauss->SetParameter(0, max_y);	mygauss->SetParLimits(0, max_y*0.80, max_y*1.20);
+			mygauss->SetParameter(0, max_y);	mygauss->SetParLimits(0, max_y*0.50, max_y*1.50);
 			mygauss->SetParameter(1, max_t);	mygauss->SetParLimits(1, max_t-0.1, max_t+0.1);
-			mygauss->SetParameter(2, 1.0/128);	mygauss->SetParLimits(2, 1.0/256, 1.0);
+			mygauss->SetParameter(2, hT->GetRMS());	mygauss->SetParLimits(2, 0.001, 5.0);
 			hT->Fit("mygauss", "", "", -0.5, 0.5);
 
 			TF1 * gaussianFit = hT->GetFunction("mygauss");
@@ -121,7 +120,7 @@
 				sprintf(hName, "C%03d_%02d_%d_B_T_pFine_X", asic, channel, tac);
 				TProfile *p = (TProfile *)_file0->Get(hName);
 				if(p == NULL) continue;
-				TF1 *f = p->GetFunction("pol1");
+				TF1 *f = p->GetFunction("pl1");
 				if(f == NULL) continue;
 				Float_t leakage = f->GetParameter(1) / (4*6.4) * 1000; // in ADC/ms
 				gLeakage->SetPoint(nPoints, (64*asic + channel)%128 + 0.25*tac, leakage);
@@ -131,7 +130,7 @@
 		}
 	}
 				
-	
+
 	c->Close();
 	c = new TCanvas();
 	c->Divide(2,2);
@@ -159,5 +158,5 @@
 	gLeakage->GetXaxis()->SetRangeUser(0, 128);
 	gLeakage->GetYaxis()->SetRangeUser(0, 10);	
 	gLeakage->Draw("AL");
-	
+
 }
