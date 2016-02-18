@@ -46,23 +46,6 @@ void displayHelp(char *program)
 	);
 }
 
-struct Event {
-	uint8_t mh_n1; 
-	uint8_t mh_j1;
-	long long time1;
-	float e1;
-	int id1;
-
-	
-	uint8_t mh_n2; 
-	uint8_t mh_j2;
-	long long time2;
-	float e2;
-	int id2;
-
-};
-
-
 class EventWriter : public OverlappedEventHandler<Coincidence, Coincidence> {
 	private:
 		FILE *dataFile;
