@@ -230,21 +230,40 @@ for tChannel in activeChannels:
 	
 	maxE = 2.0
 	minE = 0.1
+
+	# Build a list of profiles, excluding cases which don't have
+	# acceptable error levels to start with
+	profiles2 = []
+	for p in profiles:
+		errors =  [ p.GetBinError(j) for j in range(1, nBins) ]
+		errorOK = [ e for e in errors if e > minE and e < maxE ]
+		ratio = float(len(errorOK)) / len(errors)
+		if ratio > 0.90:
+			profiles2.append(p)
+
+	# For each phase, find the largest ADC value among all (channel,tac)
+	# among those channels with acceptable error values
 	minList = [ 1024 for j in range(0, nBins+1) ]
 	for j in range(1, nBins):
-		try:		
-			errors = [ p.GetBinError(i) for p in profiles for i in range(j-1, j+1) ]
-			maxADC = max([p.GetBinContent(j) for p in profiles if min(errors) > minE and max(errors) < maxE ])
+		# Consider neighboor phase's errors too
+		errors = [ p.GetBinError(i) for p in profiles2 for i in range(j-1, j+1) ]
+		# Get max ADC value for this phase among all the considered (channel,tac)(channel,tac)(channel,tac)(channel,tac)
+		maxADC = max([p.GetBinContent(j) for p in profiles2 ])
+		if min(errors) > minE and max(errors) < maxE:
 			minList[j] = maxADC			
-		except ValueError as e:
-			pass
 
+	# Find the lowest ADC point
+	# Look into neighbour phases for safety margin too
 	minList2 = [v for v in minList]
 	for j in range(1, nBins):
 		minList2[j] = max(minList[j-1:j+1])
 		
 	minADC = min(minList2)
-	if minADC == 1024: continue # Could not find a suitable point for any channel	
+	if minADC == 1024:
+		# Could not find a suitable point for any channel
+		print "Error: Could not find a suitable phase for leakage scan"
+		break
+
 	minADCJ = minList.index(minADC)
 	
 	
