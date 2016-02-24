@@ -808,6 +808,8 @@ class ATB:
 		# Send a 64K clock long reset
 		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0xFF, 0xFF]))
 		sleep(0.120 + 64*self.__frameLength)	# Need to wait for at least 100 ms, plus the reset time
+		# Reset the ASIC config cache, as we've just reset the ASICs too
+		self.__asicConfigCache = {}
 		# Read the number of ASIC data links expected by this FEB/D
 		# and generate a suitable default global configuration
 		nLinks = self.readFEBDConfig(portID, slaveID, 0, 1)
