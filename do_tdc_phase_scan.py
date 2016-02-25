@@ -26,6 +26,8 @@ parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp'], 
 
 parser.add_argument('--tpDAC', type=int, default=0, help='The amplitude of the test pulse in DAC units (Default is 32 ). When running in fetp mode, this value needs to be set')
 
+parser.add_argument('--writeAtStep', default=False, action='store_true', help='Write ROOT file at intermediate steps')
+
 parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
 
 
@@ -138,25 +140,15 @@ for tChannel in activeChannels:
 	for tAsic in activeAsics:
 		# Overwrite test channel config
 		atbConfig.asicConfig[tAsic].globalConfig.setValue("test_pulse_en", 1)
-		#tChannelConfig = atbConfig.asicConfig[tAsic].channelConfig[tChannel]
-		#tChannelTConfig = atbConfig.asicConfig[tAsic].channelTConfig[tChannel]
-		#atbConfig.asicConfig[tAsic].channelConfig[tChannel].setValue("fe_test_mode", 1)
 		if tdcaMode:
-			
-			# Both TDC branches
 			atbConfig.asicConfig[tAsic].channelConfig[tChannel][52-47:52-42+1] = bitarray("11" + "11" + "1" + "1") 
-			
-			# TDC E branch only
-			#atbConfig.asicConfig[tAsic].channelConfig[tChannel][52-47:52-42+1] = bitarray("11" + "01" + "1" + "1") 
+
 		else:				
 			atbConfig.asicConfig[tAsic].channelTConfig[tChannel] = bitarray('1')
 			atbConfig.asicConfig[tAsic].globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
 
-	uut.stop()
 	uut.config = atbConfig
 	uut.uploadConfig()
-	uut.start()
-	uut.doSync()
 
 
 	nBins = int(Nmax * M / K)
@@ -185,10 +177,7 @@ for tChannel in activeChannels:
 			tpFinePhase = phaseStep % M
 
 		uut.setTestPulsePLL(tpLength, frameInterval, tpFinePhase, pulseLow)
-		#uut.start(2)
 		uut.doSync()
-		#uut.start(1)
-		t0 = time()
 		
 		print "Channel %02d acquiring %1.4f (%d)  @ %d" % (tChannel, step2, phaseStep, frameInterval)
 
@@ -220,7 +209,8 @@ for tChannel in activeChannels:
 		print "Got %(nReceivedFrames)d frames" % locals()
 		print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
 
-	rootData1.write()
+	if args.writeAtStep:
+		rootData1.write()
 	
 	histograms = [ hTFine[n][tac] for n in activeAsics for tac in range(4) ]
 	if tdcaMode:
@@ -311,7 +301,6 @@ for tChannel in activeChannels:
 			
 			print "Channel %02d acquiring %1.4f (%d) @ %d" % (tChannel, step2, tpFinePhase, interval)
 
-			#uut.start(1)
 			nReceivedEvents = 0
 			nAcceptedEvents = 0
 			nReceivedFrames = 0
@@ -351,15 +340,10 @@ for tChannel in activeChannels:
 					
 			print "Got %(nReceivedFrames)d frames" % locals()
 			print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
-			#uut.start(2)
 
-		uut.setTestPulseNone()
-		uut.doSync()
 
+	if args.writeAtStep:
 		rootData2.write()
-
-
-
 
 rootData1.close()
 rootData2.close()
