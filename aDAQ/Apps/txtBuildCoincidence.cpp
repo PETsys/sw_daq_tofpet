@@ -84,7 +84,7 @@ class EventWriter : public OverlappedEventHandler<Coincidence, Coincidence> {
 					Hit &h1 = *p1.hits[m];
 					Hit &h2 = *p2.hits[n];
 
-					fprintf(dataFile, "%u\t%u\t%u\t%u\t%u\t%f\t%f\t %u\t%f\t%f\t%f\t%f\t%lld\t%lld\n",
+					fprintf(dataFile, "%u\t%u\t%u\t%u\t%u\t%f\t%f\t%u\t%f\t%f\t%f\t%f\t%lld\t%lld\n",
 						p1.nHits, m, p2.nHits, n,
 						h1.raw->channelID, h1.x, h1.y,
 						h2.raw->channelID, h2.x, h2.y,
