@@ -31,7 +31,8 @@
 #include <boost/tuple/tuple.hpp>
 #include <boost/random.hpp>
 #include <boost/nondet_random.hpp>
-
+#include <fcntl.h>
+#include <sys/stat.h>
 
 static const int MAX_N_ASIC = DAQ::Common::SYSTEM_NCHANNELS / 64;
 static const float ErrorHistogramRange = 0.5;
@@ -345,14 +346,15 @@ int main(int argc, char *argv[])
 				int asicStart = list[n].get<1>();
 				int asicEnd = list[n].get<2>();
 
-				//sprintf(fName, "%s_%d_%s.tmp", tableFileNamePrefix, fileID, isLinearity ? "linearity" : "leakage");
-				sprintf(fName,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
-				FILE *linearityDataFile = fopen(fName, "rb");
+				char fNameA[1024];
+				sprintf(fNameA,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
+				FILE *linearityDataFile = fopen(fNameA, "rb");
 				if(linearityDataFile == NULL) 
 					exit(1);
 
-				sprintf(fName,"%s_%d_leakage.tmp", tableFileNamePrefix, fileID);				
-				FILE *leakageDataFile = fopen(fName, "rb");
+				char fNameB[1024];
+				sprintf(fNameB,"%s_%d_leakage.tmp", tableFileNamePrefix, fileID);				
+				FILE *leakageDataFile = fopen(fNameB, "rb");
 				if(leakageDataFile == NULL) 
 					exit(1);
 				
@@ -399,6 +401,21 @@ int main(int argc, char *argv[])
 				
 				fclose(linearityDataFile);
 				fclose(leakageDataFile);
+				
+				// Re-open the temporary data files and use fadvise to drop them from OS cache
+				// in order not to polute it too much
+				int fd;
+				fd = open(fNameA, O_RDONLY);
+				if(fd != -1) {
+					posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+					close(fd);
+				}
+				fd = open(fNameB, O_RDONLY);
+				if(fd != -1) {
+					posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+					close(fd);
+				}
+				
 				exit(0);
 			} 
 			else {
