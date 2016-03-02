@@ -8,7 +8,7 @@
 	mygauss->SetParNames("C", "\mu", "\sigma");
 
 	Int_t nPoints = 0;
-	for(Int_t asic = 0; asic < 64; asic += 1) {
+	for(Int_t asic = 0; asic < 128; asic += 1) {
 		for(Int_t channel = 0; channel < 64; channel+= 1) {
 			
 			char hName[128];
@@ -75,7 +75,7 @@
 
 	
 	nPoints = 0;
-	for(Int_t asic = 0; asic < 64; asic += 1) {
+	for(Int_t asic = 0; asic < 128; asic += 1) {
 		for(Int_t channel = 0; channel < 64; channel+= 1) {
 			
 			char hName[128];
@@ -114,7 +114,7 @@
 	}
 	
 	nPoints = 0;
-	for(Int_t asic = 0; asic < 64; asic += 1) {
+	for(Int_t asic = 0; asic < 128; asic += 1) {
 		for(Int_t channel = 0; channel < 64; channel+= 1) {
 			for (Int_t tac = 0; tac < 4; tac += 1) {
 				sprintf(hName, "C%03d_%02d_%d_B_T_pFine_X", asic, channel, tac);
