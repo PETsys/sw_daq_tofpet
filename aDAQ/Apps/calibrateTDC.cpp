@@ -33,11 +33,7 @@
 #include <boost/nondet_random.hpp>
 
 
-static const int nASIC = DAQ::Common::SYSTEM_NCHANNELS / 64;
-static const int nAsicPerCPU = 2;
-static const int nAsicPerBoard = 2;
-static const int nBoards = nASIC/nAsicPerCPU;
-static const int nTAC = nASIC*64*2*4;
+static const int MAX_N_ASIC = DAQ::Common::SYSTEM_NCHANNELS / 64;
 static const float ErrorHistogramRange = 0.5;
 
 
@@ -241,7 +237,7 @@ int main(int argc, char *argv[])
 			nAsicsPerFile = atoi(optarg);
 		
 		else if(optionIndex==0 && strcmp (optarg,"ALL") == 0)
-			nAsicsPerFile = nASIC;
+			nAsicsPerFile = MAX_N_ASIC;
 		
 		else if(optionIndex==1)
 			nominalM = atof(optarg);
@@ -287,11 +283,6 @@ int main(int argc, char *argv[])
 		sortData(tDataFileName, eDataFileName, tableFileNamePrefix, nAsicsPerFile);
 	}
 
-	TacInfo *tacInfo = (TacInfo *)mmap(NULL, sizeof(TacInfo)*nTAC, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-	for(int tac = 0; tac < nTAC; tac++)
-		tacInfo[tac] = TacInfo();
-	
-	
 	char fName[1024];
 	sprintf(fName, "%s_ranges.tmp", tableFileNamePrefix);
 	FILE *rangeFile = fopen(fName, "r");
@@ -326,6 +317,13 @@ int main(int argc, char *argv[])
 	while(fscanf(listFile, "%d %d %d\n", &fileID, &asicStart, &asicEnd) == 3) {
 		list.push_back(boost::tuple<int, int, int>(fileID, asicStart, asicEnd));
 	}
+	
+	int nChannels = asicEnd * 64;
+	int nTAC = asicEnd * 64 * 2 * 4;
+	TacInfo *tacInfo = (TacInfo *)mmap(NULL, sizeof(TacInfo)*nTAC, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+	for(int tac = 0; tac < nTAC; tac++)
+		tacInfo[tac] = TacInfo();
+	
 	
 	
 
@@ -368,7 +366,7 @@ int main(int argc, char *argv[])
 					assert(fscanf(leakagePhaseFile, "%f\n", &leakagePhasePoint[i]) == 1);
 				}
 
-				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2(DAQ::Common::SYSTEM_NCHANNELS);
+				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2((asicEnd - asicStart) * 64);
 				
 				sprintf(fName,"%s_asics%02d-%02d.tdc.root", tableFileNamePrefix, asicStart, asicEnd-1);
 				
@@ -416,7 +414,7 @@ int main(int argc, char *argv[])
 
 
 	// Copy parameters from shared memory to global P2 
-	DAQ::TOFPET::P2 myP2(DAQ::Common::SYSTEM_NCHANNELS);
+	DAQ::TOFPET::P2 myP2(nChannels);
 	for(int asic = 0; asic < asicEnd; asic++) {
 		for(int channel = 0; channel < 64; channel++) {
 			for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
@@ -497,6 +495,8 @@ int calibrate(	int asicStart, int asicEnd,
 {
 	unsigned gidStart = asicStart * 64 * 2 * 4;
 	unsigned gidEnd = asicEnd * 64 * 4 * 2;
+	unsigned nTAC = gidEnd - gidStart;
+	unsigned channelStart = asicStart * 64;
 
 	// Build the histograms
 	TH2S **hA_Fine2List = new TH2S *[nTAC];
@@ -505,8 +505,7 @@ int calibrate(	int asicStart, int asicEnd,
 		hA_Fine2List[n] = NULL;
 		pB_FineList[n] = NULL;
 	}
-	
-	
+
 	for(unsigned gid = gidStart; gid < gidEnd; gid++) {
 		unsigned tac = gid & 0x3;
 		bool isT = ((gid >> 2) & 0x1) == 0;
@@ -516,22 +515,22 @@ int calibrate(	int asicStart, int asicEnd,
 		
 		sprintf(hName, isT ? "C%03d_%02d_%d_A_T_hFine2" : "C%03d_%02d_%d_A_E_hFine2",
 			asic, channel, tac);
-		hA_Fine2List[gid] = new TH2S(hName, hName, linearityNbins, linearityRangeMinimum, linearityRangeMaximum, 1024, 0, 1024);
+		hA_Fine2List[gid-gidStart] = new TH2S(hName, hName, linearityNbins, linearityRangeMinimum, linearityRangeMaximum, 1024, 0, 1024);
 
 		sprintf(hName, isT ? "C%03d_%02d_%d_B_T_pFine_X" : "C%03d_%02d_%d_B_E_pFine_X",
 			asic, channel, tac);
-		pB_FineList[gid] = new TProfile(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum);
+		pB_FineList[gid-gidStart] = new TProfile(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum);
 	}
-	
+
 	Event *eventBuffer = new Event[READ_BUFFER_SIZE];
 	int r;
 	fseek(linearityDataFile, 0, SEEK_SET);
 	while((r = fread(eventBuffer, sizeof(Event), READ_BUFFER_SIZE, linearityDataFile)) > 0) {
 		for(int i = 0; i < r; i++) {
 			Event &event = eventBuffer[i];
-			assert(hA_Fine2List[event.gid] != NULL);
+			assert(hA_Fine2List[event.gid-gidStart] != NULL);
 			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
-			hA_Fine2List[event.gid]->Fill(event.stage, event.fine);
+			hA_Fine2List[event.gid-gidStart]->Fill(event.stage, event.fine);
 		}
 	}
 	
@@ -541,8 +540,8 @@ int calibrate(	int asicStart, int asicEnd,
 			Event &event = eventBuffer[i];
 			assert(event.gid >= gidStart);
 			assert(event.gid < gidEnd);
-			assert(pB_FineList[event.gid] != NULL);
-			pB_FineList[event.gid]->Fill(event.stage, event.fine);
+			assert(pB_FineList[event.gid-gidStart] != NULL);
+			pB_FineList[event.gid-gidStart]->Fill(event.stage, event.fine);
 		}
 	}
 	delete [] eventBuffer;
@@ -550,7 +549,6 @@ int calibrate(	int asicStart, int asicEnd,
 	boost::mt19937 generator;
 
 	int hasData = 0;
-	
 	for(unsigned gid = gidStart; gid < gidEnd; gid++) {
 		unsigned tac = gid & 0x3;
 		bool isT = ((gid >> 2) & 0x1) == 0;
@@ -562,7 +560,7 @@ int calibrate(	int asicStart, int asicEnd,
 		// and have conflitcting variable names
 		{
 		
-			TH2S *hA_Fine2 = hA_Fine2List[gid];
+			TH2S *hA_Fine2 = hA_Fine2List[gid-gidStart];
 			if(hA_Fine2 == NULL) continue;
 			if(hA_Fine2->GetEntries() == 0) continue;
 			hasData=1;
@@ -709,7 +707,7 @@ int calibrate(	int asicStart, int asicEnd,
 			}
 			
 			TF1 *pf2 = new TF1("periodicF2", periodicF2, xMin, xMax,  nPar2);		
-			pf2->SetNpx(256 * (xMax - xMin));
+			pf2->SetNpx(2*nBinsX);
 			for(int p = 0; p < nPar2; p++) pf2->SetParName(p, paramNames2[p]);
 			
 			currChi2 = INFINITY;
@@ -756,13 +754,13 @@ int calibrate(	int asicStart, int asicEnd,
 			ti.shape.p2 = p2 = pf2->GetParameter(3);
 			
 		
-			myP2.setShapeParameters((64*asic+channel), tac, isT, tB, m, p2);
-			myP2.setT0((64*asic+channel), tac, isT, tEdge);
+			myP2.setShapeParameters((64*asic+channel)-channelStart, tac, isT, tB, m, p2);
+			myP2.setT0((64*asic+channel)-channelStart, tac, isT, tEdge);
 
 			// Allocate the control histograms
 			sprintf(hName, isT ? "C%03d_%02d_%d_A_T_control_T" : "C%03d_%02d_%d_A_E_control_T", 
 					asic, channel, tac);
-			ti.pA_ControlT = new TProfile(hName, hName, nBinsX, xMin, xMax, "s");
+			ti.pA_ControlT = new TProfile(hName, hName, linearityNbins, linearityRangeMinimum, linearityRangeMaximum, "s");
 
 			sprintf(hName, isT ? "C%03d_%02d_%d_A_T_control_E" : "C%03d_%02d_%d_A_E_control_E", 
 					asic, channel, tac);
@@ -773,18 +771,17 @@ int calibrate(	int asicStart, int asicEnd,
 		}
 		
 		{
+			char hName[128];
 				
 			float x = leakagePhasePoint[gid];
 			float tQ = 3 - fmod(1024.0 + x - ti.shape.tEdge, 2.0);
 			
-			TProfile *pB_Fine = pB_FineList[gid];
+			TProfile *pB_Fine = pB_FineList[gid-gidStart];
 			assert(pB_Fine != NULL);
 			if(pB_Fine->GetEntries() == 0) {
 				continue;
 			}
-			
-			char hName[128];
-		
+				
 			int nBinsX = pB_Fine->GetXaxis()->GetNbins();
 			float xMin = pB_Fine->GetXaxis()->GetXmin();
 			float xMax = pB_Fine->GetXaxis()->GetXmax();
@@ -794,7 +791,7 @@ int calibrate(	int asicStart, int asicEnd,
 			pl1->SetParameter(1, 0.01);
 			pl1->SetParLimits(0, 0, 1024);
 			pl1->SetParLimits(1, -1.0, 1.0);
-			pl1->SetNpx(256 * (xMax - xMin));
+			pl1->SetNpx(nBinsX);
 			
 			int nTry = 0;
 			while(nTry < 10){
@@ -822,12 +819,12 @@ int calibrate(	int asicStart, int asicEnd,
 			ti.leakage.a1 = fit->GetParameter(1) / (1024 * 4);
 			ti.leakage.a2 = 0;//fit->GetParameter(2) / ((1024 * 4)*(1024*4));
 			
-			myP2.setLeakageParameters((64 * asic + channel), tac, isT, ti.leakage.tQ, ti.leakage.a0, ti.leakage.a1, ti.leakage.a2);
+			myP2.setLeakageParameters((64 * asic + channel)-channelStart, tac, isT, ti.leakage.tQ, ti.leakage.a0, ti.leakage.a1, ti.leakage.a2);
 			
 
 			sprintf(hName, isT ? "C%03d_%02d_%d_B_T_control_T" : "C%03d_%02d_%d_B_E_control_T", 
 					asic, channel, tac);
-			ti.pB_ControlT = new TProfile(hName, hName, nBinsX, xMin, xMax, "s");
+			ti.pB_ControlT = new TProfile(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum, "s");
 		
 			sprintf(hName, isT ? "C%03d_%02d_%d_B_T_control_E" : "C%03d_%02d_%d_B_E_control_E", 
 					asic, channel, tac);
@@ -852,6 +849,8 @@ void qualityControl(
 
 	unsigned gidStart = asicStart * 64 * 2 * 4;
 	unsigned gidEnd = asicEnd * 64 * 4 * 2;
+	unsigned nTAC = gidEnd - gidStart;
+	unsigned channelStart = asicStart * 64;
 
 	// Need two iterations to correct t0, then one more to build final histograms
 	for(int iter = 0; iter <= nIterations; iter++) {
@@ -885,9 +884,9 @@ void qualityControl(
 				float adcEstimate = aperiodicF2(t_, 0, ti.shape.tB, ti.shape.m, ti.shape.p2);
 				float adcError = event.fine - adcEstimate;
 
-				float tEstimate = myP2.getT(channel, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
-				float qEstimate = myP2.getQ(channel, tac, isT, event.fine, event.tacIdleTime,0);
-				bool isNormal = myP2.isNormal(channel, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
+				float tEstimate = myP2.getT(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
+				float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
+				bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
 				float tError = tEstimate - event.stage;
 	
 				if(!isNormal) continue;
@@ -922,8 +921,8 @@ void qualityControl(
 				}
 			}
 	
-			float t0 = myP2.getT0(channel, tac, isT);
-			myP2.setT0(channel, tac, isT, t0 - offset);
+			float t0 = myP2.getT0(channel-channelStart, tac, isT);
+			myP2.setT0(channel-channelStart, tac, isT, t0 - offset);
 		}
 	}
 	
@@ -947,9 +946,9 @@ void qualityControl(
 			float adcEstimate = ti.leakage.a0 + ti.leakage.a1 * event.tacIdleTime + ti.leakage.a2 * event.tacIdleTime * event.tacIdleTime;
 			float adcError = event.fine - adcEstimate;
 	
-			float tEstimate = myP2.getT(channel, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
-			float qEstimate = myP2.getQ(channel, tac, isT, event.fine, event.tacIdleTime,0);
-			bool isNormal = myP2.isNormal(channel, tac, isT, event.fine, event.coarse, event.tacIdleTime,0);
+			float tEstimate = myP2.getT(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
+			float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
+			bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime,0);
 			float tError = tEstimate - leakagePhasePoint[event.gid];
 
 			if(!isNormal) continue;
@@ -966,7 +965,8 @@ void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefi
 {
 	printf("Sorting data into temporary files...\n");
 	
-	int nOutputFiles = int(ceil(float(nASIC)/nAsicsPerFile));
+	int nOutputFiles = int(ceil(float(MAX_N_ASIC)/nAsicsPerFile));
+	int nTAC = MAX_N_ASIC * 64 * 2 * 4;
 
 	char **linearityDataFilesNames = new char *[nOutputFiles];
 	char **leakageDataFilesNames = new char *[nOutputFiles];
