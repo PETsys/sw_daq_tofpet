@@ -551,6 +551,7 @@ int calibrate(	int asicStart, int asicEnd,
 			assert(event.gid >= gidStart);
 			assert(event.gid < gidEnd);
 			assert(pB_FineList[event.gid-gidStart] != NULL);
+			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
 			pB_FineList[event.gid-gidStart]->Fill(event.stage, event.fine);
 		}
 	}
@@ -576,7 +577,7 @@ int calibrate(	int asicStart, int asicEnd,
 		
 			TH2S *hA_Fine2 = hA_Fine2List[gid-gidStart];
 			if(hA_Fine2 == NULL) continue;
-			if(hA_Fine2->GetEntries() == 0) continue;
+			if(hA_Fine2->GetEntries() < 1000) continue;
 			hasData=1;
 			char hName[128];
 		
@@ -792,7 +793,7 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			TProfile *pB_Fine = pB_FineList[gid-gidStart];
 			assert(pB_Fine != NULL);
-			if(pB_Fine->GetEntries() == 0) {
+			if(pB_Fine->GetEntries() < 100) {
 				continue;
 			}
 				
