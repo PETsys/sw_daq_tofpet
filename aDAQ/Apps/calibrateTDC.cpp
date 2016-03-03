@@ -679,7 +679,7 @@ int calibrate(	int asicStart, int asicEnd,
 		
 			TF1 *pf = new TF1("periodicF1", periodicF1, xMin, xMax, nPar1);
 			for(int p = 0; p < nPar1; p++) pf->SetParName(p, paramNames1[p]);
-			pf->SetNpx(256 * (xMax - xMin));
+			pf->SetNpx(2 * nBinsX);
 			
 			float b;
 			float m;
