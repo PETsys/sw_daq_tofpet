@@ -1,18 +1,19 @@
 #!/bin/sh
-yum -y install gcc
-yum -y install gcc-c++
-yum -y install boost-devel
-yum -y install epel-release
-yum -y install root
-yum -y install root-gui-fitpanel
-yum -y install root-spectrum
-yum -y install root-spectrum-painter
-yum -y install root-minuit2
-yum -y install root-physics
-yum -y install python 
-yum -y install python-devel
-yum -y install root-python
-yum -y install python-pip
+yum -y install gcc \
+gcc-c++ \
+boost-devel \
+epel-release \
+root \
+root-gui-fitpanel \
+root-spectrum \
+root-spectrum-painter \
+root-minuit2 \
+root-physics \
+python \
+python-devel \
+root-python \
+python-pip \
+
 pip install --upgrade pip
 pip install bitarray
 pip install crcmod
