@@ -43,3 +43,15 @@ void Sticv3Handler::printReport()
         printf("  %10u (%4.1f%%)\n", nPassed, 100.0*nPassed/nEvent);
 	
 }
+
+int Sticv3Handler::compensateCoarse(unsigned coarse, unsigned long long frameID)
+{
+	int coarse_i = coarse;
+	long long clocksElapsed = (frameID % 256) *1024*4ULL;	// Periodic reset every 256 frames
+	long long wrapNumber	= clocksElapsed / 32767;
+	long long wrapRemainder	= clocksElapsed % 32767;
+	if(coarse_i < wrapRemainder) coarse_i += 32767;
+		coarse_i -= wrapRemainder;
+
+	return coarse_i;
+}

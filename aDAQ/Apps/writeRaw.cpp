@@ -23,6 +23,7 @@
 #include <Core/RawPulseWriter.hpp>
 #include <TOFPET/RawV3.hpp>
 #include <ENDOTOFPET/Raw.hpp>
+#include <STICv3/sticv3Handler.hpp>
 
 using namespace std;
 using namespace DAQ;
@@ -196,8 +197,12 @@ int main(int argc, char *argv[])
 					p.T = T;
 					unsigned tCoarse = shm->getTCoarse(index, n);
 					unsigned eCoarse = shm->getECoarse(index, n);
-					p.time = (1024LL * frameID + ((tCoarse>>2) & 0x3FF)) * p.T;
-					p.timeEnd = (1024LL * frameID + ((eCoarse>>2) & 0x3FF)) * p.T;
+					// Compensate for LFSR's 2^16-1 period
+					// and wrap at frame's 6.4 us period
+					int ctCoarse = STICv3::Sticv3Handler::compensateCoarse(tCoarse, frameID) % 4096;
+					int ceCoarse = STICv3::Sticv3Handler::compensateCoarse(eCoarse, frameID) % 4096;
+					p.time = 1024LL * frameID * p.T + ctCoarse * p.T/4;
+					p.timeEnd = 1024LL * frameID * p.T + ceCoarse * p.T/4;
 					if((p.timeEnd - p.time) < -256*p.T) p.timeEnd += (1024LL * p.T);
 					p.channelID = 64 * shm->getAsicID(index, n) + shm->getChannelID(index, n);
 					p.d.stic.tcoarse = tCoarse;
