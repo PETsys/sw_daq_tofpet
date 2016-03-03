@@ -163,22 +163,22 @@ struct Event {
 	long long tacIdleTime;
 	float stage;
 };
-static const int READ_BUFFER_SIZE = 128*1024 / sizeof(Event);
+static const int READ_BUFFER_SIZE = 32*1024*1024 / sizeof(Event);
 
 void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefix, int nAsicsPerFile);
 
 int calibrate(
 	int asicStart, int asicEnd,
-	FILE *linearityDataFile, int linearityNbins, float linearityRangeMinimum, float linearityRangeMaximum,
-	FILE *leakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum, float *leakagePhasePoint,
+	int linearityDataFile, int linearityNbins, float linearityRangeMinimum, float linearityRangeMaximum,
+	int eakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum, float *leakagePhasePoint,
 	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
 	float nominalM
 );
 
 void qualityControl(
 	int asicStart, int asicEnd, 
-	FILE *linearityDataFile,
-	FILE *leakageDataFile, float *leakagePhasePoint,
+	int linearityDataFile,
+	int leakageDataFile, float *leakagePhasePoint,
 	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2
 );
 
@@ -346,20 +346,21 @@ int main(int argc, char *argv[])
 				int asicStart = list[n].get<1>();
 				int asicEnd = list[n].get<2>();
 
-				char fNameA[1024];
-				sprintf(fNameA,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
-				FILE *linearityDataFile = fopen(fNameA, "rb");
-				if(linearityDataFile == NULL) 
+				sprintf(fName,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
+				int linearityDataFile = open(fName, O_RDONLY);
+				if(linearityDataFile == -1) 
 					exit(1);
 
-				char fNameB[1024];
-				sprintf(fNameB,"%s_%d_leakage.tmp", tableFileNamePrefix, fileID);				
-				FILE *leakageDataFile = fopen(fNameB, "rb");
-				if(leakageDataFile == NULL) 
+				sprintf(fName,"%s_%d_leakage.tmp", tableFileNamePrefix, fileID);
+				int leakageDataFile = open(fName, O_RDONLY);
+				if(leakageDataFile == -1) 
 					exit(1);
 				
+				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
+				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
+				
 				float *leakagePhasePoint = new float[nTAC];
-				sprintf(fName,"%s_%d_leakage_phase.tmp", tableFileNamePrefix, fileID);				
+				sprintf(fName,"%s_%d_leakage_phase.tmp", tableFileNamePrefix, fileID);
 				FILE *leakagePhaseFile = fopen(fName, "r");
 				if(leakagePhaseFile == NULL) 
 					exit(1);
@@ -399,22 +400,10 @@ int main(int argc, char *argv[])
 				}
 				delete myP2;
 				
-				fclose(linearityDataFile);
-				fclose(leakageDataFile);
-				
-				// Re-open the temporary data files and use fadvise to drop them from OS cache
-				// in order not to polute it too much
-				int fd;
-				fd = open(fNameA, O_RDONLY);
-				if(fd != -1) {
-					posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
-					close(fd);
-				}
-				fd = open(fNameB, O_RDONLY);
-				if(fd != -1) {
-					posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
-					close(fd);
-				}
+				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_DONTNEED);
+				close(linearityDataFile);
+				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_DONTNEED);
+				close(leakageDataFile);
 				
 				exit(0);
 			} 
@@ -504,8 +493,8 @@ int main(int argc, char *argv[])
 }
 
 int calibrate(	int asicStart, int asicEnd,
-		FILE *linearityDataFile, int linearityNbins, float linearityRangeMinimum, float linearityRangeMaximum,
-		FILE *leakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum, float *leakagePhasePoint,
+		int linearityDataFile, int linearityNbins, float linearityRangeMinimum, float linearityRangeMaximum,
+		int leakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum, float *leakagePhasePoint,
 		TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
 		float nominalM
 )
@@ -538,12 +527,15 @@ int calibrate(	int asicStart, int asicEnd,
 			asic, channel, tac);
 		pB_FineList[gid-gidStart] = new TProfile(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum);
 	}
+	struct timespec t0;
+	clock_gettime(CLOCK_REALTIME, &t0);
 
 	Event *eventBuffer = new Event[READ_BUFFER_SIZE];
 	int r;
-	fseek(linearityDataFile, 0, SEEK_SET);
-	while((r = fread(eventBuffer, sizeof(Event), READ_BUFFER_SIZE, linearityDataFile)) > 0) {
-		for(int i = 0; i < r; i++) {
+	lseek(linearityDataFile, 0, SEEK_SET);
+	while((r = read(linearityDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+		int nEvents = r / sizeof(Event);
+		for(int i = 0; i < nEvents; i++) {
 			Event &event = eventBuffer[i];
 			assert(hA_Fine2List[event.gid-gidStart] != NULL);
 			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
@@ -551,9 +543,10 @@ int calibrate(	int asicStart, int asicEnd,
 		}
 	}
 	
-	fseek(leakageDataFile, 0, SEEK_SET);
-	while((r = fread(eventBuffer, sizeof(Event), READ_BUFFER_SIZE, leakageDataFile)) > 0) {
-		for(int i = 0; i < r; i++) {
+	lseek(leakageDataFile, 0, SEEK_SET);
+	while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+		int nEvents = r / sizeof(Event);
+		for(int i = 0; i < nEvents; i++) {
 			Event &event = eventBuffer[i];
 			assert(event.gid >= gidStart);
 			assert(event.gid < gidEnd);
@@ -562,6 +555,10 @@ int calibrate(	int asicStart, int asicEnd,
 		}
 	}
 	delete [] eventBuffer;
+	struct timespec t1;
+	clock_gettime(CLOCK_REALTIME, &t1);
+	
+	printf("Read data in %f seconds\n", t1.tv_sec - t0.tv_sec + 1E-9*(t1.tv_nsec - t0.tv_nsec));
 
 	boost::mt19937 generator;
 
@@ -855,8 +852,8 @@ int calibrate(	int asicStart, int asicEnd,
 
 void qualityControl(
 	int asicStart, int asicEnd, 
-	FILE *linearityDataFile,
-	FILE *leakageDataFile, float *leakagePhasePoint,
+	int linearityDataFile,
+	int leakageDataFile, float *leakagePhasePoint,
 	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2
 )
 {
@@ -879,10 +876,11 @@ void qualityControl(
 		}
 
 	
-		fseek(linearityDataFile, 0, SEEK_SET);
+		lseek(linearityDataFile, 0, SEEK_SET);
 		int r;
-		while((r = fread(eventBuffer, sizeof(Event), READ_BUFFER_SIZE, linearityDataFile)) > 1) {
-			for (int i = 0; i < r; i++) {
+		while((r = read(linearityDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+			int nEvents = r / sizeof(Event);
+			for (int i = 0; i < nEvents; i++) {
 				Event &event = eventBuffer[i];
 				assert(event.gid >= gidStart);
 				assert(event.gid < gidEnd);
@@ -945,9 +943,10 @@ void qualityControl(
 	
 	// Build leakage quality control
 	int r;
-	fseek(leakageDataFile, 0, SEEK_SET);
-	while((r = fread(eventBuffer, sizeof(Event), READ_BUFFER_SIZE, leakageDataFile)) > 1) {
-		for(int i = 0; i < r; i++) {
+	lseek(leakageDataFile, 0, SEEK_SET);
+	while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+		int nEvents = r / sizeof(Event);
+		for(int i = 0; i < nEvents; i++) {
 			Event &event = eventBuffer[i];
 			assert(event.gid >= gidStart);
 			assert(event.gid < gidEnd);
