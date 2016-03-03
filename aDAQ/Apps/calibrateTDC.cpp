@@ -215,7 +215,14 @@ int main(int argc, char *argv[])
 	int posInd=0;        
         bool doSorting = true;
         bool doProcessing = true;
-	int maxWorkers = sysconf(_SC_NPROCESSORS_ONLN);
+
+	// Choose the default number of workers based on CPU and RAM
+	// Assume we need 4 GiB of system RAM per worker for good performance
+	int nCPU = sysconf(_SC_NPROCESSORS_ONLN);
+	struct sysinfo si;
+	sysinfo(&si);
+	int maxMemWorkers = si.totalram * si.mem_unit / (4LL * 1024*1024*1024);
+	int maxWorkers = nCPU < maxMemWorkers ? nCPU : maxMemWorkers;
 	
 	static struct option longOptions[] = {
 		{ "asics_per_file", required_argument, 0, 0 },
