@@ -284,7 +284,7 @@ class TMP104CommunicationError(Exception):
 		self.__din = din
 		self.__dout = dout
 	def __str__(self):
-		return "TMP104 read error at port %d, slave %d. IN = %s, OUT = %s" % (self.__portID, self.__slaveID, [ hex(x) for x in self.__din ], [ hex(x) for x in self.__dout ])
+		return "TMP104 read error at port %d, slave %d. Chain looks open. (Data: IN = %s, OUT = %s)" % (self.__portID, self.__slaveID, [ hex(x) for x in self.__din ], [ hex(x) for x in self.__dout ])
 
 class ClockNotOK(Exception):
 	def __init__(self, portID, slaveID):
@@ -1391,36 +1391,33 @@ class ATB:
 		#print "DONE!"
 
 	## Initializes the temperature sensors in the FEB/As
-	# Return a list of active sensors found in FEB/As, in the form of a list of 
-	# (portID, slaveID, nSensors) tuples
-	def getTemperatureSensorList(self):
-		sensorList = []
-		for portID, slaveID in self.getActiveFEBDs():
-			asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
-			if asicType not in [0x00010001]: continue;
-			din = [ 3, 0x55, 0b10001100, 0b10010000 ]
-			din = bytearray(din)
-			dout = self.sendCommand(portID, slaveID, 0x04, din)
-			if len(dout) < 5:
-				raise TMP104CommunicationError(portID, slaveID, din, dout)
-			
-			nSensors = dout[4] & 0x0F
+	# Return the number of active sensors found in FEB/As
+	def getNumberOfTemperatureSensors(self, portID, slaveID):
+		asicType = self.readFEBDConfig(portID, slaveID, 0, 0)
+		if asicType not in [0x00010001]:
+			return 0
+
+		din = [ 3, 0x55, 0b10001100, 0b10010000 ]
+		din = bytearray(din)
+		dout = self.sendCommand(portID, slaveID, 0x04, din)
+		if len(dout) < 5:
+			raise TMP104CommunicationError(portID, slaveID, din, dout)
 		
-			din = [ 3, 0x55, 0b11110010, 0b01100011]
-			din = bytearray(din)
-			dout = self.sendCommand(portID, slaveID, 0x04, din)
-			if len(dout) < 5:
-				raise TMP104CommunicationError(portID, slaveID, din, dout)
+		nSensors = dout[4] & 0x0F
+	
+		din = [ 3, 0x55, 0b11110010, 0b01100011]
+		din = bytearray(din)
+		dout = self.sendCommand(portID, slaveID, 0x04, din)
+		if len(dout) < 5:
+			raise TMP104CommunicationError(portID, slaveID, din, dout)
 
-			din = [ 2 + nSensors, 0x55, 0b11110011 ]
-			din = bytearray(din)
-			dout = self.sendCommand(portID, slaveID, 0x04, din)
-			if len(dout) < (4 + nSensors):
-				raise TMP104CommunicationError(portID, slaveID, din, dout)
+		din = [ 2 + nSensors, 0x55, 0b11110011 ]
+		din = bytearray(din)
+		dout = self.sendCommand(portID, slaveID, 0x04, din)
+		if len(dout) < (4 + nSensors):
+			raise TMP104CommunicationError(portID, slaveID, din, dout)
 
-			sensorList.append((portID, slaveID, nSensors))
-			
-		return sensorList
+		return nSensors
 
 	## Reads the temperature found in the specified FEB/D
 	# @param portID  DAQ port ID where the FEB/D is connected
