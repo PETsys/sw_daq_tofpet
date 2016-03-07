@@ -179,13 +179,10 @@ float P2::getQtac(int channel, int tac, bool isT, int adc, long long tacIdleTime
 	float adcEstimate = te.leakage.a0 + te.leakage.a1 * tacIdleTime  + te.leakage.a2 * tacIdleTime * tacIdleTime;
 	tB = -(- 2*p2*te.leakage.tQ + sqrtf(4*adcEstimate*p2 + m*m ) - m)/(2*p2);
 	float tQ2 = +( 2 * p2 * tB + sqrtf(4 * adc * p2 + m*m) - m)/(2 * p2);
-
 	
-/*	if(tac == 0 && isT && tacIdleTime == (5*1024)*4)
-		fprintf(stderr, "P2:getQ (%d, %d, %c, %d, %lld) : tB = %f\n", channel, tac, isT ? 'T' : 'E', adc, tacIdleTime, tB);*/
+	// If we don't have leakage calibration for this channel, proceed without it
+	float tQ3 = te.leakage.a0 > 0 ? tQ2 : tQ1;
 	
-/*	printf("%f %f %f %lld => %f => %f (vs %f : %f)\n", te.leakage.tQ, te.leakage.b, te.leakage.m, tacIdleTime, adcEstimate, tB, te.shape.tB, (tB - te.shape.tB));
-	printf("tQ : %f vs %f : %f\n", tQ1, tQ2, tQ1 - tQ2);*/
 	return tQ2 + defaultQ;
 }
 
