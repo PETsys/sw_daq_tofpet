@@ -506,6 +506,7 @@ int calibrate(	int asicStart, int asicEnd,
 		float nominalM
 )
 {
+	unsigned nASIC = asicEnd - asicStart;
 	unsigned gidStart = asicStart * 64 * 2 * 4;
 	unsigned gidEnd = asicEnd * 64 * 4 * 2;
 	unsigned nTAC = gidEnd - gidStart;
@@ -518,6 +519,10 @@ int calibrate(	int asicStart, int asicEnd,
 		hA_Fine2List[n] = NULL;
 		pB_FineList[n] = NULL;
 	}
+
+	bool asicPresent[nASIC];
+	for(int n = 0; n < nASIC; n++)
+		asicPresent[n] = false;
 
 	for(unsigned gid = gidStart; gid < gidEnd; gid++) {
 		unsigned tac = gid & 0x3;
@@ -547,6 +552,8 @@ int calibrate(	int asicStart, int asicEnd,
 			assert(hA_Fine2List[event.gid-gidStart] != NULL);
 			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
 			hA_Fine2List[event.gid-gidStart]->Fill(event.stage, event.fine);
+			unsigned asic = event.gid >> 9;
+			asicPresent[asic-asicStart] = true;
 		}
 	}
 	
@@ -560,6 +567,8 @@ int calibrate(	int asicStart, int asicEnd,
 			assert(pB_FineList[event.gid-gidStart] != NULL);
 			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
 			pB_FineList[event.gid-gidStart]->Fill(event.stage, event.fine);
+			unsigned asic = event.gid >> 9;
+			asicPresent[asic-asicStart] = true;
 		}
 	}
 	delete [] eventBuffer;
@@ -578,13 +587,23 @@ int calibrate(	int asicStart, int asicEnd,
 		unsigned asic = gid >> 9;
 		TacInfo &ti = tacInfo[gid];
 		
+		// We had _no_ data for this ASIC, we assume it's not present in the system
+		// Let's just move on without further ado
+		if(!asicPresent[asic-asicStart])
+			continue;
+		
 		// Code below came from two loops
 		// and have conflitcting variable names
 		{
 		
 			TH2S *hA_Fine2 = hA_Fine2List[gid-gidStart];
 			if(hA_Fine2 == NULL) continue;
-			if(hA_Fine2->GetEntries() < 1000) continue;
+			if(hA_Fine2->GetEntries() < 1000) {
+				fprintf(stderr, "WARNING: Not enough data to calibrate. Skipping TAC. (A: %4d %2d %d %c)\n",
+					asic, channel, tac, isT  ? 'T' : 'E'
+				);
+				continue;
+			}
 			hasData=1;
 			char hName[128];
 		
@@ -800,7 +819,7 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			TProfile *pB_Fine = pB_FineList[gid-gidStart];
 			assert(pB_Fine != NULL);
-			if(pB_Fine->GetEntries() < 100) {
+			if(pB_Fine->GetEntries() < 200) {
 				continue;
 			}
 				
