@@ -224,7 +224,7 @@ void *FrameServer::runWorker(void *arg)
         return F->doWork();
 }
 
-bool FrameServer::parseDataFrame(DataFrame *dataFrame)
+bool FrameServer::parseDataFrame(DataFrame *dataFrame, bool computeIdleTimes)
 {
 	
 	unsigned long long frameID = dataFrame->data[0] & 0xFFFFFFFFFULL;
@@ -278,11 +278,20 @@ bool FrameServer::parseDataFrame(DataFrame *dataFrame)
 		int64_t tacIdleTime = eventTime - tacLastEventTime[tacIndex];
 		tacLastEventTime[tacIndex] = eventTime;
 
-		dataFrame->channelIdleTime[n] = channelIdleTime;
-		dataFrame->tacIdleTime[n] = tacIdleTime;
+		dataFrame->channelIdleTime[n] = computeIdleTimes ? channelIdleTime : 0;
+		dataFrame->tacIdleTime[n] = computeIdleTimes ? tacIdleTime : 0;
 #endif
 	}
 	
 	return true;
 }
 
+int FrameServer::setSorter(unsigned mode)
+{
+	return -1;
+}
+
+int FrameServer::setCoincidenceTrigger(CoincidenceTriggerConfig *config)
+{
+	return -1;
+}

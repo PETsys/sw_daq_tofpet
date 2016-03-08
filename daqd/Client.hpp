@@ -25,6 +25,8 @@ private:
 	int doCommandToFrontEnd(int commandLength);
 	int doGetPortUp();
 	int doGetPortCounts();
+	int doSetSorter();
+	int doSetTrigger();
 
 };
 

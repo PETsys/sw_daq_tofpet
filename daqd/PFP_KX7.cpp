@@ -54,35 +54,25 @@ PFP_KX7::PFP_KX7()
 	// Filler Activated (26); Disable Interrupt (24); Disable AXI Stream (21)
 	// Use User FIFO Threshold (16); User FIFO Threshold in 64B word addressing (11 -> 0)
 	uint32_t word32;
-//	word32 = 0x01000000;  // without filler
-	word32 = 0x09000000;  // with filler
-//	word32 = 0x09200000;  // stream disable, with filler
+	word32 = 0x19000000;  // sorter disable, with filler
 	Status = PFP_Write(Card, BaseAddrReg + ConfigReg * 4, 4, &word32, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 	assert(Status == WD_STATUS_SUCCESS);
-
-	// setting up ToT Threshold
-	// ToT Threshold (31 -> 0)
-	word32 = 0x00000064;
+	
+	// setting up ToT Threshold (in clocks)
+	word32 = 0x00000000;
 	Status = PFP_Write(Card, BaseAddrReg + ThresholdReg * 4, 4, &word32, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 	assert(Status == WD_STATUS_SUCCESS);
 
 	// setting up Coincidence Windows
-	// Single Window step (27 -> 24); Coincidence Window (21 -> 20); Coinc. Aft. Window (14 -> 8); Coinc. Pre Window (3 -> 0)
-	// Single Window step: 0 = 0 TCoarse; 1 = 10 TCoarse; 2 = 20 TCoarse; 3 = 50 TCoarse; 4->14 = 100 TCoarse; 15 = all
-//	word32 = 0x00101001;  // sent coincidence only
-	word32 = 0x0F101001;  // sent everthing
+	word32 = 0x0F000000;  // sent everthing
 	Status = PFP_Write(Card, BaseAddrReg + CoincWindowReg * 4, 4, &word32, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
-	assert(Status == WD_STATUS_SUCCESS);
+	assert(Status == WD_STATUS_SUCCESS);	
 
-	// setting up Coincidence Mask
-	// (31 -> 16) for one channel; (15 -> 0) for other channel; (2 channels per address)
-	// k bit = '1' for i channel be able to search coincidence with k channel
-	// i (own) bit = '1' allows coincidence with more than 1 other channel; = '0' only allows coinc with 1 and only 1 other channel
 	word32 = 0xFFFFFFFF;
-	for (int i = 0; i < (12+1)/2; i++) {  // 12 channels => 6 addresses
+	for (int i = 0; i < 6; i++) {  // 12 channels => 6 addresses
 		Status = PFP_Write(Card, BaseAddrReg + (CoincMasksReg + i) * 4, 4, &word32, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		assert(Status == WD_STATUS_SUCCESS);
-	}
+	}	
 
 	// setting up DMA configuration
 	// DMA Start toggle (26); DMA Size in 16B word addressing (23 -> 0)
@@ -525,4 +515,73 @@ uint64_t PFP_KX7::getPortCounts(int channel, int whichCount)
 	setLastCommandTimeIdleCount();
 	pthread_mutex_unlock(&hwLock);
 	return reply;
+}
+
+int PFP_KX7::setSorter(unsigned mode)
+{
+	fprintf(stderr, "INFO: PFP_KX7::setSorter(%u) called\n", mode);
+	return -1;
+	setLastCommandTimeIdleCount();
+	pthread_mutex_lock(&hwLock);
+
+	// This word is used for multiple purposes
+	// Thus, we read it and modify just the sort enable bit
+	uint32_t currentSetting;
+	ReadAndCheck(ConfigReg * 4, &currentSetting, 1);
+	// Clear the sorter enable bit
+	currentSetting = currentSetting & ~0x10000000;
+	// Set the sorter enable bit based on the desired mode
+	currentSetting = currentSetting | mode ? 0x10000000 : 0x00000000;
+	WriteAndCheck(ConfigReg * 4, &currentSetting, 1);
+
+	setLastCommandTimeIdleCount();
+	pthread_mutex_unlock(&hwLock);
+	return 0;
+}
+
+int PFP_KX7::setCoincidenceTrigger(CoincidenceTriggerConfig *config)
+{
+	setLastCommandTimeIdleCount();
+	pthread_mutex_lock(&hwLock);
+
+	if(config == NULL || config->enable == 0) {
+		// Write a allow all configuration
+		uint32_t word32 = 0x0F000000;
+		WriteAndCheck(CoincWindowReg * 4, &word32, 1);
+
+		word32 = 0x00000000;
+		WriteAndCheck(ThresholdReg * 4, &word32, 1);
+		
+		word32 = 0x00000000;
+		for(int n = 0; n < 6; n++) {
+			WriteAndCheck((CoincMasksReg + n) * 4, &word32, 1);
+		}
+	}
+	else {
+		if(config->preWindow > 0xF) config->preWindow = 0xF;
+		if(config->postWindow > 0x3F) config->postWindow = 0x3F;
+		if(config->cWindow > 0x3) config->cWindow = 0x3;
+
+		uint32_t word32 = 0x00000000;
+		word32 |= config->preWindow;
+		word32 |= config->postWindow << 8;
+		word32 |= config->cWindow << 20;
+		// WARNING: software support for single window sampling not implemented yet
+		WriteAndCheck(CoincWindowReg * 4, &word32, 1);
+
+		word32 = config->minToT;
+		WriteAndCheck(ThresholdReg * 4, &word32, 1);
+
+		uint32_t mask[6];
+		for(int n = 0; n < 6; n++) {
+			word32 = 0x00000000;
+			word32 |= config->mask[2*n + 0] & 0xFFF;
+			word32 |= (config->mask[2*n + 1] & 0xFFF) << 16;
+			mask[n] = word32;
+		}
+		WriteAndCheck(CoincMasksReg * 4, mask, 6);
+	}
+	setLastCommandTimeIdleCount();
+	pthread_mutex_unlock(&hwLock);
+	return 0;
 }

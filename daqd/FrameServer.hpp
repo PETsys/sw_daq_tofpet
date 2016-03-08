@@ -8,6 +8,15 @@
 
 namespace DAQd {
 
+struct CoincidenceTriggerConfig {
+	uint32_t enable;
+	uint32_t minToT;
+	uint32_t cWindow;
+	uint32_t preWindow;
+	uint32_t postWindow;
+	uint32_t singlesFraction;
+	uint32_t mask[32];
+};
 
 class FrameServer {
 public:
@@ -31,12 +40,16 @@ public:
 	
 	virtual uint64_t getPortUp() = 0;
 	virtual uint64_t getPortCounts(int port, int whichCount) = 0;
-	
+
+	virtual int setSorter(unsigned mode);
+
+	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
+
 	
 protected:	
 	static const int CommandTimeout = 250; // ms
 	
-	bool parseDataFrame(DataFrame *dataFrame);
+	bool parseDataFrame(DataFrame *dataFrame, bool computeIdleTimes);
 	
 	int debugLevel;
 	

@@ -129,7 +129,7 @@ void *UDPFrameServer::doWork()
 					pthread_mutex_unlock(&m->lock);
 					
 					memcpy(dataFrame->data, p, frameSize * sizeof(uint64_t));
-					if(!m->parseDataFrame(dataFrame)) break;
+					if(!m->parseDataFrame(dataFrame, true)) break;
 					
 					pthread_mutex_lock(&m->lock);					
 					if(dataFrame != devNull) {

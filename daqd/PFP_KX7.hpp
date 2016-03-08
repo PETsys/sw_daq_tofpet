@@ -32,6 +32,9 @@ public:
 	int setAcquistionOnOff(bool enable);
 	uint64_t getPortUp();
 	uint64_t getPortCounts(int channel, int whichCount);
+	virtual int setSorter(unsigned mode);
+	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
+
 	  static const int ETIMEOUT = -1;
 	  static const int ENOWORDS = -2;
 	  static const int ENOCARD = -10000;

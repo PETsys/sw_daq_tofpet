@@ -20,9 +20,10 @@ public:
 	~SystemInformation();
 
 	void loadMapFile(const char *fname);
+	void loadTriggerMapFile(const char *fname);
 
 	bool isCoincidenceAllowed(int region1, int region2) {
-		return region1 != region2;
+		return regionMap[region1 * DAQ::Common::MAX_TRIGGER_REGIONS + region2];
 	};
 
 	bool isMultihitAllowed(int region1, int region2) {
@@ -33,6 +34,7 @@ public:
 
 private:
 	ChannelInformation channelInformation[DAQ::Common::SYSTEM_NCHANNELS];
+	bool regionMap[DAQ::Common::MAX_TRIGGER_REGIONS * DAQ::Common::MAX_TRIGGER_REGIONS];
 };
 
 }}

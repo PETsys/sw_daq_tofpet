@@ -20,6 +20,8 @@ public:
 	virtual int setAcquistionOnOff(bool enable) = 0;
 	virtual uint64_t getPortUp() = 0;
 	virtual uint64_t getPortCounts(int channel, int whichCount) = 0;
+	virtual int setSorter(unsigned mode);
+	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
 };
 
 class DAQFrameServer : public FrameServer
@@ -35,8 +37,12 @@ public:
 	virtual void stopAcquisition();
 	virtual uint64_t getPortUp();
 	virtual uint64_t getPortCounts(int port, int whichCount);
+	virtual int setSorter(unsigned mode);
+	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
+
 private:
 	AbstractDAQCard *DP;
+	bool computeIdleTimes;
 	
 protected:
 

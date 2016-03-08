@@ -114,6 +114,37 @@ def loadBaseline(boardConfig, asicStart, asicEnd, fileName):
 		
 	f.close()
 
+## Loads the channel map and trigger enable map
+# @param boardConfig The configuration in which to load. It should be of type atb.BoardConfig
+# @param channelMapFileName File with the channel map
+# @param triggerMapFileName File which defines the acceptable coincidence regions
+def loadTriggerMap(boardConfig, channelMapFileName, triggerMapFileName):
+	f = open(channelMapFileName, "r")
+	newMap = {}
+	for l in f:
+		channelID, region, xi, yi, x, y, z, hv = l.split("\t")
+		channelID = int(channelID)
+		region = int(region)
+		xi = int(xi)
+		yi = int(yi)
+		x = float(x)
+		y = float(y)
+		z = float(z)
+		newMap[channelID] = (region, xi, yi, x, y, z)
+	f.close()
+	boardConfig.channelMap = newMap
+	
+	f = open(triggerMapFileName, "r")
+	newZones = set()
+	for l in f:
+		a, b = l.split("\t");
+		a = int(a)
+		b = int(b)
+		newZones.add((a, b))
+		newZones.add((b, a))
+	boardConfig.triggerZones = newZones
+	return None
+
 def loadFEBD_HVDAC_Calibration(boardConfig, portID, slaveID, fileName):
         loadHVDACParams(boardConfig, portID*64, (portID+1)*64, fileName)
         

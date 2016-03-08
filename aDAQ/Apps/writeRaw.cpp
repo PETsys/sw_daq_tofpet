@@ -42,17 +42,22 @@ struct BlockHeader  {
 
 int main(int argc, char *argv[])
 {
-	assert(argc == 7);
+	assert(argc == 11);
 	char *shmObjectPath = argv[1];
 	unsigned long dataFrameSharedMemorySize = boost::lexical_cast<unsigned long>(argv[2]);	
-	float cWindow = boost::lexical_cast<float>(argv[3]);
-	float minToT = boost::lexical_cast<float>(argv[4]);
-	char outputType = argv[5][0];
-	char *outputFilePrefix = argv[6];
+	char outputType = argv[3][0];
+	char *outputFilePrefix = argv[4];
+	float cWindow = boost::lexical_cast<float>(argv[5]);
+	float minToT = boost::lexical_cast<float>(argv[6]);
+	float preWindow = boost::lexical_cast<float>(argv[7]);
+	float postWindow = boost::lexical_cast<float>(argv[8]);
+	char *channelMapFileName = argv[9];
+	char *triggerMapFileName = argv[10];
 
 	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
 	if(cWindow != 0) {
-		systemInformation->loadMapFile(Common::getCrystalMapFileName());
+		systemInformation->loadMapFile(channelMapFileName);
+		systemInformation->loadTriggerMapFile(triggerMapFileName);
 	}
 	
 	FILE *rawFrameFile = NULL;

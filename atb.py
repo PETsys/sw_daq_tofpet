@@ -3,7 +3,7 @@
 ## @package atb
 # This module defines all the classes, variables and methods to operate the TOFPET ASIC via a UNIX socket  
 
-from math import log, ceil
+from math import log, ceil, floor
 from bitarray import bitarray
 from time import sleep, time
 from random import randrange
@@ -17,6 +17,7 @@ import os
 import struct
 from subprocess import Popen, PIPE
 from sys import maxint, stdout
+import tempfile
 
 import DSHM
 
@@ -48,7 +49,15 @@ class BoardConfig:
                 self.asicConfig = [ None for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
 		self.hvBias = [ None for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_HVCHANNEL) ]
 		self.hvParam = [ (1.0, 0.0) for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_HVCHANNEL)]
+		self.channelMap = {}
+		self.triggerZones = set()
+		self.triggerMinimumToT = 150E-9
+		self.triggerCoincidenceWindow = 25E-9
+		self.triggerPreWindow = 6.25E-9
+		self.triggerPostWindow = 100E-9
+		self.triggerSinglesFraction = 0
 		return None
+
         
         ## Writes formatted text file with all parameters and additional information regarding the state of the system  
         # @param prefix Prefix of the file name to be written (it will have the suffix .params)
@@ -323,6 +332,9 @@ class ATB:
 		self.__activeAsics = [ False for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
 		self.__asicType = [ None for x in range(MAX_DAQ_PORTS * MAX_CHAIN_FEBD * MAX_FEBD_ASIC) ]
 		self.__asicConfigCache = {}		
+		self.__initOK = False
+		self.__tempChannelMapFile = None
+		self.__tempTriggerMapFile = None
 		return None
 
 
@@ -935,6 +947,8 @@ class ATB:
 		sleep(0.5)
 
 		self.disableTriggerGating()
+		self.setTestPulseNone()
+		self.__disableCoincidenceTrigger()
 		for portID, slaveID in self.getActiveFEBDs():
 			coreClockNotOK = self.readFEBDConfig(portID, slaveID, 0, 11)
 			if coreClockNotOK != 0x0:
@@ -961,6 +975,7 @@ class ATB:
 		self.start()
 		sleep(0.120)
 		self.doSync()
+		self.__initOK = True
 
 	def __getCurrentFrameID(self):
 		activePorts = self.getActivePorts()
@@ -1073,16 +1088,129 @@ class ATB:
 	def enableTriggerGating(self, delay):
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 13, 1024 + delay);
+
+
+	def __setCoincidenceTrigger(self, enable, triggerMinimumToT,
+					triggerCoincidenceWindow, triggerPreWindow,
+					triggerPostWindow, triggerSinglesFraction,
+					triggerZones):
+
+		T_seconds = self.__frameLength / 1024
+		T_nanoseconds = T_seconds * 1E9
+
+		# Encode parameters
+		template1 = "@IIIIII"
+		n1 = struct.calcsize(template1)
+		data1 = struct.pack(template1,
+			enable,
+			int(floor(triggerMinimumToT / T_seconds)),
+			int(ceil(triggerCoincidenceWindow / T_seconds)),
+			int(ceil(triggerPreWindow / T_seconds)),
+			int(ceil(triggerPostWindow / T_seconds)),
+			int(triggerSinglesFraction)
+		)
+
+		# Encode masks
+		data2 = ""
+		for n in range(32):
+			word = 0x00000000
+			for a, b in [ t for t in triggerZones if n in t ]:
+				# Set the bit for two port ID
+				# One of them is the self port, which would enable self triggering..
+				word |= 1 << a
+				word |= 1 << b
+			# Append this port's configuration word
+			data2 += struct.pack("@I", word)
+
+		# Encode command header
+		template0 = "@HH"
+		n0 = struct.calcsize(template0)
+		data0 = struct.pack(template0, 0x10, n0 + len(data1) + len(data2))
+
+		# Send everything
+		self.__socket.send(data0 + data1 + data2)
+
+		# Receive the reply, a 32 bit 0x00000000
+		template0 = "@i"
+		n0 = struct.calcsize(template0)
+		data0 = self.__socket.recv(n0);
+		reply, = struct.unpack(template0, data0)
+
+		return reply
+
+	## Enables the DAQ system coincidence trigger, based on the settings defined in config
+	def __enableCoincidenceTrigger(self):
+		# Hardcoded map, which is sufficient for current HW triggers
+		hwRegionMap = {}
+		for slave in range(2):
+			for port in range(12):
+				for channel in range(1024):
+					gid = (slave * 16 + port) * 1024 + channel
+					hwRegionMap[gid] = port
 		
-	
+		hwTriggerZones = set()
+		channelMapItems = self.config.channelMap.items()
+		for i, (swChannel1, (swRegion1, xi, yi, x, y, z)) in enumerate(channelMapItems):
+			hwRegion1 = hwRegionMap[swChannel1]
+			for swChannel2, (swRegion2, xi, yi, x, y, z) in channelMapItems[i:]:
+				hwRegion2 = hwRegionMap[swChannel2]
+				#print swChannel1, swRegion1, hwRegion1, " --", swChannel2, swRegion2, hwRegion2
+				if (swRegion1, swRegion2) not in self.config.triggerZones:
+					continue
+				hwTriggerZones.add((hwRegion1, hwRegion2))
+
+		r = self.__setCoincidenceTrigger(
+			1,
+			self.config.triggerMinimumToT,
+			self.config.triggerCoincidenceWindow,
+			self.config.triggerPreWindow,
+			self.config.triggerPostWindow,
+			self.config.triggerSinglesFraction,
+			hwTriggerZones
+		)
+		if r == 0:
+			print "INFO: Enabled hardware coincidence filter for the following ports: ", list(hwTriggerZones)
+
+		return r
+		
+
+	## Disables the DAQ system coincidence trigger (default)
+	def __disableCoincidenceTrigger(self):
+		return self.__setCoincidenceTrigger(
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			set()
+		)
+
         ## Disables test pulse 
 	def setTestPulseNone(self):
 		cmd =  bytearray([0x01] + [0x00 for x in range(8)])
 		for portID, slaveID in self.getActiveFEBDs():
 			self.sendCommand(portID, slaveID, 0x03,cmd)
+
+		self.__setSortingMode(True)
 		return None
 
-	
+	def __setSortingMode(self, enable):
+		if enable: 
+			word = 0x1
+		else: 
+			word = 0x0
+
+		template1 = "@HHI"
+		n = struct.calcsize(template1)
+		data = struct.pack(template1, 0x09, n, word);
+		self.__socket.send(data)
+
+		template = "@I"
+		n = struct.calcsize(template)
+		data = self.__socket.recv(n);
+		return None
+
         #def setTestPulseArb(self, invert):
 		#if not invert:
 			#tpMode = 0b11000000
@@ -1114,6 +1242,10 @@ class ATB:
 		cmd =  bytearray([0x01, tpMode, finePhase2, finePhase1, finePhase0, interval1, interval0, length1, length0])
 		for portID, slaveID in self.getActiveFEBDs():
 			self.sendCommand(portID, slaveID, 0x03,cmd)
+
+		# DAQ sorter should be disabled when using test pulse triggers
+		# Otherwise, we may risk overflowing the sorter's max hits per time slot
+		self.__setSortingMode(False)
 		return None
 
 
@@ -1176,20 +1308,54 @@ class ATB:
         # @param writer The desired outout file format. Default is "TOFPET", which is equivalent to "writeRaw"
         # @param cWindow Coincidence window (in seconds) If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
 	# @param minToT Minimal ToT (in seconds) for events to be considered as a coincidence trigger candidate.
-	def openAcquisition(self, fileName, cWindow = 0, minToT = 0, writer = "TOFPET"):
+	def openAcquisition(self, fileName, enableTrigger = False, writer = "TOFPET"):
+		if self.__initOK == False:
+			print "Called ATB::openAcquisition before ATB::initialize!"
+			exit(1)
+
 		writerModeDict = { "writeRaw" : 'T', "TOFPET" : 'T', "ENDOTOFPET" : 'E', "NULL" : 'N', 'RAW' : 'R' }
 		if writer  not in writerModeDict.keys():
 			print "ERROR: when calling ATB::openAcquisition(), writer must be ", ", ".join(writerModeDict.keys())
 		
 		m = writerModeDict[writer]
 
-		from os import environ
-		if cWindow != 0 and not environ.has_key('ADAQ_CRYSTAL_MAP'):
-			print 'Error: ADAQ_CRYSTAL_MAP environment variable must be set when using cWindow different than zero'
-			exit(1)
+		# Set this values to zero to disable the software filter
+		cWindow = 0
 
-		cmd = [ "aDAQ/writeRaw", self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
-				"%e" % cWindow, "%e" % minToT, m, fileName ]
+		# Write out the channel map and trigger map to provide to writeRaw
+		self.__tempChannelMapFile = tempfile.NamedTemporaryFile(delete=True)
+		for channelID, (region, xi, yi, x, y, z) in self.config.channelMap.items():
+			self.__tempChannelMapFile.write("%d\t%d\t%d\t%d\t%f\t%f\t%f\t0\n" % (channelID, region, xi, yi, x, y, z))
+
+		self.__tempChannelMapFile.flush()
+
+		self.__tempTriggerMapFile = tempfile.NamedTemporaryFile(delete=True)
+		for a, b in self.config.triggerZones:
+			self.__tempTriggerMapFile.write("%d\t%d\n" % (a, b))
+
+		self.__tempTriggerMapFile.flush()
+
+		
+		if not enableTrigger:
+			# We don't want to filter this data for coincidences
+			self.__disableCoincidenceTrigger()
+		else:
+			# Trying to enable the hardware coincidence trigger
+			if self.__enableCoincidenceTrigger() == 0:
+				# OK!
+				pass
+			else:
+				# Failed (because this system doesn't have one?)
+				# Enable the software trigger
+				cWindow = self.config.triggerCoincidenceWindow
+
+		cmd = [ "aDAQ/writeRaw", 
+			self.__getSharedMemoryName(), "%d" % self.__getSharedMemorySize(), \
+				m, fileName,
+				"%e" % cWindow, "%e" % self.config.triggerMinimumToT, \
+				"%e" % self.config.triggerPreWindow, "%e" % self.config.triggerPostWindow, \
+				self.__tempChannelMapFile.name, self.__tempTriggerMapFile.name \
+			]
 		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
 
         ## Acquires data and decodes it, while writting through the acquisition pipeline 

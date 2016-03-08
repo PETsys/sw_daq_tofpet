@@ -12,9 +12,7 @@ parser.add_argument('acqTime', type=float,
 parser.add_argument('OutputFilePrefix',
                    help='output file prefix (files with .raw3 and .idx3 suffixes will be created)')
 
-parser.add_argument('--cWindow', type=float, default=0, help='If set, defines the coincidence time window (in seconds) for preliminary selection of events (default is 0, accepting all events)')
-
-parser.add_argument('--minToT', type=float, default=150, help='Sets the minimum ToT (in ns) for coincidence based preliminary selection of events (default is 150)')
+parser.add_argument('--enableCoincidenceFilter', action='store_true', default=False, help='Enable the online coincidence filter. Default is off")')
 
 parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
 
@@ -25,24 +23,14 @@ args = parser.parse_args()
 # ASIC clock period
 T = 6.25E-9
 
-if args.cWindow == None:
-	cWindow = 0
-else:
-	cWindow = args.cWindow
-
-if args.minToT == None:
-	minTOT = 0
-else:
-	minToT = args.minToT
-	
 acquisitionTime = args.acqTime
 dataFilePrefix = args.OutputFilePrefix
 
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig()
-uut.openAcquisition(dataFilePrefix, cWindow*1E-9, minToT*1E-9, writer="TOFPET")
 uut.initialize()
+uut.openAcquisition(dataFilePrefix, args.enableCoincidenceFilter, writer="TOFPET")
 # Set all HV DAC channels 
 uut.setAllHVDAC(67.50)
 uut.config.writeParams(dataFilePrefix, args.comments)
