@@ -322,12 +322,16 @@ int main(int argc, char *argv[])
 	
 	std::vector<boost::tuple<int, int, int> > list;
 	int fileID, asicStart, asicEnd;
+	int asicMin = MAX_N_ASIC;
+	int asicMax = 0;
 	while(fscanf(listFile, "%d %d %d\n", &fileID, &asicStart, &asicEnd) == 3) {
 		list.push_back(boost::tuple<int, int, int>(fileID, asicStart, asicEnd));
+		asicMin = asicMin < asicStart ? asicMin : asicStart;
+		asicMax = asicMax > asicEnd ? asicMax : asicEnd;
 	}
 	
-	int nChannels = asicEnd * 64;
-	int nTAC = asicEnd * 64 * 2 * 4;
+	int nChannels = asicMax * 64;
+	int nTAC = asicMax * 64 * 2 * 4;
 	TacInfo *tacInfo = (TacInfo *)mmap(NULL, sizeof(TacInfo)*nTAC, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
 	for(int tac = 0; tac < nTAC; tac++)
 		tacInfo[tac] = TacInfo();
@@ -428,7 +432,7 @@ int main(int argc, char *argv[])
 
 	// Copy parameters from shared memory to global P2 
 	DAQ::TOFPET::P2 myP2(nChannels);
-	for(int asic = 0; asic < asicEnd; asic++) {
+	for(int asic = asicMin; asic < asicMax; asic++) {
 		for(int channel = 0; channel < 64; channel++) {
 			for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
 				bool isT = (whichBranch == 0);
@@ -446,7 +450,7 @@ int main(int argc, char *argv[])
 	}
 
 	printf("Final adjustments\n");
-	for(int asic = 0; asic < asicEnd; asic++) {
+	for(int asic = asicMin; asic < asicMax; asic++) {
 		for(int channel = 0; channel < 64; channel++) {			
 		
 			float t0_adjust_sum = 0;
@@ -487,7 +491,7 @@ int main(int argc, char *argv[])
 	}
 
 	printf("Saving calibration tables\n");
-	for(unsigned n = 0; n <  asicEnd/nAsicsPerFile; n++) {
+	for(unsigned n = asicMin/nAsicsPerFile; n <  asicMax/nAsicsPerFile; n++) {
 
 		char tableFileName[1024];
 		int asicStart = n * nAsicsPerFile;
