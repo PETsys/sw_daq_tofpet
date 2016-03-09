@@ -519,8 +519,6 @@ uint64_t PFP_KX7::getPortCounts(int channel, int whichCount)
 
 int PFP_KX7::setSorter(unsigned mode)
 {
-	fprintf(stderr, "INFO: PFP_KX7::setSorter(%u) called\n", mode);
-	return -1;
 	setLastCommandTimeIdleCount();
 	pthread_mutex_lock(&hwLock);
 
@@ -529,9 +527,9 @@ int PFP_KX7::setSorter(unsigned mode)
 	uint32_t currentSetting;
 	ReadAndCheck(ConfigReg * 4, &currentSetting, 1);
 	// Clear the sorter enable bit
-	currentSetting = currentSetting & ~0x10000000;
-	// Set the sorter enable bit based on the desired mode
-	currentSetting = currentSetting | mode ? 0x10000000 : 0x00000000;
+	currentSetting = currentSetting & 0xEFFFFFFF;
+	// Set the sorter disable bit based on the desired mode
+	currentSetting = currentSetting | (!mode ? 0x10000000 : 0x00000000);
 	WriteAndCheck(ConfigReg * 4, &currentSetting, 1);
 
 	setLastCommandTimeIdleCount();
