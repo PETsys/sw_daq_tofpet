@@ -224,7 +224,7 @@ void *FrameServer::runWorker(void *arg)
         return F->doWork();
 }
 
-bool FrameServer::parseDataFrame(DataFrame *dataFrame, bool computeIdleTimes)
+bool FrameServer::parseDataFrame(DataFrame *dataFrame)
 {
 	
 	unsigned long long frameID = dataFrame->data[0] & 0xFFFFFFFFFULL;
@@ -294,4 +294,9 @@ int FrameServer::setSorter(unsigned mode)
 int FrameServer::setCoincidenceTrigger(CoincidenceTriggerConfig *config)
 {
 	return -1;
+}
+
+int FrameServer::setIdleTimeCalculation(unsigned mode)
+{
+	computeIdleTimes = (mode != 0);
 }

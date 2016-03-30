@@ -42,14 +42,17 @@ public:
 	virtual uint64_t getPortCounts(int port, int whichCount) = 0;
 
 	virtual int setSorter(unsigned mode);
-
 	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
+	virtual int setIdleTimeCalculation(unsigned mode);
 
+	
+private: 
+	bool computeIdleTimes;
 	
 protected:	
 	static const int CommandTimeout = 250; // ms
 	
-	bool parseDataFrame(DataFrame *dataFrame, bool computeIdleTimes);
+	bool parseDataFrame(DataFrame *dataFrame);
 	
 	int debugLevel;
 	

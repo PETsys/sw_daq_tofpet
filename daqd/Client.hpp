@@ -27,7 +27,7 @@ private:
 	int doGetPortCounts();
 	int doSetSorter();
 	int doSetTrigger();
-
+	int doSetIdleTimeCalculation();
 };
 
 }

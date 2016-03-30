@@ -35,7 +35,6 @@ DAQFrameServer::DAQFrameServer(AbstractDAQCard *card, int nFEB, int *feTypeMap, 
 	
 	printf("allocated DP object = %p\n", DP);
 	
-	computeIdleTimes = true;
 	startWorker();
 }
 
@@ -218,7 +217,7 @@ void *DAQFrameServer::doWork()
 				lastFrameWasBad = true; skippedLoops = 1000006; continue; 
 		}
 
-		if (!m->parseDataFrame(dataFrame, computeIdleTimes))
+		if (!m->parseDataFrame(dataFrame))
 			continue;
 
 		if(dataFrame != devNull) {
@@ -258,13 +257,5 @@ int DAQFrameServer::setSorter(unsigned mode)
 int DAQFrameServer::setCoincidenceTrigger(CoincidenceTriggerConfig *config)
 {
 	int r = DP->setCoincidenceTrigger(config);
-	if(config->enable == 1 and r == 0) {
-		// We have sucessfully enabled hardware coincidence filter
-		// Disable idle time computation, as the values would be garbage
-		computeIdleTimes = false;
-	}
-	else {
-		computeIdleTimes = true;
-	}
 	return r;
 }

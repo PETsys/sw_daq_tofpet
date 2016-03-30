@@ -335,6 +335,10 @@ class ATB:
 		self.__initOK = False
 		self.__tempChannelMapFile = None
 		self.__tempTriggerMapFile = None
+
+		# Gating and coincidence trigger will break idle time calculation
+		# If either is enabled, they set this flag to non-zero
+		self.__idleTimeBreakage = 0x0
 		return None
 
 
@@ -946,6 +950,8 @@ class ATB:
 		self.stop()		
 		sleep(0.5)
 
+		self.__setIdleTimeComputation(True)
+		self.__setSortingMode(True)
 		self.disableTriggerGating()
 		self.setTestPulseNone()
 		self.__disableCoincidenceTrigger()
@@ -1082,13 +1088,16 @@ class ATB:
 	def disableTriggerGating(self):
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 13, 0x00);
+		self.__idleTimeBreakage &= ~0b1
+		self.__setIdleTimeComputation(self.__idleTimeBreakage == 0)
 
 	## Enabled external gate function
 	# @param delay Delay of the external gate signal, in clock periods
 	def enableTriggerGating(self, delay):
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 13, 1024 + delay);
-
+		self.__idleTimeBreakage |= 0b1
+		self.__setIdleTimeComputation(self.__idleTimeBreakage == 0)
 
 	def __setCoincidenceTrigger(self, enable, triggerMinimumToT,
 					triggerCoincidenceWindow, triggerPreWindow,
@@ -1135,6 +1144,14 @@ class ATB:
 		n0 = struct.calcsize(template0)
 		data0 = self.__socket.recv(n0);
 		reply, = struct.unpack(template0, data0)
+
+		if enable && reply != 0:
+			# We have successfully enabled a hardware coincidence trigger
+			# Thus, we need to disable the idle time calculation
+			self.__idleTimeBreakage |= 0b10
+		else:
+			self.__idleTimeBreakage &= ~0b10
+		self.__setIdleTimeComputation(self.__idleTimeBreakage == 0)
 
 		return reply
 
@@ -1204,6 +1221,22 @@ class ATB:
 		template1 = "@HHI"
 		n = struct.calcsize(template1)
 		data = struct.pack(template1, 0x09, n, word);
+		self.__socket.send(data)
+
+		template = "@I"
+		n = struct.calcsize(template)
+		data = self.__socket.recv(n);
+		return None
+
+	def __setIdleTimeComputation(self, enable):
+		if enable:
+			word = 0x1
+		else: 
+			word = 0x0
+
+		template1 = "@HHI"
+		n = struct.calcsize(template1)
+		data = struct.pack(template1, 0x11, n, word);
 		self.__socket.send(data)
 
 		template = "@I"

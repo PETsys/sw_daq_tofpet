@@ -61,6 +61,8 @@ int Client::handleRequest()
 		actionStatus = doSetSorter();
 	else if(cmdHeader.type == commandSetTrigger)
 		actionStatus = doSetTrigger();
+	else if(cmdHeader.type == commandSetIdleTimeCalculation)
+		actionStatus = doSetIdleTimeCalculation();
 	
 	if(actionStatus == -1) {
 		fprintf(stderr, "Error handling client %d, command was %u\n", socket, unsigned(cmdHeader.type));
@@ -194,6 +196,18 @@ int Client::doSetTrigger()
 	struct CoincidenceTriggerConfig triggerConfig;
 	memcpy(&triggerConfig, socketBuffer + sizeof(CmdHeader_t), sizeof(triggerConfig));
 	int32_t reply = frameServer->setCoincidenceTrigger(&triggerConfig);;
+	int status = send(socket, &reply, sizeof(reply), MSG_NOSIGNAL);
+	if(status < sizeof(reply)) return -1;
+	return 0;
+}
+
+int Client::doSetIdleTimeCalculation()
+{
+	uint32_t mode;
+	memcpy(&mode, socketBuffer + sizeof(CmdHeader_t), sizeof(mode));
+	frameServer->setIdleTimeCalculation(mode);
+
+	uint32_t reply = 0;
 	int status = send(socket, &reply, sizeof(reply), MSG_NOSIGNAL);
 	if(status < sizeof(reply)) return -1;
 	return 0;

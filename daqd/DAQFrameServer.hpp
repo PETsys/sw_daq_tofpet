@@ -42,7 +42,6 @@ public:
 
 private:
 	AbstractDAQCard *DP;
-	bool computeIdleTimes;
 	
 protected:
 
