@@ -434,11 +434,11 @@ int main(int argc, char *argv[])
 	DAQ::TOFPET::P2 myP2(nChannels);
 	for(int asic = asicMin; asic < asicMax; asic++) {
 		for(int channel = 0; channel < 64; channel++) {
-			for(int whichBranch = 0; whichBranch < 2; whichBranch++) {
-				bool isT = (whichBranch == 0);
+			for(int tOrE = 0; tOrE < 2; tOrE++) {
+				bool isT = (tOrE == 0);
 				for(int tac = 0; tac < 4; tac++) {
-					int index2 = 4 * (64 * asic + channel) + tac;				
-					TacInfo &ti = tacInfo[2*index2 + (isT ? 0 : 1)];					
+					unsigned gid = ((64*asic + channel) << 3) | (tOrE << 2) | (tac & 0x3);
+					TacInfo &ti = tacInfo[gid];
 					if(ti.pA_Fine == NULL)	continue;
 					
 					myP2.setShapeParameters((64*asic+channel), tac, isT, ti.shape.tB, ti.shape.m, ti.shape.p2);
@@ -456,9 +456,10 @@ int main(int argc, char *argv[])
 			float t0_adjust_sum = 0;
 			int t0_adjust_N = 0;	
 			for(int tac = 0; tac < 4; tac++) {
-				int index2 = 4 * (64 * asic + channel) + tac;				
-				TacInfo &tiT = tacInfo[2*index2 + 0];				
-				TacInfo &tiE = tacInfo[2*index2 + 1];				
+				unsigned gidT = ((64*asic + channel) << 3) | (0 << 2) | (tac & 0x3);
+				unsigned gidE = ((64*asic + channel) << 3) | (1 << 2) | (tac & 0x3);
+				TacInfo &tiT = tacInfo[gidT];
+				TacInfo &tiE = tacInfo[gidE];
 				
 				if(tiT.pA_Fine == NULL || tiE.pA_Fine == NULL) 
 					continue;
@@ -472,9 +473,10 @@ int main(int argc, char *argv[])
 			
 			float t0_adjust = t0_adjust_sum / t0_adjust_N;
 			for(int tac = 0; tac < 4; tac++) {
-				int index2 = 4 * (64 * asic + channel) + tac;				
-				TacInfo &tiT = tacInfo[2*index2 + 0];				
-				TacInfo &tiE = tacInfo[2*index2 + 1];				
+				unsigned gidT = ((64*asic + channel) << 3) | (0 << 2) | (tac & 0x3);
+				unsigned gidE = ((64*asic + channel) << 3) | (1 << 2) | (tac & 0x3);
+				TacInfo &tiT = tacInfo[gidT];
+				TacInfo &tiE = tacInfo[gidE];
 				
 				if(tiT.pA_Fine == NULL || tiE.pA_Fine == NULL) 
 					continue;
