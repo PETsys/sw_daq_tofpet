@@ -1145,7 +1145,7 @@ class ATB:
 		data0 = self.__socket.recv(n0);
 		reply, = struct.unpack(template0, data0)
 
-		if enable && reply != 0:
+		if enable and reply != 0:
 			# We have successfully enabled a hardware coincidence trigger
 			# Thus, we need to disable the idle time calculation
 			self.__idleTimeBreakage |= 0b10
