@@ -830,7 +830,7 @@ int calibrate(	int asicStart, int asicEnd,
 			}
 				
 			int nBinsX = pB_Fine->GetXaxis()->GetNbins();
-			float xMin = pB_Fine->GetXaxis()->GetXmin();
+			float xMin = pB_Fine->GetXaxis()->GetXmin() + pB_Fine->GetXaxis()->GetBinWidth(1);
 			float xMax = pB_Fine->GetXaxis()->GetXmax();
 			
 			TF1 *pl1 = new TF1("pl1", "[0]+[1]*x", xMin, xMax);		
@@ -842,7 +842,7 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			int nTry = 0;
 			while(nTry < 10){
-				pB_Fine->Fit("pl1", "Q");
+				pB_Fine->Fit("pl1", "Q", "", xMin, xMax);
 				TF1 *fit = pB_Fine->GetFunction("pl1");
 				if(fit == NULL) break;
 				float chi2 = fit->GetChisquare();
