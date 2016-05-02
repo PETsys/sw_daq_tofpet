@@ -1,8 +1,9 @@
 #!/bin/sh
+yum -y install epel-release
+
 yum -y install gcc \
 gcc-c++ \
 boost-devel \
-epel-release \
 root \
 root-gui-fitpanel \
 root-spectrum \
