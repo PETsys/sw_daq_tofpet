@@ -10,6 +10,7 @@ root-spectrum \
 root-spectrum-painter \
 root-minuit2 \
 root-physics \
+root-multiproc \
 python \
 python-devel \
 root-python \
