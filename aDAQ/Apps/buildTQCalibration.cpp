@@ -192,9 +192,9 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
-	bool onlineMode=false;
 	float readBackTime=-1;
 #endif
+	bool onlineMode=false;
 	int nOptArgs=0;
 	while(1) {
 		int optionIndex = 0;
@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
 		    reader = new DAQ::TOFPET::RawReaderV2(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd, pipeSink);
 #else
 		reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
-				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
+				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.20, true, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new TQCorrWriter(f, false, P2,
 				new NullSink<Hit>()
 				)));

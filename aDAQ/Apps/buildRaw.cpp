@@ -98,9 +98,9 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
-	bool onlineMode=false;
 	float readBackTime=-1;
 #endif
+	bool onlineMode=false;
 	
 	int nOptArgs=0;
 	while(1) {

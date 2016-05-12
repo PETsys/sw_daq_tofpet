@@ -353,8 +353,8 @@ public:
 
 			
 			
-			Hit &hit1 = c.photons[0].hits[0];
-			Hit &hit2 = c.photons[1].hits[0];
+			Hit &hit1 = *(c.photons[0]->hits[0]);
+			Hit &hit2 = *(c.photons[1]->hits[0]);
 
 			bool isBadEvent1=hit1.badEvent;
 			bool isBadEvent2=hit2.badEvent;
@@ -448,9 +448,9 @@ int main(int argc, char *argv[])
 #ifndef __ENDOTOFPET__
 	char rawV[128];
 	rawV[0]='3';
-	bool onlineMode=false;
 	float readBackTime=-1;
 #endif
+	bool onlineMode=false;
 	bool useROOT=true;
 	bool useLIST=false;
 	float acqAngle=0;
@@ -725,7 +725,7 @@ int main(int argc, char *argv[])
 #else
 			reader = new DAQ::ENDOTOFPET::RawReaderE(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd,
 				new CoincidenceFilter(systemInformation, cWindowCoarse, minToTCoarse,
-				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.2, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
+				new DAQ::ENDOTOFPET::Extract(new P2Extract(P2, false, 0.0, 0.20, true, NULL), new DAQ::STICv3::Sticv3Handler() , NULL,
 				new CrystalPositions(systemInformation,
 				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, maxHits,
 				new CoincidenceGrouper(cWindow,

@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <Common/Constants.hpp>
+#include <STICv3/sticv3Handler.hpp>
 
 using namespace std;
 using namespace DAQ::Core;
@@ -153,30 +154,16 @@ void RawReaderE::run()
 				
 				RawHit &p = outBuffer->getWriteSlot();
 			
-				//long long clocksElapsed = CurrentFrameID *1024*4ULL;
-				long long clocksElapsed = (CurrentFrameID%256) *1024*4ULL;	// Periodic reset every 256 frames
-				long long wrapNumber	= clocksElapsed / 32767;
-				long long wrapRemainder	= clocksElapsed % 32767;
-
 				unsigned tCoarse = rawEvent2.tCoarse;
 				unsigned eCoarse = rawEvent2.eCoarse;
-
-				if(tCoarse < wrapRemainder)
-					tCoarse += 32767;
-				tCoarse -= wrapRemainder;
-
-				
-				if(eCoarse < wrapRemainder)
-					eCoarse += 32767;
-				eCoarse -= wrapRemainder;
-
-				//printf("wrapRemainder: %6lld\n", wrapRemainder);
-				//printf("tCoarse: %6lu %6lu\n", rawEvent2.tCoarse, tCoarse);
-
+				// Compensate LFSR's 2^16-1 period
+				// and wrap at frame's 6.4 us period
+				int ctCoarse = STICv3::Sticv3Handler::compensateCoarse(tCoarse, CurrentFrameID) % 4096;
+				int ceCoarse = STICv3::Sticv3Handler::compensateCoarse(eCoarse, CurrentFrameID) % 4096;
 			
 				long long pT = T * 1E12;
-				p.time = 1024LL * CurrentFrameID * pT + tCoarse * pT/4;
-				p.timeEnd = 1024LL * CurrentFrameID * pT + eCoarse * pT/4;
+				p.time = 1024LL * CurrentFrameID * pT + ctCoarse * pT/4;
+				p.timeEnd = 1024LL * CurrentFrameID * pT + ceCoarse * pT/4;
 				if((p.timeEnd - p.time) < -256*pT) p.timeEnd += (1024LL * pT);
 				p.channelID = rawEvent2.channelID;
 				p.channelIdleTime = rawEvent2.channelIdleTime;

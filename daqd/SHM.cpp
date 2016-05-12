@@ -73,10 +73,5 @@ unsigned long long SHM::getSizeInBytes()
 unsigned SHM::decodeSticCoarse(unsigned coarse, unsigned long long frameID)
 {
 	coarse = m_lut[coarse];
-	long long clocksElapsed = (frameID % 256) *1024*4ULL;	// Periodic reset every 256 frames
-	long long wrapNumber	= clocksElapsed / 32767;
-	long long wrapRemainder	= clocksElapsed % 32767;
-	if(coarse < wrapRemainder) coarse += 32767;
-	coarse -= wrapRemainder;
 	return coarse;
 }

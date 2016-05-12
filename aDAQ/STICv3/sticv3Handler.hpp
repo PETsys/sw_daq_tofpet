@@ -19,6 +19,8 @@ namespace DAQ { namespace STICv3 {
 
 		bool handleEvent(RawHit &rawHit, Hit &Hit); 
 
+		static int compensateCoarse(unsigned coarse, unsigned long long frameID);
+
 
 	private:
 		u_int32_t nPassed;

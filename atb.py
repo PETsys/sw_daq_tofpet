@@ -371,17 +371,8 @@ class ATB:
 		for portID, slaveID in self.getActiveFEBDs(): 
 			self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 
-		# Start acquisition process
-		# Disable DAQ card
-		self._daqdMode(0);
-		# Enable all FEB/D to receive external sync
-		for portID, slaveID in self.getActiveFEBDs():
-			self.writeFEBDConfig(portID, slaveID, 0, 10, 1)
-		# Enable DAQ card (also generates sync to FEB/Ds
-		self._daqdMode(2);
-		# Inhibit all FEB/Ds from receiving external sync
-		for portID, slaveID in self.getActiveFEBDs():
-			self.writeFEBDConfig(portID, slaveID, 0, 10, 0)
+		# Now, start the DAQ!
+		self._daqdMode(2); # Start acquisition on daqd
 
 		# Check the status from all the ASICs
 		for portID, slaveID in self.getActiveFEBDs():
@@ -394,7 +385,18 @@ class ATB:
 			decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(nLocalAsics) ]
 
 			for i, globalAsicID in enumerate(self.getGlobalAsicIDsForFEBD(portID, slaveID)):
-				localOK = deserializerStatus[i] and decoderStatus[i] 
+				asicType = self.__asicType[globalAsicID]
+				if asicType == 0x00020003: 
+					# Do not check presense for STiCv3
+					continue
+
+				duplet = (deserializerStatus[i], decoderStatus[i])
+				if duplet == (True, True):
+					localOK = True
+				elif duplet == (False, False):
+					localOK = False
+				else:
+					localOK = None
 				globalOK = self.__activeAsics[globalAsicID]
 				if localOK != globalOK:
 					raise ErrorAsicPresenceChanged(portID, slaveID, i)
@@ -887,54 +889,82 @@ class ATB:
 
 		# Load a minimum power configuration into the FEB/D
 		allOff = sticv3.AsicConfig('stic_configurations/ALL_OFF.txt')
-		data = allOff.data
-		data = data + "\x00\x00\x00"
+		writeData = allOff.data + "\x00\x00\x00"
 		memAddr = 1
-		while len(data) > 3:
-			d = data[0:4]
-			data = data[4:]
+		while len(writeData) > 3:
+			d = writeData[0:4]
+			writeData = writeData[4:]
 			msb = (memAddr >> 8) & 0xFF
 			lsb = memAddr & 0xFF
 			#print "RAM ADDR %4d, nBytes Written = %d, nBytes Left = %d" % (memAddr, len(d), len(data))
 			#print [hex(ord(x)) for x in d]
-			self.sendCommand(febID, 0, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
+			self.sendCommand(portID, slaveID, 0x00, bytearray([0x00, msb, lsb] + [ ord(x) for x in d ]))
 			memAddr = memAddr + 1	
 
 		for n in range(8):
 			ldoVector = self.readFEBDConfig(portID, slaveID, 0, 5)
 			if ldoVector & (1<<n) == 0: # This LDO is OFF, let's turn it on	
-				print "INFO: LDO %d was OFF, turning ON"
+				print "INFO: LDO %d was OFF, turning ON" % n
 				ldoVector = ldoVector | (1<<n)
 				self.writeFEBDConfig(portID, slaveID, 0, 5, ldoVector)
 				for i in range(16): # Apply the ALL_OFF configuration to all chips in FEB/D
+					sleep(0.010)
 					self.sendCommand(portID, slaveID, 0x00, bytearray([0x01, i]))
 
-		localAsicConfigOK = [ True for x in localAsicIDList ] # For STICv3, we don't check the configuration status
+		for i in range(16): # Apply the ALL_OFF configuration to all chips in FEB/D
+			self.sendCommand(portID, slaveID, 0x00, bytearray([0x01, i]))
+			self.sendCommand(portID, slaveID, 0x00, bytearray([0x01, i]))
+			readBackData = self.readConfigSTICv3(portID, slaveID)
+
+
+			nBytesToCompare = min(len(allOff.data), len(readBackData))
+			readBackData[nBytesToCompare-1]=readBackData[nBytesToCompare-1] & 0x01
+
+			if readBackData[0:nBytesToCompare] != allOff.data[0:nBytesToCompare]:
+				print "Config mismatch for P%02d S%02d A%02d" % (portID, slaveID, i)
+				print "Wrote ", [ "%02x" % ord(x) for x in allOff.data[0:nBytesToCompare]]
+				print "Read  ", [ "%02x" % ord(x) for x in str(readBackData[0:nBytesToCompare])]
+
+			sleep(0.010)
+
 
 		# Enable the reception logic	
 		self.writeFEBDConfig(portID, slaveID, 0, 4, 0xF)
 		#self.sendCommand(portID, slaveID, 0x03, bytearray([0x04, 0x00, 0x00]))
-		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
+		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0xFF]))
 		sleep(0.120)	# Need to wait for at least 100 ms, plus the reset time
+
+		localAsicIDList = self.getGlobalAsicIDsForFEBD(portID, slaveID)
 
 		deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
 		decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
 
-		deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
-		decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(len(localAsicConfigOK)) ]
+		deserializerStatus = [ deserializerStatus & (1<<n) != 0 for n in range(len(localAsicIDList)) ]
+		decoderStatus = [ decoderStatus & (1<<n) != 0 for n in range(len(localAsicIDList)) ]
 
+		inconsistentAsicException = None
 		for i, asicID in enumerate(localAsicIDList):
 			self.__asicType[asicID] = 0x00020003
-			triplet = (localAsicConfigOK[i], deserializerStatus[i], decoderStatus[i])
-			if triplet == (True, True, True):
+
+			# All STiC ASICs are assumed to be true
+			self.__activeAsics[asicID] = True
+			continue
+
+			duplet = (deserializerStatus[i], decoderStatus[i])
+			if duplet == (True, True):
 				# All OK, ASIC is present and OK
 				self.__activeAsics[asicID] = True
-			elif triplet == (False, False, False):
+			elif duplet == (False, False):
 				# All failed, ASIC is not present
 				self.__activeAsics[asicID] = False
 			else:
 				# Something failed!!
-				raise ErrorAsicPresenceInconsistent(portID, slaveID, i, str(triplet))	
+				self.__activeAsics[asicID] = None
+				inconsistentAsicException = ErrorAsicPresenceInconsistent(portID, slaveID, i, str(duplet))
+				print inconsistentAsicException
+
+		if inconsistentAsicException is not None:
+			raise inconsistentAsicException
 
 		return None
 
@@ -1467,7 +1497,7 @@ class ATB:
 		return None
 
 	## \internal
-        def readConfigSTICv3(self):
+        def readConfigSTICv3(self, portID, slaveID):
 
 		# Some padding
 		#data = data + "\x00\x00\x00"
@@ -1476,7 +1506,7 @@ class ATB:
                 for i in range(0, 146):
 			msb = (memAddr >> 8) & 0xFF
 			lsb = memAddr & 0xFF
-			return_data=self.sendCommand(0, 0, 0x00, bytearray([0x02, msb, lsb]))
+			return_data=self.sendCommand(portID, slaveID, 0x00, bytearray([0x02, msb, lsb]))
 			#print [hex(x) for x in return_data[2:6]]
 
 			data = data+return_data[2:6];
@@ -1505,7 +1535,7 @@ class ATB:
 			memAddr = memAddr + 1
 		
 		#print "Configuring"
-		self.sendCommand(portID, slaveID, 0, 0x00, bytearray([0x01,localAsicID]))
+		self.sendCommand(portID, slaveID, 0x00, bytearray([0x01,localAsicID]))
 			
 		
 
