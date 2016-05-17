@@ -452,13 +452,14 @@ int PFP_KX7::WriteAndCheck(int reg, uint32_t *data, int count) {
 	assert(reg >= 0);
 	assert((reg/4 + count) >= 0);
 	assert((reg/4 + count) <= 1024);
+
+	reg = BaseAddrReg + reg;
 	
 	uint32_t *readBackBuffer = new uint32_t[count];
 	bool fail = true;
 	DWORD Status;
 	int iter = 0;
 	while(fail) {
-		reg = BaseAddrReg + reg;
 		//Status = PFP_Write(Card, reg, count * 4, data, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		for(int i = 0; i < count; i++) PFP_Write(Card, reg + 4*i, 4, data+i, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		for(int i = 0; i < count; i++) readBackBuffer[i] = 0;
@@ -476,12 +477,13 @@ int PFP_KX7::ReadAndCheck(int reg, uint32_t *data, int count) {
 	assert((reg/4 + count) >= 0);
 	assert((reg/4 + count) <= 1024);
 
+	reg = BaseAddrReg + reg;
+
 	uint32_t *readBackBuffer = new uint32_t[count];
 	bool fail = true;
 	DWORD Status;
 	int iter = 0;
 	while(fail) {
-		reg = BaseAddrReg + reg;
 		Status = PFP_Read(Card, reg, count * 4, data, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
 		for(int i = 0; i < count; i++) readBackBuffer[i] = 0;
 		PFP_Read(Card, reg, count * 4, readBackBuffer, WDC_MODE_32, WDC_ADDR_RW_DEFAULT);
