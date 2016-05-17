@@ -18,6 +18,8 @@
 #include <unistd.h>
 #include "boost/date_time/posix_time/posix_time.hpp"
 
+static unsigned long long TARGET_EXT_CLK_FREQUENCY = 160000000;
+
 using namespace DAQd;
 
 static const unsigned DMA_TRANS_BYTE_SIZE = 262144;  // max for USER_FIFO_THRESHOLD 262128
@@ -44,8 +46,8 @@ PFP_KX7::PFP_KX7()
 
 	unsigned int ExtClkFreq;
 	PFP_SM_Get_ECF0(Card, &ExtClkFreq);
-	if (ExtClkFreq < 199990000 || ExtClkFreq > 200010000) {  // check the ext oscilator frequency
-		Status = PFP_SM_Set_Freq0(Card, 200000);  // if not correct, reprogram
+	if (ExtClkFreq < 0.99995*TARGET_EXT_CLK_FREQUENCY || ExtClkFreq > 1.00005*TARGET_EXT_CLK_FREQUENCY) {  // check the ext oscilator frequency
+		Status = PFP_SM_Set_Freq0(Card, TARGET_EXT_CLK_FREQUENCY/1000);  // if not correct, reprogram
 		assert(Status == WD_STATUS_SUCCESS);
 	}
 
