@@ -22,7 +22,7 @@ using namespace DAQ::Common;
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s <setup_file> <rawfiles_prefix> <output_file> --channelMap <channel.map> --triggerMap <trigger.map>\n", program);
+	fprintf(stderr, "usage: %s <setup_file> <rawfiles_prefix> <output_file> --channelMap <channel.map>\n", program);
 }
 
 void displayHelp(char *program)
@@ -35,7 +35,6 @@ void displayHelp(char *program)
 	"  <rawfiles_prefix>		Raw data files prefix\n"
 	"  <output_file>		\tOutput file containing coincidence event data\n"
 	"  --channelMap <channel.map>	Channel map file\n"
-	"  --triggerMap <trigger.map>	Trigger map file\n"
 	"\n"
 	
 	"\noptional arguments:\n"
@@ -122,7 +121,6 @@ int main(int argc, char *argv[])
 	
 	bool writeMultipleHits = true;
 	char *channelMapFileName = NULL;
-	char *triggerMapFileName = NULL;
 	
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
@@ -131,7 +129,6 @@ int main(int argc, char *argv[])
 		{ "gWindow", required_argument,0,0 },
 		{ "writeMultipleHits", no_argument,0,0 },
 		{ "channelMap", required_argument, 0, 0},
-		{ "triggerMap", required_argument, 0, 0},
 		{ NULL, 0, 0, 0 }
 	};
 	
@@ -148,7 +145,6 @@ int main(int argc, char *argv[])
 			case 3: gWindow = atof(optarg) * 1E-9; break;
 			case 4: writeMultipleHits = true; break;
 			case 5: channelMapFileName = optarg; break;
-			case 6: triggerMapFileName = optarg; break;
 			default: 
 				displayHelp(argv[0]); return 1;
 		}
@@ -170,11 +166,6 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "\n%s: error: --channelMap was not specified!\n", argv[0]);
 		return(1);
 	}
-	if(triggerMapFileName == NULL) {
-		displayUsage(argv[0]);
-		fprintf(stderr, "\n%s: error: --triggerMap was not specified!\n", argv[0]);
-		return(1);
-	}
 	
 	
 	char * setupFileName=argv[optind];
@@ -193,7 +184,6 @@ int main(int argc, char *argv[])
 	
 	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
 	systemInformation->loadMapFile(channelMapFileName);
-	systemInformation->loadTriggerMapFile(triggerMapFileName);
 	
 	float gRadius = 20; // mm 
 
