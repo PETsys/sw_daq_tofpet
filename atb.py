@@ -1187,6 +1187,12 @@ class ATB:
 
 	## Enables the DAQ system coincidence trigger, based on the settings defined in config
 	def __enableCoincidenceTrigger(self):
+		status = self.__disableCoincidenceTrigger()
+		if status != 0:
+			# This system doesn't have a hardware trigger
+			# Let's just move on
+			return status
+	
 		# Hardcoded map, which is sufficient for current HW triggers
 		hwRegionMap = {}
 		for slave in range(2):
@@ -1201,12 +1207,17 @@ class ATB:
 			hwRegion1 = hwRegionMap[swChannel1]
 			for swChannel2, (swRegion2, xi, yi, x, y, z) in channelMapItems[i:]:
 				hwRegion2 = hwRegionMap[swChannel2]
-				#print swChannel1, swRegion1, hwRegion1, " --", swChannel2, swRegion2, hwRegion2
 				if (swRegion1, swRegion2) not in self.config.triggerZones:
 					continue
+
+				if hwRegion1 == hwRegion2:
+					print "INFO: Hardware coincidence trigger available but will not be enabled."
+					print "INFO: Reason: coincidences required between region %d and %d but both map to hardware trigger region %d" % (swRegion1, swRegion2, hwRegion1)
+					return -1
+
 				hwTriggerZones.add((hwRegion1, hwRegion2))
 
-		r = self.__setCoincidenceTrigger(
+		status = self.__setCoincidenceTrigger(
 			1,
 			self.config.triggerMinimumToT,
 			self.config.triggerCoincidenceWindow,
@@ -1215,10 +1226,10 @@ class ATB:
 			self.config.triggerSinglesFraction,
 			hwTriggerZones
 		)
-		if r == 0:
+		if status == 0:
 			print "INFO: Enabled hardware coincidence filter for the following ports: ", list(hwTriggerZones)
 
-		return r
+		return status
 		
 
 	## Disables the DAQ system coincidence trigger (default)
@@ -1368,9 +1379,8 @@ class ATB:
 
         ##Opens the acquisition pipeline, allowing the data frames read from the shared memory block to be written to disk by a writing applications
         # @param fileName The name of the file containg the data written by aDAQ/writeRaw
+	# @param enableTrigger Enables the hardware/software coincidence triggers
         # @param writer The desired outout file format. Default is "TOFPET", which is equivalent to "writeRaw"
-        # @param cWindow Coincidence window (in seconds) If different from 0, only events with a time of arrival difference of cWindow (in seconds) will be written to disk. 
-	# @param minToT Minimal ToT (in seconds) for events to be considered as a coincidence trigger candidate.
 	def openAcquisition(self, fileName, enableTrigger = False, writer = "TOFPET"):
 		if self.__initOK == False:
 			print "Called ATB::openAcquisition before ATB::initialize!"
@@ -1403,13 +1413,11 @@ class ATB:
 			# We don't want to filter this data for coincidences
 			self.__disableCoincidenceTrigger()
 		else:
-			# Trying to enable the hardware coincidence trigger
+			# Try to enable the hardware coincidence trigger
 			if self.__enableCoincidenceTrigger() == 0:
-				# OK!
 				pass
 			else:
-				# Failed (because this system doesn't have one?)
-				# Enable the software trigger
+				# Enable the software trigger as fallback
 				cWindow = self.config.triggerCoincidenceWindow
 
 		cmd = [ "aDAQ/writeRaw", 

@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 import atb
-from atbUtils import loadAsicConfig, dumpAsicConfig, loadHVDACParams, loadBaseline, loadHVBias
+from atbUtils import loadAsicConfig, dumpAsicConfig, loadHVDACParams, loadBaseline, loadHVBias, loadTriggerMap
 
 # Loads configuration for the local setup
 def loadLocalConfig(useBaseline=True):
 	atbConfig = atb.BoardConfig()
+	loadTriggerMap(atbConfig, "basic_channel.map", "basic_trigger.map")
+	atbConfig.triggerMinimumToT = 150E-9
+	atbConfig.triggerCoincidenceWindow = 25E-9
 
 	# HV DAC calibration
 	loadHVDACParams(atbConfig, 0, 64, "config/pab1/hvdac.Config")
