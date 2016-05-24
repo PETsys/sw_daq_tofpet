@@ -21,21 +21,22 @@ using namespace DAQ::Common;
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
+	fprintf(stderr, "usage: %s <setup_file> <rawfiles_prefix> <output_file>\n", program);
 }
 
 void displayHelp(char *program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
+	fprintf(stderr, "usage: %s <setup_file> <rawfiles_prefix> <output_file>\n", program);
 	fprintf(stderr, 
+	"\npositional arguments:\n"
+	"  <setup_file>		File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n"
+	"  <rawfiles_prefix>	Raw data files prefix\n"
+	"  <output_file>	\tOutput file containing coincidence event data\n"
+	"\n"
 	
 	"\noptional arguments:\n"
-	 "  --help \t\t\t Show this help message and exit \n"
+	 "  --help		Show this help message and exit \n"
 	 "\n"
-	"\npositional arguments:\n"
-	"  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n"
-	"  rawfiles_prefix \t\t Raw data files prefix\n"
-	"  output_file \t\t Output file containing coincidence event data\n"
 	);
 }
 
