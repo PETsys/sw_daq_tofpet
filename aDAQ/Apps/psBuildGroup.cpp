@@ -43,6 +43,7 @@ void displayHelp(char *program)
 	 "  --maxEnergy=MAXENERGY	\tThe maximum energy (in keV) of an event to be considered a valid coincidence. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n"
 	 "  --gWindow=gWINDOW		Maximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n"
 	 "  --writeMultipleHits		Write multiple hit information.\n"
+	 "  --writeBinary		\tWrite a binary file\n"
 	 "\n"
 	);
 }
@@ -61,10 +62,11 @@ class EventWriter : public OverlappedEventHandler<GammaPhoton, GammaPhoton> {
 	private:
 		FILE *dataFile;
 		bool writeMultipleHits;
+		bool writeBinary;
 	public:
-		EventWriter (FILE *f, bool writeMultipleHits, EventSink<GammaPhoton> *sink) :
+		EventWriter (FILE *f, bool writeMultipleHits, bool writeBinary, EventSink<GammaPhoton> *sink) :
 		OverlappedEventHandler<GammaPhoton, GammaPhoton>(sink, true),
-		dataFile(f), writeMultipleHits(writeMultipleHits)
+		dataFile(f), writeMultipleHits(writeMultipleHits), writeBinary(writeBinary)
 		{		
 		}
 		
@@ -81,25 +83,27 @@ class EventWriter : public OverlappedEventHandler<GammaPhoton, GammaPhoton> {
 			
 			for(unsigned i = 0; i < nEvents; i++) {
 				GammaPhoton &e = inBuffer->get(i);
-		        
 				if(e.time < tMin || e.time >= tMax) continue;
-				
-				
 				int limit = writeMultipleHits ? e.nHits : 1;
 				
 				for(int m = 0; m < limit; m++){
-					
-					
 					Hit &h = *e.hits[m];
-				
 					
-					Event eo = { 
-						e.nHits, m,
-						h.time, h.energy,
-						h.raw->channelID,
-					};
-					
-					fwrite(&eo, sizeof(eo), 1, dataFile);
+					if(writeBinary) {
+						Event eo = { 
+							(uint8_t) e.nHits, (uint8_t) m,
+							h.time, h.energy,
+							h.raw->channelID
+						};
+						fwrite(&eo, sizeof(eo), 1, dataFile);
+					}
+					else {
+						fprintf(dataFile, "%d\t%d\t%lld\t%f\t%d\n",
+							e.nHits, m,
+							h.time, h.energy,
+							h.raw->channelID
+						);
+					}
 					
 				}
 			}
@@ -120,6 +124,7 @@ int main(int argc, char *argv[])
 	float ctrEstimate = 200E-12;
 	
 	bool writeMultipleHits = true;
+	bool writeBinary = false;
 	char *channelMapFileName = NULL;
 	
 	static struct option longOptions[] = {
@@ -129,6 +134,7 @@ int main(int argc, char *argv[])
 		{ "gWindow", required_argument,0,0 },
 		{ "writeMultipleHits", no_argument,0,0 },
 		{ "channelMap", required_argument, 0, 0},
+		{ "writeBinary", no_argument, 0, 0 },
 		{ NULL, 0, 0, 0 }
 	};
 	
@@ -145,6 +151,7 @@ int main(int argc, char *argv[])
 			case 3: gWindow = atof(optarg) * 1E-9; break;
 			case 4: writeMultipleHits = true; break;
 			case 5: channelMapFileName = optarg; break;
+			case 6: writeBinary = true; break;
 			default: 
 				displayHelp(argv[0]); return 1;
 		}
@@ -170,7 +177,7 @@ int main(int argc, char *argv[])
 	
 	char * setupFileName=argv[optind];
 	char *inputFilePrefix = argv[optind+1];
-	char *outputFilePrefix = argv[optind+2];
+	char *outputFileName = argv[optind+2];
 	
 
 	DAQ::TOFPET::P2 *P2 = new DAQ::TOFPET::P2(SYSTEM_NCRYSTALS);
@@ -187,10 +194,9 @@ int main(int argc, char *argv[])
 	
 	float gRadius = 20; // mm 
 
-
 	DAQ::TOFPET::RawScanner *scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
-	if(scanner->getNSteps() != 1) {
-		fprintf(stderr, "%s only supports single step acquisitions\n", argv[0]);
+	if(scanner->getNSteps() > 1 && !writeBinary) {
+		fprintf(stderr, "%s only supports single step acquisitions when writing text files\n", argv[0]);
 		return 1;
 	}
 	
@@ -203,24 +209,59 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Empty input file, bailing out\n");
 		return 1;
 	}
-	eventsEnd=194522323/10;
-	FILE * dataFile = fopen(outputFilePrefix, "wb");
+	
+	FILE * dataFile = fopen(outputFileName, writeBinary ? "wb" : "w");
 	if(dataFile == NULL) {
 		int e = errno;
-		fprintf(stderr, "Could not open %s for writing : %d %s\n", outputFilePrefix, e, strerror(e));
+		fprintf(stderr, "Could not open %s for writing : %d %s\n", outputFileName, e, strerror(e));
 		return 1;
 	}
+	FILE *indexFile = NULL;
+	long long outputStepBegin = 0;
+	if(writeBinary) {
+		char indexFileName[512];
+		sprintf(indexFileName, "%s.idx", outputFileName);
+		indexFile = fopen(indexFileName, "w");
+		if(indexFile == NULL) {
+			int e = errno;
+			fprintf(stderr, "Could not open %s for writing : %d %s\n", indexFileName, e, strerror(e));
+			return 1;
+		}
+	}
 	
-	RawReader *reader = new RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , -1, false,
-		new P2Extract(P2, false, 0.0, 0.20, true,
-		new CrystalPositions(systemInformation,
-		new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, GammaPhoton::maxHits,
-		new EventWriter(dataFile, writeMultipleHits,
-		new NullSink<GammaPhoton>()
-				)))));
+	for(int step = 0; step < scanner->getNSteps(); step++) {
+		unsigned long long eventsBegin;
+		unsigned long long eventsEnd;
+		float eventStep1;
+		float eventStep2;
+		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
+		if(eventsBegin != eventsEnd) {
+			// Do not process empty steps, the chain crashes
+		
+			RawReader *reader = new RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , -1, false,
+				new P2Extract(P2, false, 0.0, 0.20, true,
+				new CrystalPositions(systemInformation,
+				new NaiveGrouper(gRadius, gWindow, minEnergy, maxEnergy, GammaPhoton::maxHits,
+				new EventWriter(dataFile, writeMultipleHits, writeBinary,
+				new NullSink<GammaPhoton>()
+			)))));
+			reader->wait();
+			delete reader;
+		}
+		
+		
+		if(writeBinary) {
+			long long outputStepEnd = ftell(dataFile);
+			fprintf(indexFile, "%f\t%f\t%lld\t%lld\n", eventStep1, eventStep2, outputStepBegin, outputStepEnd);
+			outputStepBegin = outputStepEnd;
+		}
+	}
+			
 	
-	reader->wait();
-	delete reader;
 	fclose(dataFile);
+	if(indexFile != NULL) {
+		fclose(indexFile);
+	}
+
 	return 0;
 }

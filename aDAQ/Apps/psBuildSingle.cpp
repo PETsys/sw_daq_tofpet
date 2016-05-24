@@ -36,6 +36,7 @@ void displayHelp(char *program)
 	
 	"\noptional arguments:\n"
 	 "  --help		Show this help message and exit \n"
+	 "  --writeBinary	\tWrite a binary file\n"
 	 "\n"
 	);
 }
@@ -50,10 +51,11 @@ struct Event {
 class EventWriter : public OverlappedEventHandler<Hit, Hit> {
 	private:
 		FILE *dataFile;
+		bool writeBinary;
 	public:
-		EventWriter (FILE *f, EventSink<Hit> *sink) :
+		EventWriter (FILE *f, bool writeBinary, EventSink<Hit> *sink) :
 		OverlappedEventHandler<Hit, Hit>(sink, true),
-		dataFile(f) 
+		dataFile(f), writeBinary(writeBinary)
 		{		
 		}
 		
@@ -70,17 +72,23 @@ class EventWriter : public OverlappedEventHandler<Hit, Hit> {
 			
 			for(unsigned i = 0; i < nEvents; i++){ 
 				Hit &hit = inBuffer->get(i);
-			       
 				if(hit.time < tMin || hit.time >= tMax) continue;
-				
-				Event eo = { 
-			        
-					hit.time, hit.energy,
-					hit.raw->channelID,
-				};
-					
-				fwrite(&eo, sizeof(eo), 1, dataFile);
-				
+
+				if (writeBinary) {
+					Event eo = {
+						hit.time,
+						hit.energy,
+						hit.raw->channelID
+					};
+					fwrite(&eo, sizeof(eo), 1, dataFile);
+				}
+				else {
+					fprintf(dataFile, "%lld\t%f\t%d\n",
+						hit.time,
+						hit.energy,
+						hit.raw->channelID
+					);
+				}
 		
 			}
 			
@@ -90,9 +98,10 @@ class EventWriter : public OverlappedEventHandler<Hit, Hit> {
 
 int main(int argc, char *argv[])
 {
-	
+	bool writeBinary = false;
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
+		{ "writeBinary", no_argument, 0, 0 },
 		{ NULL, 0, 0, 0 }
 	};
 	
@@ -104,6 +113,7 @@ int main(int argc, char *argv[])
 		
 		switch(optionIndex) {
 			case 0: displayHelp(argv[0]); return 0;
+			case 1: writeBinary = true; break;
    
 			default: 
 				displayHelp(argv[0]); return 1;
@@ -124,7 +134,7 @@ int main(int argc, char *argv[])
 	
 	char * setupFileName=argv[optind];
 	char *inputFilePrefix = argv[optind+1];
-	char *outputFilePrefix = argv[optind+2];
+	char *outputFileName = argv[optind+2];
 	
 
 	DAQ::TOFPET::P2 *P2 = new DAQ::TOFPET::P2(SYSTEM_NCRYSTALS);
@@ -140,8 +150,8 @@ int main(int argc, char *argv[])
 	
 
 	DAQ::TOFPET::RawScanner *scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
-	if(scanner->getNSteps() != 1) {
-		fprintf(stderr, "%s only supports single step acquisitions\n", argv[0]);
+	if(scanner->getNSteps() > 1 && !writeBinary) {
+		fprintf(stderr, "%s only supports single step acquisitions when writing text files\n", argv[0]);
 		return 1;
 	}
 	
@@ -155,21 +165,55 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	
-	FILE * dataFile = fopen(outputFilePrefix, "wb");
+	FILE * dataFile = fopen(outputFileName, writeBinary ? "wb" : "w");
 	if(dataFile == NULL) {
 		int e = errno;
-		fprintf(stderr, "Could not open %s for writing : %d %s\n", outputFilePrefix, e, strerror(e));
+		fprintf(stderr, "Could not open %s for writing : %d %s\n", outputFileName, e, strerror(e));
 		return 1;
 	}
+	FILE *indexFile = NULL;
+	long long outputStepBegin = 0;
+	if(writeBinary) {
+		char indexFileName[512];
+		sprintf(indexFileName, "%s.idx", outputFileName);
+		indexFile = fopen(indexFileName, "w");
+		if(indexFile == NULL) {
+			int e = errno;
+			fprintf(stderr, "Could not open %s for writing : %d %s\n", indexFileName, e, strerror(e));
+			return 1;
+		}
+	}
 	
-	RawReader *reader = new RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , -1, false,
-		new P2Extract(P2, false, 0.0, 0.20, true,
-		new EventWriter(dataFile, 
-		new NullSink<Hit>()
-	)));
+	for(int step = 0; step < scanner->getNSteps(); step++) {
+		unsigned long long eventsBegin;
+		unsigned long long eventsEnd;
+		float eventStep1;
+		float eventStep2;
+		scanner->getStep(step, eventStep1, eventStep2, eventsBegin, eventsEnd);
+		if(eventsBegin != eventsEnd) {
+			// Do not process empty steps, the chain crashes
+		
+			RawReader *reader = new RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , -1, false,
+				new P2Extract(P2, false, 0.0, 0.20, true,
+				new EventWriter(dataFile, writeBinary,
+				new NullSink<Hit>()
+			)));
+			reader->wait();
+			delete reader;
+		}
+		
+		
+		if(writeBinary) {
+			long long outputStepEnd = ftell(dataFile);
+			fprintf(indexFile, "%f\t%f\t%lld\t%lld\n", eventStep1, eventStep2, outputStepBegin, outputStepEnd);
+			outputStepBegin = outputStepEnd;
+		}
+	}
+			
 	
-	reader->wait();
-	delete reader;
 	fclose(dataFile);
+	if(indexFile != NULL) {
+		fclose(indexFile);
+	}
 	return 0;
 }
