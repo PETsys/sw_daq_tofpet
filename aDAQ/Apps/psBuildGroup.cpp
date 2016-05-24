@@ -22,25 +22,29 @@ using namespace DAQ::Common;
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
+	fprintf(stderr, "usage: %s <setup_file> <rawfiles_prefix> <output_file> --channelMap <channel.map> --triggerMap <trigger.map>\n", program);
 }
 
 void displayHelp(char *program)
 {
-	fprintf(stderr, "usage: %s setup_file rawfiles_prefix output_file\n", program);
+	fprintf(stderr, "usage: %s <setup_file> <rawfiles_prefix> <output_file> --channelMap <channel.map> --triggerMap <trigger.map>\n", program);
 	fprintf(stderr, 
 	
+	"\nrequired arguments:\n"
+	"  <setup_file>			File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n"
+	"  <rawfiles_prefix>		Raw data files prefix\n"
+	"  <output_file>		\tOutput file containing coincidence event data\n"
+	"  --channelMap <channel.map>	Channel map file\n"
+	"  --triggerMap <trigger.map>	Trigger map file\n"
+	"\n"
+	
 	"\noptional arguments:\n"
-	 "  --help \t\t\t Show this help message and exit \n"
-	 "  --minEnergy=MINENERGY\t\t The minimum energy (in keV) of an event to be considered a valid coincidence. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n"
-	 "  --maxEnergy=MAXENERGY\t\t The maximum energy (in keV) of an event to be considered a valid coincidence. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n"
-	 "  --gWindow=gWINDOW\t\t Maximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n"
-	 "  --writeMultipleHits\t\t Write multiple hit information.\n"
+	 "  --help			Show this help message and exit \n"
+	 "  --minEnergy=MINENERGY	\tThe minimum energy (in keV) of an event to be considered a valid coincidence. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 150 ns)\n"
+	 "  --maxEnergy=MAXENERGY	\tThe maximum energy (in keV) of an event to be considered a valid coincidence. If no energy calibration file is available, the entered value will correspond to a minimum TOT in ns (default is 500 ns)\n"
+	 "  --gWindow=gWINDOW		Maximum delta time (in seconds) inside a given multi-hit group (default is 100E-9s)\n"
+	 "  --writeMultipleHits		Write multiple hit information.\n"
 	 "\n"
-	"\npositional arguments:\n"
-	"  setup_file \t\t\t File containing paths to tdc calibration file(s) (required), tQ correction file(s) (optional) and Energy calibration file(s) (optional)\n"
-	"  rawfiles_prefix \t\t Raw data files prefix\n"
-	"  output_file \t\t Output file containing coincidence event data\n"
 	);
 }
 
@@ -117,6 +121,8 @@ int main(int argc, char *argv[])
 	float ctrEstimate = 200E-12;
 	
 	bool writeMultipleHits = true;
+	char *channelMapFileName = NULL;
+	char *triggerMapFileName = NULL;
 	
 	static struct option longOptions[] = {
 		{ "help", no_argument, 0, 0 },
@@ -124,6 +130,8 @@ int main(int argc, char *argv[])
 		{ "maxEnergy", required_argument,0,0 },
 		{ "gWindow", required_argument,0,0 },
 		{ "writeMultipleHits", no_argument,0,0 },
+		{ "channelMap", required_argument, 0, 0},
+		{ "triggerMap", required_argument, 0, 0},
 		{ NULL, 0, 0, 0 }
 	};
 	
@@ -139,6 +147,8 @@ int main(int argc, char *argv[])
 			case 2: maxEnergy = atof(optarg); break;
 			case 3: gWindow = atof(optarg) * 1E-9; break;
 			case 4: writeMultipleHits = true; break;
+			case 5: channelMapFileName = optarg; break;
+			case 6: triggerMapFileName = optarg; break;
 			default: 
 				displayHelp(argv[0]); return 1;
 		}
@@ -152,6 +162,17 @@ int main(int argc, char *argv[])
 	else if(argc - optind > 3){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
+		return(1);
+	}
+	
+	if(channelMapFileName == NULL) {
+		displayUsage(argv[0]);
+		fprintf(stderr, "\n%s: error: --channelMap was not specified!\n", argv[0]);
+		return(1);
+	}
+	if(triggerMapFileName == NULL) {
+		displayUsage(argv[0]);
+		fprintf(stderr, "\n%s: error: --triggerMap was not specified!\n", argv[0]);
 		return(1);
 	}
 	
@@ -171,7 +192,8 @@ int main(int argc, char *argv[])
 	}
 	
 	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
-	systemInformation->loadMapFile(DAQ::Common::getCrystalMapFileName());
+	systemInformation->loadMapFile(channelMapFileName);
+	systemInformation->loadTriggerMapFile(triggerMapFileName);
 	
 	float gRadius = 20; // mm 
 
