@@ -136,7 +136,6 @@ int main(int argc, char *argv[])
 	}
 	
 	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
-	systemInformation->loadMapFile(DAQ::Common::getCrystalMapFileName());
 	
 
 	DAQ::TOFPET::RawScanner *scanner = new DAQ::TOFPET::RawScannerV3(inputFilePrefix);
@@ -164,10 +163,9 @@ int main(int argc, char *argv[])
 	
 	RawReader *reader = new RawReaderV3(inputFilePrefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , -1, false,
 		new P2Extract(P2, false, 0.0, 0.20, true,
-		new CrystalPositions(systemInformation,
 		new EventWriter(dataFile, 
 		new NullSink<Hit>()
-	))));
+	)));
 	
 	reader->wait();
 	delete reader;
