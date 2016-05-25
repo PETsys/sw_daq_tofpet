@@ -394,7 +394,7 @@ void P2::loadTOTFile(int start, int end, const char *fName)
 	float col2;
 	float col3;
 	while(fscanf(f, "%d\t%f\t%f\n",&col1, &col2, &col3) == 3 ){
-		long totIndex=getIndexTOT(start+col1,col2);
+		long totIndex=getIndexTOT(col1,col2);
 		ToTcal &totCale = ToTtable[totIndex];
 		totCale.channel=col1;
 		totCale.tot=col2;
