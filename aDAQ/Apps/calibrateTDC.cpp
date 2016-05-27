@@ -1125,9 +1125,14 @@ void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefi
 			}
 			printf("\n");
 			
+			
+			// Find histogram bin size from histograms in ROOT file
+			// We use the E branch histograms for the simple reason that due to Python's referernce
+			// counting and do_tdc_phase_scan.py's organization, the T branch histograms may not be 
+			// in the ROOT file.
 			if(isLinearity) {
 				char hName[128];
-				sprintf(hName, "htFine_%03d_%02d_%d", asic, channel, tac);
+				sprintf(hName, "heFine_%03d_%02d_%d", asic, channel, tac);
 				TH2 *h = (TH2 *)hFile->Get(hName);
 				if(h != NULL) {
 					linearityNbins = h->GetXaxis()->GetNbins();
@@ -1137,7 +1142,7 @@ void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefi
 			}
 			else {
 				char hName[128];
-				sprintf(hName, "htFineB_%03d_%02d_%d", asic, channel, tac);
+				sprintf(hName, "heFineB_%03d_%02d_%d", asic, channel, tac);
 				TH2 *h = (TH2 *)hFile->Get(hName);
 				if(h != NULL) {
 					leakageNbins = h->GetXaxis()->GetNbins();
