@@ -139,6 +139,7 @@ for tChannel in activeChannels:
 
 	for tAsic in activeAsics:
 		# Overwrite test channel config
+		if not atbConfig.asicConfig[tAsic]: continue
 		atbConfig.asicConfig[tAsic].globalConfig.setValue("test_pulse_en", 1)
 		if tdcaMode:
 			atbConfig.asicConfig[tAsic].channelConfig[tChannel][52-47:52-42+1] = bitarray("11" + "11" + "1" + "1") 
