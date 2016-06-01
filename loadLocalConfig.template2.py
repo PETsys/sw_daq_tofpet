@@ -8,6 +8,10 @@ def loadLocalConfig(useBaseline=True):
 	# HV DAC calibration
 	loadHVDACParams(atbConfig, "config/febd1/hvdac.Config")
 
+        loadTriggerMap(atbConfig, "basic_channel.map", "basic_trigger.map")
+	atbConfig.triggerMinimumToT = 150E-9
+	atbConfig.triggerCoincidenceWindow = 25E-9
+
 	### FEBA (F1) configuration
 	loadAsicConfig(atbConfig, 0, 2, "config/FEBA1/asic.config")
 	if useBaseline:
