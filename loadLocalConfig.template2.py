@@ -5,12 +5,13 @@ from atbUtils import loadAsicConfig, dumpAsicConfig, loadHVDACParams, loadBaseli
 # Loads configuration for the local setup
 def loadLocalConfig(useBaseline=True):
 	atbConfig = atb.BoardConfig()
-	# HV DAC calibration
-	loadHVDACParams(atbConfig, "config/febd1/hvdac.Config")
 
         loadTriggerMap(atbConfig, "basic_channel.map", "basic_trigger.map")
 	atbConfig.triggerMinimumToT = 150E-9
 	atbConfig.triggerCoincidenceWindow = 25E-9
+
+	# HV DAC calibration
+	loadHVDACParams(atbConfig, "config/febd1/hvdac.Config")
 
 	### FEBA (F1) configuration
 	loadAsicConfig(atbConfig, 0, 2, "config/FEBA1/asic.config")

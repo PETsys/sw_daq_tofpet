@@ -5,6 +5,7 @@ from atbUtils import loadAsicConfig, dumpAsicConfig, loadHVDACParams, loadBaseli
 # Loads configuration for the local setup
 def loadLocalConfig(useBaseline=True):
 	atbConfig = atb.BoardConfig()
+
 	loadTriggerMap(atbConfig, "basic_channel.map", "basic_trigger.map")
 	atbConfig.triggerMinimumToT = 150E-9
 	atbConfig.triggerCoincidenceWindow = 25E-9
