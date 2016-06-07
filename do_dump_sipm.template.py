@@ -16,6 +16,8 @@ parser.add_argument('--enableCoincidenceFilter', action='store_true', default=Fa
 
 parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
 
+parser.add_argument('--hvBias', type=float, required=True, help='The voltage to be set for the HV DACs')
+
 args = parser.parse_args()
 
 
@@ -32,7 +34,7 @@ uut.config = loadLocalConfig()
 uut.initialize()
 uut.openAcquisition(dataFilePrefix, args.enableCoincidenceFilter, writer="TOFPET")
 # Set all HV DAC channels 
-uut.setAllHVDAC(67.50)
+uut.setAllHVDAC(args.hvBias)
 uut.config.writeParams(dataFilePrefix, args.comments)
 
 for step1 in [0]:
