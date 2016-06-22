@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
 	float acqAngle = 0;
 	float ctrEstimate = 200E-12;
 	
-	bool writeMultipleHits = true;
+	bool writeMultipleHits = false;
 	bool writeBinary = false;
 	char *channelMapFileName = NULL;
 	
