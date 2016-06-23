@@ -86,7 +86,7 @@ int psDrawCTR(char const *fileName, Int_t channelA=-1, Int_t channelB=-1)
 	sprintf(hName, "ToT spectra (channel %d)", channelB); 
 	TH1F * hToT2 = new TH1F("hToT2", hName, nBinsToT, 0, nBinsToT);
 
-        while(fread(&ei, sizeof(ei), 1, dataFile) == 1) {
+        while(fread(&ei, sizeof(ei), 1, dataFile) == 1 && count < MAX_EVENTS) {
 		nRead ++;
 		if(nRead % 10000 == 0) {
 			printf("Read %d\r", nRead);
