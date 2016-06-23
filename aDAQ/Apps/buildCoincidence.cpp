@@ -465,7 +465,7 @@ int main(int argc, char *argv[])
 	float gWindowRoot = 100E-9; // s
 	int maxHitsRoot=1;
 	float minEnergy = 150; // keV or ns (if energy=tot)
-	float maxEnergy = 500; // keV or ns (if energy=tot)
+	float maxEnergy = 3000; // keV or ns (if energy=tot)
 	float minToT = 100E-9; //s
 
 	int nOptArgs=0;

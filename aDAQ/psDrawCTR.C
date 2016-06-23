@@ -43,7 +43,7 @@ int psDrawCTR(char const *fileName, Int_t channelA=-1, Int_t channelB=-1)
 	Double_t wMax = 8000;
 	TH1F *hDelta = new TH1F("hDelta", "Coincidence time difference", 2*wMax/tBinWidth, -wMax, wMax);
 	
-	Int_t nBinsToT=600;
+	Int_t nBinsToT=1000;
 	const Int_t N_CHANNELS = 256;
 	TH2F *hC2 = new TH2F("hC2", "C2", N_CHANNELS, 0, N_CHANNELS, N_CHANNELS, 0, N_CHANNELS);
 	
