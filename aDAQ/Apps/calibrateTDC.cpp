@@ -658,12 +658,18 @@ int calibrate(	int asicStart, int asicEnd,
 				float v2 = pA_Fine->GetBinContent(j+2);
 				float e1 =  pA_Fine->GetBinError(j-2);
 				float e2 =  pA_Fine->GetBinError(j+2);
-				int c1 = pA_Fine->GetBinEntries(j-1);
-				int c2 = pA_Fine->GetBinEntries(j+1);
+				int c1 = pA_Fine->GetBinEntries(j-2);
+				int c2 = pA_Fine->GetBinEntries(j+2);
+				float t1 = pA_Fine->GetBinCenter(j-2);
+				float t2 = pA_Fine->GetBinCenter(j+2);
 				
 				if(c1 == 0 || c2 == 0) continue;
+				if(e1 > 5.0 || e2 > 5.0) continue;
 
-				if (v1 < (1.20 * adcMin) && v2 > (0.80 * adcMax)) {
+				float slope = (v2 - v1)/(t2 - t1);
+				// Slope is usually -nominalM
+				// But at edge, it's 10 x nominalM
+				if(slope > 5 * nominalM) {
 					tEdge = pA_Fine->GetBinCenter(j);
 					break;
 				}
@@ -936,7 +942,7 @@ void qualityControl(
 				float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
 				bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
 				float tError = tEstimate - event.stage;
-	
+
 				if(!isNormal) continue;
 				ti.pA_ControlT->Fill(event.stage, tError);
 				if(fabs(tError) < ErrorHistogramRange) // Don't fill if out of histogram's range
