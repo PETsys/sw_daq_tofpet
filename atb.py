@@ -793,7 +793,7 @@ class ATB:
 			readCommand = 'rd' + command[2:]
 			readStatus, readValue = self.__doTOFPETAsicCommand(asicID, readCommand, channel=channel)
 			if readValue != value:
-				raise tofpet.ConfigurationErrorBadRead(febID, 0, asicID % 16, value, readValue)
+				raise tofpet.ConfigurationErrorBadRead(portID, slaveID, asicID % 16, value, readValue)
 
 			self.__asicConfigCache[cacheKey] = bitarray(value)
 			return (status, None)
