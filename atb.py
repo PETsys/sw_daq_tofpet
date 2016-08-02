@@ -857,7 +857,11 @@ class ATB:
 			try:
 				self.doTOFPETAsicCommand(asicID, "wrGlobalCfg", value=defaultGlobalConfig)
 				localAsicConfigOK[i] = True
-			except tofpet.ConfigurationError as e:
+			# Either of these two errors will occur when an ASIC is not present
+			# So we use them as indicationt the ASIC is not there
+			except tofpet.ConfigurationErrorBadAck as e:
+				pass
+			except tofpet.ConfigurationErrorStuckHigh as e:
 				pass
 
 		# Enable the reception logic	
@@ -865,6 +869,14 @@ class ATB:
 		#self.sendCommand(portID, slaveID, 0x03, bytearray([0x04, 0x00, 0x00]))
 		self.sendCommand(portID, slaveID, 0x03, bytearray([0x00, 0x00, 0x00, 0x00, 0x00]))
 		sleep(0.120)	# Need to wait for at least 100 ms, plus the reset time
+
+		for i, asicID in enumerate(localAsicIDList):
+			if not localAsicConfigOK[i]: continue
+
+			status, readback = self.doTOFPETAsicCommand(asicID, "rdGlobalCfg")
+			if readback != defaultGlobalConfig:
+				raise tofpet.ConfigurationErrorBadRead(portID, slaveID, i, defaultGlobalConfig, readback)
+
 
 		deserializerStatus = self.readFEBDConfig(portID, slaveID, 0, 2)
 		decoderStatus = self.readFEBDConfig(portID, slaveID, 0, 3)
