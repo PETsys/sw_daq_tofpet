@@ -5,13 +5,14 @@
 
 	TCanvas *c = new TCanvas();
 	TF1 *mygauss = new TF1("mygauss", "[0]*exp(-0.5*((x-[1])/[2])**2)", -0.5, 0.5);
-	mygauss->SetParNames("C", "\mu", "\sigma");
+	mygauss->SetParNames("C", "\\mu", "\\sigma");
+
+	char hName[128];
 
 	Int_t nPoints = 0;
 	for(Int_t asic = 0; asic < 128; asic += 1) {
 		for(Int_t channel = 0; channel < 64; channel+= 1) {
 			
-			char hName[128];
 			sprintf(hName, "C%03d_%02d_%d_A_T_control_E", asic, channel, 0);			
 			TH1 * hT= (TH1 *) _file0->Get(hName);
 			if (hT == NULL) continue;
@@ -65,12 +66,12 @@
 	c->cd(3);
 	hCounts->GetYaxis()->SetRangeUser(0, hCounts->GetMaximum() * 1.10);
 	hCounts->GetXaxis()->SetTitle("Channel");
-	hCounts->Draw();
+	hCounts->Draw("HIST");
 	
 	c = new TCanvas();
-	TGraphErrors *gSummary = new TGraphErrors(128);
-	TH1 * hSummary = new TH1F("summary2", "summary", 1000, 0, 500E-12);
-	TH1 * hCounts = new TH1F("counts2", "Counts", 128, 0, 128);
+	gSummary = new TGraphErrors(128);
+	hSummary = new TH1F("summary2", "summary", 1000, 0, 500E-12);
+	hCounts = new TH1F("counts2", "Counts", 128, 0, 128);
 	TGraph *gLeakage = new TGraph(4*128);
 
 	
@@ -149,7 +150,7 @@
 	c->cd(3);
 	hCounts->GetYaxis()->SetRangeUser(0, hCounts->GetMaximum() * 1.10);
 	hCounts->GetXaxis()->SetTitle("Channel");
-	hCounts->Draw();	
+	hCounts->Draw("HIST");	
 	
 	c->cd(4);
 	gLeakage->SetTitle("Leakage");
