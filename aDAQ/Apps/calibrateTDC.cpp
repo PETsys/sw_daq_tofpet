@@ -213,8 +213,8 @@ int main(int argc, char *argv[])
 	int nAsicsPerFile=2;
 	int readInd=0;
 	int posInd=0;        
+	bool keepTemporary = false;
         bool doSorting = true;
-        bool doProcessing = true;
 
 	// Choose the default number of workers based on CPU and RAM
 	// Assume we need 4 GiB of system RAM per worker for good performance
@@ -229,7 +229,8 @@ int main(int argc, char *argv[])
 		{ "int-factor", required_argument, 0, 0 },
 		{ "help", no_argument, 0, 0 },
 		{ "no-sorting", no_argument, 0, 0 },
-		{ "max-workers", required_argument, 0, 0 }
+		{ "max-workers", required_argument, 0, 0 },
+		{ "keep-temporary", no_argument, 0, 0 }
 	};
 
 	
@@ -264,6 +265,9 @@ int main(int argc, char *argv[])
                 }
                 else if(optionIndex == 4) {
 			maxWorkers = atoi(optarg);
+		}
+		else if(optionIndex == 5) {
+			keepTemporary = true;
 		}
 		else {
 			displayUsage(argv[0]);
@@ -501,7 +505,26 @@ int main(int argc, char *argv[])
 		sprintf(tableFileName, "%s_asics%02u-%02u.tdc.cal", tableFileNamePrefix, asicStart, asicEnd-1);
 		myP2.storeFile(  64*nAsicsPerFile*n, 64*nAsicsPerFile*(n+1), tableFileName);
 	}
+	
+	if(!keepTemporary) {
+		// Remove temporary files
+		for(unsigned n = 0; n < list.size(); n++) {
+			int fileID = list[n].get<0>();
+			sprintf(fName,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
+			unlink(fName);
+			sprintf(fName,"%s_%d_leakage.tmp", tableFileNamePrefix, fileID);
+			unlink(fName);
+			sprintf(fName, "%s_%d_leakage_phase.tmp", tableFileNamePrefix, n);
+			unlink(fName);
+		}
+		
+		sprintf(fName, "%s_list.tmp", tableFileNamePrefix);
+		unlink(fName);
 
+		sprintf(fName, "%s_ranges.tmp", tableFileNamePrefix);
+		unlink(fName);
+	}
+	
 	return 0;
 }
 
