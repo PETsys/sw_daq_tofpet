@@ -604,8 +604,6 @@ int calibrate(	int asicStart, int asicEnd,
 	struct timespec t1;
 	clock_gettime(CLOCK_REALTIME, &t1);
 	
-	printf("Read data in %f seconds\n", t1.tv_sec - t0.tv_sec + 1E-9*(t1.tv_nsec - t0.tv_nsec));
-
 	boost::mt19937 generator;
 
 	int hasData = 0;
@@ -699,7 +697,7 @@ int calibrate(	int asicStart, int asicEnd,
 			}
 			
 			// Fit a line to a TDC period to determine the interpolation factor
-			pA_Fine->Fit("pol1", "Q", "", tEdge + 0.2, tEdge + 2 - 0.2);
+			pA_Fine->Fit("pol1", "Q0", "", tEdge + 0.2, tEdge + 2 - 0.2);
 			TF1 *fPol = pA_Fine->GetFunction("pol1");
 			if(fPol == NULL) {
 				fprintf(stderr, "WARNING: Could not make a linear fit. Skipping TAC. (A: %4d %2d %d %c)\n",
@@ -752,7 +750,7 @@ int calibrate(	int asicStart, int asicEnd,
 				pf->SetParameter(0, tEdge);		pf->SetParLimits(0, lowerT0, upperT0);
 				pf->SetParameter(1, adcMin);		pf->SetParLimits(1, 0.90 * adcMin, 1.10 * adcMin);
 				pf->SetParameter(2, estimatedM);	pf->SetParLimits(2, 0.98 * estimatedM, 1.02 * estimatedM);
-				pA_Fine->Fit("periodicF1", "Q", "", 0.5, xMax);
+				pA_Fine->Fit("periodicF1", "Q0", "", 0.5, xMax);
 				
 				TF1 *pf_ = pA_Fine->GetFunction("periodicF1");
 				if(pf_ != NULL) {
@@ -795,7 +793,7 @@ int calibrate(	int asicStart, int asicEnd,
 				pf2->SetParameter(1, tB);		pf2->SetParLimits(1, 1.10*tB, 0);
 				pf2->SetParameter(2, m);		pf2->SetParLimits(2, 1.00 * m, 1.15 * m);
 				pf2->SetParameter(3, -1.0);		pf2->SetParLimits(3, -5.0, 0);
-				pA_Fine->Fit("periodicF2", "Q", "", 0.5, xMax);
+				pA_Fine->Fit("periodicF2", "Q0", "", 0.5, xMax);
 
 				TF1 *pf_ = pA_Fine->GetFunction("periodicF2");
 				if(pf_ != NULL) {
@@ -871,7 +869,7 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			int nTry = 0;
 			while(nTry < 10){
-				pB_Fine->Fit("pl1", "Q", "", xMin, xMax);
+				pB_Fine->Fit("pl1", "Q0", "", xMin, xMax);
 				TF1 *fit = pB_Fine->GetFunction("pl1");
 				if(fit == NULL) break;
 				float chi2 = fit->GetChisquare();
@@ -991,7 +989,7 @@ void qualityControl(
 			int nEntries = ti.pA_ControlE->GetEntries();
 			if (nEntries > 1000) {
 				TF1 *f = NULL;
-				ti.pA_ControlE->Fit("gaus", "Q");
+				ti.pA_ControlE->Fit("gaus", "Q0");
 				f = ti.pA_ControlE->GetFunction("gaus");
 				if (f != NULL) {
 					offset = f->GetParameter(1);
