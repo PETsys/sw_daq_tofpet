@@ -8,11 +8,14 @@
 #include <TH2S.h>
 #include <TF1.h>
 #include <TGraph.h>
+#include <TGraphErrors.h>
 #include <Fit/FitConfig.h>
 #include <TVirtualFitter.h>
 #include <TMinuit.h>
 #include <Math/ProbFuncMathCore.h>
 #include <TRandom.h>
+#include <TCanvas.h>
+#include <TStyle.h>
 #include <TOFPET/P2.hpp>
 #include <assert.h>
 #include <math.h>
@@ -179,7 +182,8 @@ void qualityControl(
 	int asicStart, int asicEnd, 
 	int linearityDataFile,
 	int leakageDataFile, float *leakagePhasePoint,
-	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2
+	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
+	char *plotFilePrefix
 );
 
 void displayHelp(char * program)
@@ -388,7 +392,12 @@ int main(int argc, char *argv[])
 				
 				sprintf(fName,"%s_asics%02d-%02d.tdc.root", tableFileNamePrefix, asicStart, asicEnd-1);
 				
+				char plotFilePrefix[1024];
+				sprintf(plotFilePrefix, "%s_asics%02d-%02d", tableFileNamePrefix, asicStart, asicEnd-1);
+				
 				TFile * resumeFile = new TFile(fName, "RECREATE", "", 1);
+				// Create a un-used canvas, just to avoid the fits automatically creating one and printing a warning
+				TCanvas *blank = new TCanvas();
 				
 				int hasData = calibrate(
 							asicStart, asicEnd,
@@ -407,7 +416,8 @@ int main(int argc, char *argv[])
 						asicStart, asicEnd, 
 						linearityDataFile,
 						leakageDataFile, leakagePhasePoint,
-						tacInfo, *myP2
+						tacInfo, *myP2,
+						plotFilePrefix
 					);
 					resumeFile->Write();
 					resumeFile->Close();
@@ -613,6 +623,8 @@ int calibrate(	int asicStart, int asicEnd,
 		unsigned channel = (gid >> 3) & 63;
 		unsigned asic = gid >> 9;
 		TacInfo &ti = tacInfo[gid];
+		//if(asic != 0 || channel != 8) continue;
+
 		
 		// We had _no_ data for this ASIC, we assume it's not present in the system
 		// Let's just move on without further ado
@@ -674,30 +686,44 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			// Obtain a rough estimate of the edge position
 			float tEdge = 0;
-			for(int j = 2; j < nBinsX - 3; j++) {
-				float v1 = pA_Fine->GetBinContent(j-2);
-				float v2 = pA_Fine->GetBinContent(j+2);
-				float e1 =  pA_Fine->GetBinError(j-2);
-				float e2 =  pA_Fine->GetBinError(j+2);
-				int c1 = pA_Fine->GetBinEntries(j-2);
-				int c2 = pA_Fine->GetBinEntries(j+2);
-				float t1 = pA_Fine->GetBinCenter(j-2);
-				float t2 = pA_Fine->GetBinCenter(j+2);
-				
-				if(c1 == 0 || c2 == 0) continue;
-				if(e1 > 5.0 || e2 > 5.0) continue;
+			float lowerT0 = 0;
+			float upperT0 = 0;
+			
+			adcMin = 1024.0;
+			for(int n = 5; n >= 1; n--) {
+				for(int j = 1; j < (nBinsX - 1 - n); j++) {
+					float v1 = pA_Fine->GetBinContent(j);
+					float v2 = pA_Fine->GetBinContent(j+n);
+					float e1 =  pA_Fine->GetBinError(j);
+					float e2 =  pA_Fine->GetBinError(j+n);
+					int c1 = pA_Fine->GetBinEntries(j);
+					int c2 = pA_Fine->GetBinEntries(j+n);
+					float t1 = pA_Fine->GetBinCenter(j);
+					float t2 = pA_Fine->GetBinCenter(j+n);
+					
+					if(c1 == 0 || c2 == 0) continue;
+					if(e1 > 5.0 || e2 > 5.0) continue;
 
-				float slope = (v2 - v1)/(t2 - t1);
-				// Slope is usually -nominalM
-				// But at edge, it's 10 x nominalM
-				if(slope > 5 * nominalM) {
-					tEdge = pA_Fine->GetBinCenter(j);
-					break;
+					float slope = (v2 - v1)/(t2 - t1);
+					// Slope is usually -nominalM
+					// But at edge, it's 10 x nominalM
+					if(slope > 5 * nominalM) {
+						tEdge = (t2 + t1)/2.0;
+						lowerT0 = t1;// - 0.5 * pA_Fine->GetXaxis()->GetBinWidth(0);
+						upperT0 = t2;// + 0.5 * pA_Fine->GetXaxis()->GetBinWidth(0);
+						adcMin = fminf (adcMin, pA_Fine->GetBinContent(j));
+					}
 				}
 			}
+			while(lowerT0 > 2.0 && tEdge > 2.0 && upperT0 > 2.0) {
+				lowerT0 -= 2.0;
+				tEdge -= 2.0;
+				upperT0 -= 2.0;
+			}
 			
+			float tEdgeTolerance = upperT0 - lowerT0;
 			// Fit a line to a TDC period to determine the interpolation factor
-			pA_Fine->Fit("pol1", "Q0", "", tEdge + 0.2, tEdge + 2 - 0.2);
+			pA_Fine->Fit("pol1", "Q", "", tEdge + tEdgeTolerance, tEdge + 2.0  - tEdgeTolerance);
 			TF1 *fPol = pA_Fine->GetFunction("pol1");
 			if(fPol == NULL) {
 				fprintf(stderr, "WARNING: Could not make a linear fit. Skipping TAC. (A: %4d %2d %d %c)\n",
@@ -708,28 +734,6 @@ int calibrate(	int asicStart, int asicEnd,
 			}
 			float estimatedM = - fPol->GetParameter(1);
 			
-			// Obtain a better estimate of the edge positions
-			for(int j = 1; j < nBinsX - 2; j++) {
-				float v1 = pA_Fine->GetBinContent(j-1);
-				float v2 = pA_Fine->GetBinContent(j+1);
-				float e1 =  pA_Fine->GetBinError(j-2);
-				float e2 =  pA_Fine->GetBinError(j+2);
-				int c1 = pA_Fine->GetBinEntries(j-1);
-				int c2 = pA_Fine->GetBinEntries(j+1);
-				
-				if(c1 == 0 || c2 == 0) continue;
-
-				if ((v2 - v1) > 1.80 * estimatedM) {
-					tEdge = pA_Fine->GetBinCenter(j);
-					break;
-				}
-			}
-			
-			
-			while(tEdge > 2.0) tEdge -= 2.0;
-			
-			float lowerT0 = tEdge - 1.0 * pA_Fine->GetXaxis()->GetBinWidth(0);
-			float upperT0 = tEdge + 1.0 * pA_Fine->GetXaxis()->GetBinWidth(0);
 			
 			boost::uniform_real<> range(lowerT0, upperT0);
 			boost::variate_generator<boost::mt19937&, boost::uniform_real<> > nextRandomTEdge(generator, range);
@@ -748,9 +752,9 @@ int calibrate(	int asicStart, int asicEnd,
 			float maxChi2 = 2E6;
 			do {
 				pf->SetParameter(0, tEdge);		pf->SetParLimits(0, lowerT0, upperT0);
-				pf->SetParameter(1, adcMin);		pf->SetParLimits(1, 0.90 * adcMin, 1.10 * adcMin);
-				pf->SetParameter(2, estimatedM);	pf->SetParLimits(2, 0.98 * estimatedM, 1.02 * estimatedM);
-				pA_Fine->Fit("periodicF1", "Q0", "", 0.5, xMax);
+				pf->SetParameter(1, adcMin);		pf->SetParLimits(1, adcMin - estimatedM * tEdgeTolerance, adcMin);
+				pf->SetParameter(2, estimatedM);	pf->SetParLimits(2, 0.99 * estimatedM, 1.01 * estimatedM),
+				pA_Fine->Fit("periodicF1", "Q", "", 0.5, xMax);
 				
 				TF1 *pf_ = pA_Fine->GetFunction("periodicF1");
 				if(pf_ != NULL) {
@@ -766,7 +770,7 @@ int calibrate(	int asicStart, int asicEnd,
 					}
 				}
 				else {
-					tEdge += nextRandomTEdge();
+					//	tEdge = nextRandomTEdge();
 				}
 				nTry += 1;
 				
@@ -791,9 +795,10 @@ int calibrate(	int asicStart, int asicEnd,
 				//pf2->SetParameter(0, tEdge);		pf2->SetParLimits(0, tEdge-0.1, tEdge+0.1);
 				pf2->FixParameter(0, tEdge);
 				pf2->SetParameter(1, tB);		pf2->SetParLimits(1, 1.10*tB, 0);
+				//pf2->FixParameter(1, tB);
 				pf2->SetParameter(2, m);		pf2->SetParLimits(2, 1.00 * m, 1.15 * m);
 				pf2->SetParameter(3, -1.0);		pf2->SetParLimits(3, -5.0, 0);
-				pA_Fine->Fit("periodicF2", "Q0", "", 0.5, xMax);
+				pA_Fine->Fit("periodicF2", "Q", "", 0.5, xMax);
 
 				TF1 *pf_ = pA_Fine->GetFunction("periodicF2");
 				if(pf_ != NULL) {
@@ -811,7 +816,6 @@ int calibrate(	int asicStart, int asicEnd,
 				nTry += 1;
 				
 			} while((currChi2 <= 0.95*prevChi2) && (nTry < 10));
-			
 			
 			if(prevChi2 > maxChi2 && currChi2 > maxChi2) {
 				fprintf(stderr, "WARNING: NO FIT OR VERY BAD FIT (2). Skipping TAC. (A: %4d %2d %d %c)\n",
@@ -869,7 +873,7 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			int nTry = 0;
 			while(nTry < 10){
-				pB_Fine->Fit("pl1", "Q0", "", xMin, xMax);
+				pB_Fine->Fit("pl1", "Q", "", xMin, xMax);
 				TF1 *fit = pB_Fine->GetFunction("pl1");
 				if(fit == NULL) break;
 				float chi2 = fit->GetChisquare();
@@ -914,7 +918,8 @@ void qualityControl(
 	int asicStart, int asicEnd, 
 	int linearityDataFile,
 	int leakageDataFile, float *leakagePhasePoint,
-	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2
+	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
+	char *plotFilePrefix
 )
 {
 	Event *eventBuffer = new Event[READ_BUFFER_SIZE];
@@ -925,6 +930,28 @@ void qualityControl(
 	unsigned gidEnd = asicEnd * 64 * 4 * 2;
 	unsigned nTAC = gidEnd - gidStart;
 	unsigned channelStart = asicStart * 64;
+	
+	unsigned nChannels = (asicEnd - asicStart) * 64;
+	unsigned nBranches = 2*nChannels;
+	unsigned bidStart = asicStart*64;
+
+	
+	TH1F *hBranchErrorA[nBranches];
+	TH1F *hBranchErrorB[nBranches];
+	for(int bid = 0; bid < nBranches; bid++) {
+		bool tOrE = (bid & 0x1) == 0;
+		unsigned channel = (bid >> 1) & 63;
+		unsigned asic = bid >> 7;
+
+		char hName[128];
+
+		sprintf(hName, "C%03u_%02u_A_%c_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
+		hBranchErrorA[bid] = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
+
+		sprintf(hName, "C%03u_%02u_B_%c_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
+		hBranchErrorB[bid] = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
+		
+	}
 
 	// Need two iterations to correct t0, then one more to build final histograms
 	for(int iter = 0; iter <= nIterations; iter++) {
@@ -935,6 +962,9 @@ void qualityControl(
 			tacInfo[gid].pA_ControlE->Reset();
 		}
 
+		for(int bid = 0; bid < nBranches; bid++) {
+			hBranchErrorA[bid]->Reset();
+		}
 	
 		lseek(linearityDataFile, 0, SEEK_SET);
 		int r;
@@ -950,6 +980,8 @@ void qualityControl(
 				unsigned tac = event.gid & 0x3;
 				bool isT = ((event.gid >> 2) & 0x1) == 0;
 				unsigned channel = (event.gid >> 3);
+				
+				unsigned bid = ((channel - bidStart) << 1) | (isT ? 0 : 1);
 
 				if (ti.pA_ControlT == NULL) continue;
 				assert(ti.pA_ControlE != NULL);
@@ -966,8 +998,11 @@ void qualityControl(
 
 				if(!isNormal) continue;
 				ti.pA_ControlT->Fill(event.stage, tError);
-				if(fabs(tError) < ErrorHistogramRange) // Don't fill if out of histogram's range
+				// Don't fill if out of histogram's range
+				if(fabs(tError) < ErrorHistogramRange) {
 					ti.pA_ControlE->Fill(tError);
+					hBranchErrorA[bid]->Fill(tError);
+				}
 			}
 		}
 		
@@ -982,14 +1017,13 @@ void qualityControl(
 			if(ti.pA_ControlT == NULL) continue;
 			assert(ti.pA_ControlE != NULL);
 			
-			float offset = INFINITY;
-			offset = ti.pA_ControlT->GetMean(2);
+			float offset = ti.pA_ControlT->GetMean(2);
 			
 			// Try and get a better offset by fitting the error histogram
 			int nEntries = ti.pA_ControlE->GetEntries();
 			if (nEntries > 1000) {
 				TF1 *f = NULL;
-				ti.pA_ControlE->Fit("gaus", "Q0");
+				ti.pA_ControlE->Fit("gaus", "Q");
 				f = ti.pA_ControlE->GetFunction("gaus");
 				if (f != NULL) {
 					offset = f->GetParameter(1);
@@ -997,43 +1031,158 @@ void qualityControl(
 			}
 	
 			float t0 = myP2.getT0(channel-channelStart, tac, isT);
-			myP2.setT0(channel-channelStart, tac, isT, t0 - offset);
+			float newt0 = t0 - offset;
+			myP2.setT0(channel-channelStart, tac, isT, newt0);
 		}
 	}
 	
 	// Build leakage quality control
-	int r;
-	lseek(leakageDataFile, 0, SEEK_SET);
-	while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
-		int nEvents = r / sizeof(Event);
-		for(int i = 0; i < nEvents; i++) {
-			Event &event = eventBuffer[i];
-			assert(event.gid >= gidStart);
-			assert(event.gid < gidEnd);
-	
-			unsigned tac = event.gid & 0x3;
-			bool isT = ((event.gid >> 2) & 0x1) == 0;
-			unsigned channel = (event.gid >> 3);
-			
-			TacInfo &ti = tacInfo[event.gid];
+	// Some channels have a large offset during this
+	// We will cut remove it, just for the purpose of making the error histogram
+	float *localT0 = new float[nTAC];
+	for(unsigned i = 0; i < nTAC; i++) localT0[i] = 0.0;
+	for(int iter = 0; iter < 2; iter++) {
+		
+		
+		int r;
+		lseek(leakageDataFile, 0, SEEK_SET);
+		while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+			int nEvents = r / sizeof(Event);
+			for(int i = 0; i < nEvents; i++) {
+				Event &event = eventBuffer[i];
+				assert(event.gid >= gidStart);
+				assert(event.gid < gidEnd);
+		
+				unsigned tac = event.gid & 0x3;
+				bool isT = ((event.gid >> 2) & 0x1) == 0;
+				unsigned channel = (event.gid >> 3);
+				
+				unsigned bid = ((channel - bidStart) << 1) | (isT ? 0 : 1);
+				
+				TacInfo &ti = tacInfo[event.gid];
+				if (ti.pB_ControlT == NULL) continue;
+				assert(ti.pB_ControlE != NULL);
+				
+				float adcEstimate = ti.leakage.a0 + ti.leakage.a1 * event.tacIdleTime + ti.leakage.a2 * event.tacIdleTime * event.tacIdleTime;
+				float adcError = event.fine - adcEstimate;
+		
+				float tEstimate = myP2.getT(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
+				float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
+				bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime,0);
+				float tError = tEstimate - leakagePhasePoint[event.gid];
+				tError += localT0[event.gid - gidStart];
+
+				if(!isNormal) continue;
+				ti.pB_ControlT->Fill(event.stage, tError);
+				if(fabs(tError) < ErrorHistogramRange) {
+					ti.pB_ControlE->Fill(tError);
+					hBranchErrorB[bid]->Fill(tError);
+				}
+			}
+		}
+		
+		for(int gid = gidStart; gid < gidEnd; gid++) {
+			TacInfo &ti = tacInfo[gid];
 			if (ti.pB_ControlT == NULL) continue;
 			assert(ti.pB_ControlE != NULL);
 			
-			float adcEstimate = ti.leakage.a0 + ti.leakage.a1 * event.tacIdleTime + ti.leakage.a2 * event.tacIdleTime * event.tacIdleTime;
-			float adcError = event.fine - adcEstimate;
-	
-			float tEstimate = myP2.getT(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
-			float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
-			bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime,0);
-			float tError = tEstimate - leakagePhasePoint[event.gid];
-
-			if(!isNormal) continue;
-			ti.pB_ControlT->Fill(event.stage, tError);
-			if(fabs(tError) < ErrorHistogramRange)
-				ti.pB_ControlE->Fill(tError);
+			float offset = ti.pB_ControlT->GetMean(2);
+			int nEntries = ti.pB_ControlE->GetEntries();
+			if (nEntries > 1000) {
+				TF1 *f = NULL;
+				ti.pB_ControlE->Fit("gaus", "Q");
+				f = ti.pB_ControlE->GetFunction("gaus");
+				if (f != NULL) {
+					offset = f->GetParameter(1);
+				}
+			}
+			localT0[gid - gidStart] -= offset;
 		}
-	}	
+	}
+	delete [] localT0;
 	
+	
+	TCanvas *c = new TCanvas();
+	for(unsigned aOrB = 0; aOrB < 2; aOrB++) {
+		TH1F **hBranchError = (aOrB == 0) ? hBranchErrorA : hBranchErrorB;
+
+		for(unsigned tOrE = 0; tOrE < 2; tOrE++) {
+			TH1F *hCounts, *hResolution;
+			const char *modeString;
+			
+			unsigned s = aOrB << 1 | tOrE;
+			switch(aOrB << 1 | tOrE) {
+				case 0	:	modeString = "11";
+						hCounts = new TH1F("hCounts_T_A", "Counts", nChannels, 0, nChannels);
+						hResolution = new TH1F("hError_T_A", "TDC resolution histogram", 1000, 0, 500E-12);
+						break;
+				case 1	:	modeString = "21";
+						hCounts = new TH1F("hCounts_E_A", "Counts", nChannels, 0, nChannels);
+						hResolution = new TH1F("hError_E_A", "TDC resolution histogram", 1000, 0, 500E-12);
+						break;
+				case 2	:	modeString = "12";
+						hCounts = new TH1F("hCounts_T_B", "Counts", nChannels, 0, nChannels);
+						hResolution = new TH1F("hError_T_B", "TDC resolution histogram", 1000, 0, 500E-12);
+						break;
+				default	:	modeString = "22";
+						hCounts = new TH1F("hCounts_E_B", "Counts", nChannels, 0, nChannels);
+						hResolution = new TH1F("hError_E_B", "TDC resolution histogram", 1000, 0, 500E-12);
+						break;
+			}
+			TGraphErrors *gResolution = new TGraphErrors(nChannels);
+			
+			
+			int nPoints = 0;
+			for(unsigned channel = 0; channel < nChannels; channel++) {
+				TH1F *hError = hBranchError[channel << 1 | tOrE ];
+				
+				hCounts->Fill(channel, hError->GetEntries());
+				if(hError->GetEntries() < 1000) continue;
+				hError->Fit("gaus", "Q");
+				TF1 *fit = hError->GetFunction("gaus");
+				if(fit == NULL) continue;
+				float sigma = fit->GetParameter(2) * DAQ::Common::SYSTEM_PERIOD;
+				float sigmaError = fit->GetParError(2) * DAQ::Common::SYSTEM_PERIOD;
+				gResolution->SetPoint(nPoints, channel, sigma);
+				gResolution->SetPointError(nPoints, 0, sigmaError);
+				hResolution->Fill(sigma);
+				
+				nPoints += 1;
+			}
+			gResolution->Set(nPoints);
+			
+			char plotFileName[1024];
+			sprintf(plotFileName, "%s_%s.pdf", plotFilePrefix, modeString);
+			c->Clear();
+			c->Divide(2,2);
+			
+			c->cd(1);
+			gResolution->Draw("AP");
+			gResolution->SetTitle("TDC resolution");
+			gResolution->GetXaxis()->SetTitle("Channel");
+			gResolution->GetXaxis()->SetRangeUser(0, nChannels);
+			gResolution->GetYaxis()->SetTitle("Resolution (s RMS)");
+			gResolution->GetYaxis()->SetRangeUser(0, 500E-12);
+			gResolution->Draw("AP");
+			
+			c->cd(2);
+			hResolution->SetTitle("TDC resolution histogram");
+			hResolution->GetXaxis()->SetTitle("TDC resolution (s RMS)");
+			hResolution->Draw("HIST");
+			
+			c->cd(3);
+			hCounts->GetYaxis()->SetRangeUser(0, hCounts->GetMaximum() * 1.10);
+			hCounts->GetXaxis()->SetTitle("Channel");
+			hCounts->Draw("HIST");	
+
+			sprintf(plotFileName, "%s_%s.pdf", plotFilePrefix, modeString);
+			c->SaveAs(plotFileName);
+			sprintf(plotFileName, "%s_%s.png", plotFilePrefix, modeString);
+			c->SaveAs(plotFileName);
+			
+		}
+	}
+
 	delete [] eventBuffer;
 }
 
@@ -1109,7 +1258,7 @@ void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefi
 				if(isT && (tCoarse == 0) && (eCoarse == 0)) continue; // Patch for bad events
 				int fCoarse = isT ? tCoarse : eCoarse;
 				int fFine = isT ? tFine : eFine;
-
+				
 				unsigned gid = ((64*asic + channel) << 3) | (tOrE << 2) | (tac & 0x3);
 				
 				Event event;
