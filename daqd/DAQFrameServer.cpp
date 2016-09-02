@@ -259,3 +259,13 @@ int DAQFrameServer::setCoincidenceTrigger(CoincidenceTriggerConfig *config)
 	int r = DP->setCoincidenceTrigger(config);
 	return r;
 }
+
+int AbstractDAQCard::setGateEnable(unsigned mode)
+{
+	return -1;
+}
+
+int DAQFrameServer::setGateEnable(unsigned mode)
+{
+	return DP->setGateEnable(mode);
+}

@@ -587,3 +587,17 @@ int PFP_KX7::setCoincidenceTrigger(CoincidenceTriggerConfig *config)
 	pthread_mutex_unlock(&hwLock);
 	return 0;
 }
+
+int PFP_KX7::setGateEnable(unsigned mode)
+{
+	setLastCommandTimeIdleCount();
+	uint32_t data[1];
+	int status;
+	
+	data[0] = (mode != 0) ? 0x000FFFFU : 0xFFFF0000U;
+	pthread_mutex_lock(&hwLock);
+	status = WriteAndCheck(GateEnableReg * 4, data, 1);	
+	setLastCommandTimeIdleCount();
+	pthread_mutex_unlock(&hwLock);
+	return status;	
+}

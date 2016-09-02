@@ -34,6 +34,7 @@ public:
 	uint64_t getPortCounts(int channel, int whichCount);
 	virtual int setSorter(unsigned mode);
 	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
+	virtual int setGateEnable(unsigned mode);
 
 	  static const int ETIMEOUT = -1;
 	  static const int ENOWORDS = -2;
@@ -53,6 +54,7 @@ private:
 	static const int CoincWindowReg		= 608;
 	static const int CoincMasksReg		= 609;
 	static const int statusReg		= 640;
+	static const int GateEnableReg		= 577;
 
 	WDC_DEVICE_HANDLE Card;
 	static const unsigned NB = 2;

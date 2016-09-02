@@ -300,3 +300,8 @@ int FrameServer::setIdleTimeCalculation(unsigned mode)
 {
 	computeIdleTimes = (mode != 0);
 }
+
+int FrameServer::setGateEnable(unsigned mode)
+{
+	return -1;
+}

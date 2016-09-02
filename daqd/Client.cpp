@@ -63,6 +63,8 @@ int Client::handleRequest()
 		actionStatus = doSetTrigger();
 	else if(cmdHeader.type == commandSetIdleTimeCalculation)
 		actionStatus = doSetIdleTimeCalculation();
+	else if(cmdHeader.type = commandSetGateEnable)
+		actionStatus = doSetGateEnable();
 	
 	if(actionStatus == -1) {
 		fprintf(stderr, "Error handling client %d, command was %u\n", socket, unsigned(cmdHeader.type));
@@ -208,6 +210,17 @@ int Client::doSetIdleTimeCalculation()
 	frameServer->setIdleTimeCalculation(mode);
 
 	uint32_t reply = 0;
+	int status = send(socket, &reply, sizeof(reply), MSG_NOSIGNAL);
+	if(status < sizeof(reply)) return -1;
+	return 0;
+}
+
+int Client::doSetGateEnable()
+{
+	uint32_t mode;
+	memcpy(&mode, socketBuffer + sizeof(CmdHeader_t), sizeof(mode));
+	int32_t reply = frameServer->setGateEnable(mode);
+	
 	int status = send(socket, &reply, sizeof(reply), MSG_NOSIGNAL);
 	if(status < sizeof(reply)) return -1;
 	return 0;

@@ -44,6 +44,7 @@ public:
 	virtual int setSorter(unsigned mode);
 	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
 	virtual int setIdleTimeCalculation(unsigned mode);
+	virtual int setGateEnable(unsigned mode);
 
 	
 private: 

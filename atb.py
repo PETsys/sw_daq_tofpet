@@ -363,6 +363,18 @@ class ATB:
 		data = self.__socket.recv(2)
 		assert len(data) == 2		
 
+	def _daqdGateMode(self, mode):
+		template1 = "@HHI"
+		n = struct.calcsize(template1)
+		data = struct.pack(template1, 0x12, n, mode);
+		self.__socket.send(data)
+
+		template = "@I"
+		n = struct.calcsize(template)
+		data = self.__socket.recv(n);
+		return None
+
+
 	def __start(self):
 		# First, generate a "sync" in the FEB/D (or ML605) itself
 		for portID, slaveID in self.getActiveFEBDs():
@@ -374,6 +386,8 @@ class ATB:
 		# Start acquisition process
 		# Disable DAQ card
 		self._daqdMode(0);
+		# Diable gate signal from FEB/D
+		self._daqdGateMode(0)
 		# Enable all FEB/D to receive external sync
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 10, 1)
@@ -383,6 +397,8 @@ class ATB:
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 10, 0)
 		sleep(0.120)
+		self._daqdGateMode(self.__idleTimeBreakage & 0b1)
+	
 
 		# Check the status from all the ASICs
 		for portID, slaveID in self.getActiveFEBDs():
@@ -1138,6 +1154,7 @@ class ATB:
 
 	## Disables external gate function
 	def disableTriggerGating(self):
+		self._daqdGateMode(0)
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 13, 0x00);
 		self.__idleTimeBreakage &= ~0b1
@@ -1146,6 +1163,7 @@ class ATB:
 	## Enabled external gate function
 	# @param delay Delay of the external gate signal, in clock periods
 	def enableTriggerGating(self, delay):
+		self._daqdGateMode(0)
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 13, 1024 + delay);
 		self.__idleTimeBreakage |= 0b1
