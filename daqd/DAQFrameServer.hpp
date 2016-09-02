@@ -22,6 +22,7 @@ public:
 	virtual uint64_t getPortCounts(int channel, int whichCount) = 0;
 	virtual int setSorter(unsigned mode);
 	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
+	virtual int setGateEnable(unsigned mode);
 };
 
 class DAQFrameServer : public FrameServer
@@ -39,6 +40,7 @@ public:
 	virtual uint64_t getPortCounts(int port, int whichCount);
 	virtual int setSorter(unsigned mode);
 	virtual int setCoincidenceTrigger(CoincidenceTriggerConfig *config);
+	virtual int setGateEnable(unsigned mode);
 
 private:
 	AbstractDAQCard *DP;

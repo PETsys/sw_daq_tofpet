@@ -28,6 +28,7 @@ private:
 	int doSetSorter();
 	int doSetTrigger();
 	int doSetIdleTimeCalculation();
+	int doSetGateEnable();
 };
 
 }
