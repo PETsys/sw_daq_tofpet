@@ -1332,6 +1332,7 @@ class ATB:
 		finePhase2 = (finePhase >> 16) & 255
 		interval0 = interval & 255
 		interval1 = (interval >> 8) & 255
+                tpMode |= (interval >> 16) & 31
 		length0 = length & 255
 		length1 = (length >> 8) & 255
 		
