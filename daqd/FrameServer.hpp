@@ -47,7 +47,7 @@ public:
 
 	
 private: 
-	bool computeIdleTimes;
+	unsigned idleTimeMode;
 	
 protected:	
 	static const int CommandTimeout = 250; // ms

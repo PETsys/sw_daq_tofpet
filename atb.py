@@ -1002,7 +1002,7 @@ class ATB:
 		self.stop()		
 		sleep(0.5)
 
-		self.__setIdleTimeComputation(True)
+		self.__setIdleTimeComputation(0)
 		self.__setSortingMode(True)
 		self.disableTriggerGating()
 		self.setTestPulseNone()
@@ -1050,6 +1050,7 @@ class ATB:
 	def doSync(self, clearFrames=True):
 		while True:	
 			targetFrameID = self.__getCurrentFrameID()
+			targetFrameID += 32 # Post-config ASIC sync happens at a 32 frame boundary
 			#print "Waiting for frame %1d" % targetFrameID
 			while True:
 				df = self.getDataFrame()
@@ -1135,13 +1136,24 @@ class ATB:
 		dacBits = intToBin(whichDAC, 1) + intToBin(channel, 5) + intToBin(voltage, 14) + bitarray('0000')
 		dacBytes = bytearray(dacBits.tobytes())
 		return self.sendCommand(portID, slaveID, 0x01, dacBytes)
+	
+	## Enables/Disables the TOFPET ASIC TAC refresh
+	# @param mode Enable (True) or disable (False)
+	def setTacRefresh(self, mode):
+		if mode == False:
+			self.__idleTimeBreakage &= ~0b10
+		else:
+			self.__idleTimeBreakage |= 0b10
+			
+		self.__setIdleTimeComputation(self.__idleTimeBreakage)
+		
 
 	## Disables external gate function
 	def disableTriggerGating(self):
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 13, 0x00);
 		self.__idleTimeBreakage &= ~0b1
-		self.__setIdleTimeComputation(self.__idleTimeBreakage == 0)
+		self.__setIdleTimeComputation(self.__idleTimeBreakage)
 
 	## Enabled external gate function
 	# @param delay Delay of the external gate signal, in clock periods
@@ -1149,7 +1161,7 @@ class ATB:
 		for portID, slaveID in self.getActiveFEBDs():
 			self.writeFEBDConfig(portID, slaveID, 0, 13, 1024 + delay);
 		self.__idleTimeBreakage |= 0b1
-		self.__setIdleTimeComputation(self.__idleTimeBreakage == 0)
+		self.__setIdleTimeComputation(self.__idleTimeBreakage)
 
 	def __setCoincidenceTrigger(self, enable, triggerMinimumToT,
 					triggerCoincidenceWindow, triggerPreWindow,
@@ -1203,7 +1215,7 @@ class ATB:
 			self.__idleTimeBreakage |= 0b10
 		else:
 			self.__idleTimeBreakage &= ~0b10
-		self.__setIdleTimeComputation(self.__idleTimeBreakage == 0)
+		self.__setIdleTimeComputation(self.__idleTimeBreakage)
 
 		return reply
 
@@ -1291,12 +1303,7 @@ class ATB:
 		data = self.__socket.recv(n);
 		return None
 
-	def __setIdleTimeComputation(self, enable):
-		if enable:
-			word = 0x1
-		else: 
-			word = 0x0
-
+	def __setIdleTimeComputation(self, word):
 		template1 = "@HHI"
 		n = struct.calcsize(template1)
 		data = struct.pack(template1, 0x11, n, word);
@@ -1322,6 +1329,9 @@ class ATB:
         # @param finePhase Defines the delay of the test pulse regarding the start of the frame, in units of 1/392 of the clock.
         # @param invert Sets the polarity of the test pulse: active low when ``True'' and active high when ``False''
 	def setTestPulsePLL(self, length, interval, finePhase, invert):
+		if (interval + 1) % 32 == 0:
+			raise "Test pulse interval + 1 must not be a multiple of 32"
+		
 		if not invert:
 			tpMode = 0b10000000
 		else:
@@ -1616,6 +1626,14 @@ class ATB:
 		# Force parameters!
 		# Enable "veto" to reset TDC during configuration, to ensure more consistent results
 		ac.globalConfig.setValue("veto_en", 1)
+		
+		# Check if TAC refresh mode has been selecteds
+		# and adjust ASIC configuration accordingly
+		if (self.__idleTimeBreakage & 0b10) != 0:
+			ac.globalConfig.setValue("tac_refresh", 4)
+		else:
+			ac.globalConfig.setValue("tac_refresh", 0)
+			
 		for n, cc in enumerate(ac.channelConfig):
 			# Enable deadtime to reduce insane events
 			cc.setValue("deadtime", 3);
