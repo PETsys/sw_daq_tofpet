@@ -1325,17 +1325,22 @@ class ATB:
 	
         ## Sets the properties of the internal FPGA pulse generator
         # @param length Sets the length of the test pulse, from 1 to 1023 clock periods. 0 disables the test pulse.
-        # @param interval Sets the interval between test pulses. The actual interval will be (interval+1)*1024 clock cycles.
+        # @param interval Sets the interval between test pulses. The actual interval will be (interval+1)*1024 clock cycles. Ignored in single shot mode.
         # @param finePhase Defines the delay of the test pulse regarding the start of the frame, in units of 1/392 of the clock.
         # @param invert Sets the polarity of the test pulse: active low when ``True'' and active high when ``False''
-	def setTestPulsePLL(self, length, interval, finePhase, invert):
-		if (interval + 1) % 32 == 0:
-			raise "Test pulse interval + 1 must not be a multiple of 32"
+        # @param singleShot Pulse is emmited only when a button is pressed
+	def setTestPulsePLL(self, length, interval, finePhase, invert, singleShot=False):
+		if not singleShot:
+			tpMode = 0b10000000
+			if (interval + 1) % 32 == 0:
+				raise "Test pulse interval + 1 must not be a multiple of 32"
+		else:
+			tpMode = 0b00000000
 		
 		if not invert:
-			tpMode = 0b10000000
+			tpMode |= 0b00000000
 		else:
-			tpMode = 0b10100000
+			tpMode |= 0b00100000
 
 		finePhase0 = finePhase & 255
 		finePhase1 = (finePhase >> 8) & 255
