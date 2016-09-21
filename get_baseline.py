@@ -239,7 +239,7 @@ while it<=n_iter:
 
     check=dump_noise(root_filename,uut, activeAsics, targetChannels, args.hvBias, args.comments)
  
-    os.system("root -l %s \"draw_threshold_scan.C(%s,true)\"" % (root_filename,maxAsics))
+    os.system("root -l -q %s \"draw_threshold_scan.C(%s,true)\"" % (root_filename,maxAsics))
  
    
     pdf_filename= "%s/pdf/%s_%d.pdf" % (dir_path,base_prefix, it)
