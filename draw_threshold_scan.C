@@ -30,14 +30,14 @@ void draw_threshold_scan(Int_t maxAsics, bool Save = false)
 	}
 	
 	
-	gROOT->ProcessLine(".L cdf.C");
-	TF1 *f = new TF1("cdf", cdf, 32, 64, 3);
-	f->SetParName(0, "Constant");
-	f->SetParName(1, "x0");
-	f->SetParName(2, "Sigma");
+	//gROOT->ProcessLine(".L cdf.C");
+	TF1 *cdf = new TF1("cdf", "[0]*(ROOT::Math::normal_cdf(x, [2], [1]))", 32, 64);
+	cdf->SetParName(0, "Constant");
+	cdf->SetParName(1, "x0");
+	cdf->SetParName(2, "Sigma");
 
 
-
+	FILE * thFile;
 
 	for(Int_t i = 1; i < hRate->GetNbinsX() + 1; i++) {
 		
@@ -48,7 +48,7 @@ void draw_threshold_scan(Int_t maxAsics, bool Save = false)
 		
 		if(C%64==0){
 			sprintf(filename, "asic%d.baseline",C/64);
-			FILE * thFile=fopen(filename, "w");
+			thFile=fopen(filename, "w");
 		}
 		char hName[256];
 		char hTitle[256];
@@ -63,7 +63,7 @@ void draw_threshold_scan(Int_t maxAsics, bool Save = false)
 		//	FILE *thFile = C/64 == 0 ? thFile1 : thFile2;
 		
 		if(h->GetEntries() < 1) {
-		  fprintf(thFile, "%d\t%d\t%f\t%f\n", C/64, C%64, 0, 100);
+		  fprintf(thFile, "%d\t%d\t%f\t%f\n", C/64, C%64, 0.0, 100.0);
 			delete h;
 			continue;
 		}
@@ -89,13 +89,13 @@ void draw_threshold_scan(Int_t maxAsics, bool Save = false)
 
 		cout << i << " " << C << " " << " " << maxJ << firstAboveZeroJ << endl;
 		
-		f->SetParameter(0, max);	f->SetParLimits(0, 0.8*max, 1.01*max);
-		f->SetParameter(1, maxJ-0.5);	f->SetParLimits(1, firstAboveZeroJ-1.5, 64);
-		f->SetParameter(2, 0.02);	f->SetParLimits(2, 0.01, 5.0);
+		cdf->SetParameter(0, max);	cdf->SetParLimits(0, 0.8*max, 1.01*max);
+		cdf->SetParameter(1, maxJ-0.5);	cdf->SetParLimits(1, firstAboveZeroJ-1.5, 64);
+		cdf->SetParameter(2, 0.02);	cdf->SetParLimits(2, 0.01, 5.0);
 		h->Fit("cdf", "", "", 32, maxJ+0.25);
-		Float_t x0 = f->GetParameter(1);
-		Float_t x0_e = f->GetParError(1);
-		Float_t sigma = f->GetParameter(2);
+		Float_t x0 = cdf->GetParameter(1);
+		Float_t x0_e = cdf->GetParError(1);
+		Float_t sigma = cdf->GetParameter(2);
 
 
 		fprintf(thFile, "%d\t%d\t%f\t%f\n", C/64, C%64, x0, sigma);
@@ -147,7 +147,7 @@ void draw_threshold_scan(Int_t maxAsics, bool Save = false)
 	hFile->Write();
 	
 	if(Save){
-		  c1->SaveAs("/tmp/baseline_dummy.pdf");
-		  exit();
+		c1->SaveAs("/tmp/baseline_dummy.pdf");
 	}
+	
 }
