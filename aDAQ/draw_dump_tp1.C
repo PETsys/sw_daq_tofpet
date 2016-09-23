@@ -4,7 +4,8 @@
 	FILE * strTable[64][64];
 	TFile *rootFile = new TFile("str.root", "RECREATE");
 	
-	TNtuple *data = (TNtuple *)_file0->Get("data");
+	TFile *f = _file0;
+	TNtuple *data = (TNtuple *)f->Get("data");
 	Float_t step1;      	data->SetBranchAddress("step1", &step1);   
 	Float_t step2;      	data->SetBranchAddress("step2", &step2);   
 	Float_t channel;		data->SetBranchAddress("channel", &channel);
@@ -87,7 +88,6 @@
 				for(Int_t j=1; j< hToT3D->GetNbinsY()+1;j++){
 					hToT->Reset();
 			
-					Int_t asic=j-1;
 					TH1 *hToT = hToT3D->ProjectionX("hToT", j, j,i,i);
 					TH1 *hTFine = hTFine3D->ProjectionX("hTFine", j, j,i,i);
 					TH1 *hEFine = hEFine3D->ProjectionX("hEFine", j, j,i,i);
@@ -95,13 +95,12 @@
 					hTFine->GetXaxis()->SetTitle("TFine (LSB)");			
 					hEFine->GetXaxis()->SetTitle("EFine (LSB)");
 				
-					Int_t asic=j-1;
 					if(hToT->GetEntries() >100){	
-						if(strTable[asic][ch] == NULL){
+						if(strTable[j-1][ch] == NULL){
 							
-							sprintf(strTableName,"str_%d_%d.txt",asic,ch);
+							sprintf(strTableName,"str_%d_%d.txt",j-1,ch);
 					
-							strTable[asic][ch] = fopen(strTableName, "w");	  
+							strTable[j-1][ch] = fopen(strTableName, "w");	  
 						}
 					
 						hToT->Fit("gaus");
@@ -110,11 +109,11 @@
 						
 			
 						char hName[1024];
-						sprintf(hName, "hToT_%05d_%05d_%03d_%05d", int(step1*1000), int(step2*1000), asic,ch);
+						sprintf(hName, "hToT_%05d_%05d_%03d_%05d", int(step1*1000), int(step2*1000), j-1,ch);
 						hToT->Clone(hName);
-						sprintf(hName, "hTFine_%05d_%05d_%03d_%05d", int(step1*1000), int(step2*1000),asic,ch);
+						sprintf(hName, "hTFine_%05d_%05d_%03d_%05d", int(step1*1000), int(step2*1000),j-1,ch);
 						hTFine->Clone(hName);
-						sprintf(hName, "hEFine_%05d_%05d_%03d_%05d", int(step1*1000), int(step2*1000),asic,ch);
+						sprintf(hName, "hEFine_%05d_%05d_%03d_%05d", int(step1*1000), int(step2*1000),j-1,ch);
 						hEFine->Clone(hName);
 						
 						
@@ -129,15 +128,15 @@
 								   fToT->GetParameter(1), fEFine->GetParameter(2),
 								   fabs(fTFine->GetParameter(2)), fTFine->GetParError(2),
 								   fTFine->GetParameter(1), fTFine->GetParError(1)
-								   ,asic,ch);*/
-							fprintf(strTable[asic][ch], "%f\t%f\t%f\t%f\t%e\t%e\t%e\t%e\t\n", 
+								   ,j-1,ch);*/
+							fprintf(strTable[j-1][ch], "%f\t%f\t%f\t%f\t%e\t%e\t%e\t%e\t\n", 
 									step1, step2, 
 									fToT->GetParameter(1), fEFine->GetParameter(2),
 									fabs(fTFine->GetParameter(2)), fTFine->GetParError(2),
 									fTFine->GetParameter(1), fTFine->GetParError(1)
 									);
 							
-							fflush(strTable[asic][ch]);
+							fflush(strTable[j-1][ch]);
 							
 						}
 		   
