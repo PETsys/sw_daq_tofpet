@@ -264,7 +264,7 @@ bool FrameServer::parseDataFrame(DataFrame *dataFrame)
 		// WARNING:this is to keep backward compatibility with current numbering scheme
 		asicID = (slaveID & 0x1) * 16*16 + (portID & 0xF) * 16 + (asicID & 0xF);
 #ifdef __ENDOTOFPET__
-		int feType = feTypeMap[asicID / 16];
+		int feType = feTypeMap[portID];
 		dataFrame->feType[n] = feType;
 #else
 		const int feType = 0;
