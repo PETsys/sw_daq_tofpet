@@ -238,6 +238,21 @@ bool FrameServer::parseDataFrame(DataFrame *dataFrame)
 		return false;
 	}
 	
+	// If TAC refresh is active we need to discard frames for which a TAC refresh happened
+	// Refresh (setting == 4) happens every 32 frames
+	bool skip32 = (idleTimeMode & 0x2) != 0;
+	if(skip32 && (frameID % 32) == 0) {
+		// Set size to 2
+		dataFrame->data[0] &= ~ (0x7FFFULL << 36);
+		dataFrame->data[0] |=  2ULL << 36;
+		frameSize = 2;
+		
+		// Set nEvents to 0
+		dataFrame->data[1] &= ~0xFFFFULL;
+		nEvents = 0;
+	}
+	
+	bool computeIdleTimes = (idleTimeMode == 0);
 	for(unsigned n = 2; n < frameSize; n++) {
 		uint64_t eventWord = (dataFrame->data[n]);
 		
@@ -298,7 +313,12 @@ int FrameServer::setCoincidenceTrigger(CoincidenceTriggerConfig *config)
 
 int FrameServer::setIdleTimeCalculation(unsigned mode)
 {
-	computeIdleTimes = (mode != 0);
+	idleTimeMode = mode;
+}
+
+int FrameServer::setGateEnable(unsigned mode)
+{
+	return -1;
 }
 
 int FrameServer::setGateEnable(unsigned mode)

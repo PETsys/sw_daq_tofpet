@@ -1,13 +1,13 @@
-PREFIX=data/YYYY/MM/DD/M1M2/R001_fetp1
+PREFIX=data/tp1_2dscan
 
 
-D=$(dirname ${PREFIX}.raw2)
+D=$(dirname ${PREFIX}.raw3)
 P=$(basename ${PREFIX})
 
 mkdir -p ${D}/pdf
 mkdir -p ${D}/rpt
 
-aDAQ/buildRaw ${D}/${P} ${D}/${P}.root
+aDAQ/buildRaw ${D}/${P} ${D}/${P}
 
 root -l -q ${D}/${P}.root aDAQ/draw_dump_tp1.C
 mv str.root ${D}/rpt/${P}_str.root
