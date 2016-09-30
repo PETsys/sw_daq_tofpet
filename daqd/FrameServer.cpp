@@ -321,7 +321,3 @@ int FrameServer::setGateEnable(unsigned mode)
 	return -1;
 }
 
-int FrameServer::setGateEnable(unsigned mode)
-{
-	return -1;
-}
