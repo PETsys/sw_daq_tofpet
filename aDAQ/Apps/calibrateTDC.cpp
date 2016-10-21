@@ -1361,7 +1361,7 @@ void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefi
 	delete [] linearityDataFilesNames;
 	delete [] linearityDataFiles;
 	
-	nOutputFiles = ceil(float(asicEnd) / nAsicsPerFile);
+	nOutputFiles = ceil(float(asicEnd+1) / nAsicsPerFile);
 	
 	
         char fName[1024];
