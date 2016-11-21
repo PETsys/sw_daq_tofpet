@@ -550,6 +550,7 @@ int calibrate(	int asicStart, int asicEnd,
 	unsigned gidEnd = asicEnd * 64 * 4 * 2;
 	unsigned nTAC = gidEnd - gidStart;
 	unsigned channelStart = asicStart * 64;
+	unsigned channelEnd = asicEnd * 64;
 
 	// Build the histograms
 	TH2S **hA_Fine2List = new TH2S *[nTAC];
@@ -910,6 +911,33 @@ int calibrate(	int asicStart, int asicEnd,
 		}
 	
 	}
+
+	// Zero out channels for which 1 or more TAC did not calibrate
+	for(unsigned channel = channelStart; channel < channelEnd; channel++) {
+		bool channelOK = true;
+		unsigned gidA = channel << 3;
+		unsigned gidB = gidA + 8;
+		for(unsigned gid = gidA; gid < gidB; gid++) {
+			TacInfo &ti = tacInfo[gid];
+			channelOK &= (ti.pA_ControlT != NULL);
+		}
+
+		if(!channelOK) {
+			fprintf(stderr,
+				"WARNING: Channel (%4u %2u) has one or more uncalibrateable TAC\n",
+				channel >> 6, channel & 63
+			);
+		}
+		for(unsigned gid = gidA; gid < gidB; gid++) {
+			TacInfo &ti = tacInfo[gid];
+			if(!channelOK) {
+				ti = TacInfo();
+			}
+
+		}
+	}
+
+
 	return hasData;
 
 }
