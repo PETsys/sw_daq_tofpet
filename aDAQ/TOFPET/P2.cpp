@@ -160,30 +160,22 @@ float P2::getQtac(int channel, int tac, bool isT, int adc, long long tacIdleTime
   
 	int index = getIndex(channel, tac, isT);
 	TAC &te = table[index];
-	
 
-
+	// Uncalibrated channel, return half way value
 	if(te.shape.m == 0) return 2; 
-	
 	
 	float p2 = te.shape.p2;
 	float m = te.shape.m;
 	float tB = te.shape.tB;
 	
-	// tQ without accounting for leakage
-	float tQ1 = +( 2 * p2 * tB + sqrtf(4 * adc * p2 + m*m) - m)/(2 * p2);
+	// Compensate for leakage (if parameters are valid)
+	if(tacIdleTime > 0 && te.leakage.a0 > 0) {
+		float adcEstimate = te.leakage.a0 + te.leakage.a1 * tacIdleTime  + te.leakage.a2 * tacIdleTime * tacIdleTime;
+		tB = -(- 2*p2*te.leakage.tQ + sqrtf(4*adcEstimate*p2 + m*m ) - m)/(2*p2);
+	}
 	
-	
-	// tQ with leakage estimation
-	// Estimate tB based on the tacIdleTime
-	float adcEstimate = te.leakage.a0 + te.leakage.a1 * tacIdleTime  + te.leakage.a2 * tacIdleTime * tacIdleTime;
-	tB = -(- 2*p2*te.leakage.tQ + sqrtf(4*adcEstimate*p2 + m*m ) - m)/(2*p2);
-	float tQ2 = +( 2 * p2 * tB + sqrtf(4 * adc * p2 + m*m) - m)/(2 * p2);
-	
-	// If we don't have leakage calibration for this channel, proceed without it
-	float tQ3 = te.leakage.a0 > 0 ? tQ2 : tQ1;
-	
-	return tQ2 + defaultQ;
+	float tQ = +( 2 * p2 * tB + sqrtf(4 * adc * p2 + m*m) - m)/(2 * p2);
+	return tQ + defaultQ;
 }
 
 float P2::getQmodulationCorrected(float tQ, int channel, bool isT, float coarseToT)
