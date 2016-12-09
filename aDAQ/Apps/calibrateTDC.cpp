@@ -686,12 +686,12 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			
 			// Obtain a rough estimate of the edge position
-			float tEdge = 0;
-			float lowerT0 = 0;
-			float upperT0 = 0;
-			
+			float tEdge = 0.5;
+			float lowerT0 = 0.3;
+			float upperT0 = 0.7;
+			float maxDeltaADC = 0;
 			adcMin = 1024.0;
-			for(int n = 5; n >= 1; n--) {
+			for(int n = 10; n >= 1; n--) {
 				for(int j = 1; j < (nBinsX - 1 - n); j++) {
 					float v1 = pA_Fine->GetBinContent(j);
 					float v2 = pA_Fine->GetBinContent(j+n);
@@ -704,15 +704,18 @@ int calibrate(	int asicStart, int asicEnd,
 					
 					if(c1 == 0 || c2 == 0) continue;
 					if(e1 > 5.0 || e2 > 5.0) continue;
-
+					
+					
+					float deltaADC = (v2 - v1);
 					float slope = (v2 - v1)/(t2 - t1);
 					// Slope is usually -nominalM
 					// But at edge, it's 10 x nominalM
-					if(slope > 5 * nominalM) {
+					if((slope > 5 * nominalM) && (deltaADC > maxDeltaADC)) {
 						tEdge = (t2 + t1)/2.0;
 						lowerT0 = t1;// - 0.5 * pA_Fine->GetXaxis()->GetBinWidth(0);
 						upperT0 = t2;// + 0.5 * pA_Fine->GetXaxis()->GetBinWidth(0);
 						adcMin = fminf (adcMin, pA_Fine->GetBinContent(j));
+						maxDeltaADC = deltaADC;
 					}
 				}
 			}
@@ -734,6 +737,13 @@ int calibrate(	int asicStart, int asicEnd,
 				
 			}
 			float estimatedM = - fPol->GetParameter(1);
+			if(estimatedM < 0.75 * nominalM || estimatedM > 1.25 * nominalM) {
+				fprintf(stderr, "WARNING: M (%6.1f) is out of range[%6.1f, %6.1f]. Skipping TAC. (A: %4d %2d %d %c)\n",
+					estimatedM, 0.75 * nominalM, 1.25 * nominalM,
+					asic, channel, tac, isT  ? 'T' : 'E'
+				);
+				continue;
+			}
 			
 			
 			boost::uniform_real<> range(lowerT0, upperT0);
