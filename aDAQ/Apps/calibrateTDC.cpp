@@ -686,9 +686,9 @@ int calibrate(	int asicStart, int asicEnd,
 			
 			
 			// Obtain a rough estimate of the edge position
-			float tEdge = 0.5;
-			float lowerT0 = 0.3;
-			float upperT0 = 0.7;
+			float tEdge = 0.0;
+			float lowerT0 = 0.0;
+			float upperT0 = 0.0;
 			float maxDeltaADC = 0;
 			adcMin = 1024.0;
 			for(int n = 10; n >= 1; n--) {
@@ -719,6 +719,14 @@ int calibrate(	int asicStart, int asicEnd,
 					}
 				}
 			}
+			
+			if(adcMin == 1024.0) {
+				fprintf(stderr, "WARNING: Could not find a suitable edge position. Skipping TAC (A: %4d %2d %d %c)\n",
+					asic, channel, tac, isT  ? 'T' : 'E'
+				);
+				continue;
+			}
+			
 			while(lowerT0 > 2.0 && tEdge > 2.0 && upperT0 > 2.0) {
 				lowerT0 -= 2.0;
 				tEdge -= 2.0;
