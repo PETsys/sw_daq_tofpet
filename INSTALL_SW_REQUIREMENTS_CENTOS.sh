@@ -15,7 +15,7 @@ python \
 python-devel \
 root-python \
 python-pip \
-kernel-devel \
+kernel kernel-devel \
 
 pip install --upgrade pip
 pip install bitarray
