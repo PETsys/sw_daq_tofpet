@@ -317,7 +317,7 @@ for iteration in range(nmodes):
 			# ToT are already in ns
 			k = T/6.25E-9
 
-                        if(entries<100 or nProblemsT>2 or nProblemsE>2 or (tRMS*k>4 and mode==1) or (eRMS*k>3 and mode==0) or (tRMS*k>1.5 and mode==0) or (coarseTOT <50 and mode==1)):
+                        if(entries<100 or nProblemsT>3 or nProblemsE>3 or (tRMS*k>4 and mode==1) or (eRMS*k>3 and mode==0) or (tRMS*k>1.5 and mode==0) or (coarseTOT <50 and mode==1)):
                             flagBad=True;
                             
                            
@@ -355,7 +355,7 @@ if(args.multipleAsics):
 
             if args.mode!="fetp":
                 for i in range(4):
-                    if phaseProblemsT[0][tAsic][tChannel][i] > 2:
+                    if phaseProblemsT[0][tAsic][tChannel][i] > 3:
                         print "Channel %d: Problems on phase T fine measures in TDCA: %d problems found for at least one TAC" % (tChannel, phaseProblemsT[0][tAsic][tChannel][i])
                         nTTDCMean+=1
                         continue_flag=1
@@ -364,7 +364,7 @@ if(args.multipleAsics):
                     continue
 
                 for i in range(4):
-                    if phaseProblemsE[0][tAsic][tChannel][i] > 2:
+                    if phaseProblemsE[0][tAsic][tChannel][i] > 3:
                         print "Channel %d: Problems on phase E fine measures in TDCA: %d problems found for at least one TAC" % (tChannel, phaseProblemsE[0][tAsic][tChannel][i])
                         nETDCMean+=1
                         continue_flag=1
@@ -397,7 +397,7 @@ if(args.multipleAsics):
 
            ###################################################
             for i in range(4):
-                if phaseProblemsT[1][tAsic][tChannel][i] > 2:
+                if phaseProblemsT[1][tAsic][tChannel][i] > 3:
                     print "Channel %d: Problems on phase T fine measures in FETP: %d problems found for at least one  TAC" % (tChannel, phaseProblemsT[1][tAsic][tChannel][i])
                     nTFETPMean+=1
                     continue_flag=1
