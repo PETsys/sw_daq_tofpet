@@ -43,7 +43,7 @@ struct BlockHeader  {
 
 int main(int argc, char *argv[])
 {
-	assert(argc == 11);
+	assert(argc == 12);
 	char *shmObjectPath = argv[1];
 	unsigned long dataFrameSharedMemorySize = boost::lexical_cast<unsigned long>(argv[2]);	
 	char outputType = argv[3][0];
@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
 	float postWindow = boost::lexical_cast<float>(argv[8]);
 	char *channelMapFileName = argv[9];
 	char *triggerMapFileName = argv[10];
+	float cutToT = boost::lexical_cast<float>(argv[11]);
 
 	DAQ::Common::SystemInformation *systemInformation = new DAQ::Core::SystemInformation();
 	if(cWindow != 0) {
@@ -223,6 +224,11 @@ int main(int argc, char *argv[])
 					p.d.stic.tBadHit = shm->getTBadHit(index, n);
 					p.d.stic.eBadHit = shm->getEBadHit(index, n);
 				} else {
+					continue;
+				}
+				
+				// Cut events which don't meet cutToT
+				if((p.timeEnd - p.time) < (cutToT * 1E12)) {
 					continue;
 				}
 				

@@ -56,6 +56,7 @@ class BoardConfig:
 		self.triggerPreWindow = 6.25E-9
 		self.triggerPostWindow = 100E-9
 		self.triggerSinglesFraction = 0
+		self.cutToT = -25E-9
 		return None
 
         
@@ -1481,7 +1482,8 @@ class ATB:
 				m, fileName,
 				"%e" % cWindow, "%e" % self.config.triggerMinimumToT, \
 				"%e" % self.config.triggerPreWindow, "%e" % self.config.triggerPostWindow, \
-				self.__tempChannelMapFile.name, self.__tempTriggerMapFile.name \
+				self.__tempChannelMapFile.name, self.__tempTriggerMapFile.name, \
+				"%e" % self.config.cutToT \
 			]
 		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
 
