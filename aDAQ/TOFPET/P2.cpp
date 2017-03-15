@@ -312,6 +312,24 @@ void P2::storeFile(int start, int end, const char *fName)
 	
 }
 
+// Remove comments and extra whitespace
+// Leaving only fiels separated by a single \t character
+static void normalizeLine(char *line) {
+	std::string s = std::string(line);
+	// Remove carriage return, from Windows written files
+	s = boost::regex_replace(s, boost::regex("\r"), "");
+	// Remove comments
+	s = boost::regex_replace(s, boost::regex("\\s*#.*"), "");
+	// Remove leading white space
+	s = boost::regex_replace(s, boost::regex("^\\s+"), "");
+	// Remove trailing whitespace
+	s = boost::regex_replace(s, boost::regex("\\s+$"), "");
+	// Normalize white space to tab
+	s = boost::regex_replace(s, boost::regex("\\s+"), "\t");
+	strcpy(line, s.c_str());
+	
+}
+
 void P2::loadTDCFile(int start, int end, const char *fName)
 {
 	FILE *f = fopen(fName, "r");
@@ -459,6 +477,8 @@ void P2::loadFiles(const char *mapFileName, bool loadTQ, bool multistep, float s
 	int lineNumber = 0;
 	while(fscanf(mapFile, "%[^\n]\n", line) == 1) {
 		lineNumber += 1;
+		normalizeLine(line);
+		if (strlen(line) == 0) continue;
 		boost::match_results<const char *> what;
 		if(!boost::regex_match((const char *)line, what, e, boost::match_default)) {
 			fprintf(stderr, "Bad syntax in '%s' (line %d) (1)\n", mapFileName, lineNumber);
