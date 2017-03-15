@@ -364,6 +364,9 @@ int main(int argc, char *argv[])
 				int fileID = list[n].get<0>();
 				int asicStart = list[n].get<1>();
 				int asicEnd = list[n].get<2>();
+				
+				int gidStart = asicStart * 64 * 4 * 2;
+				int gidEnd = asicEnd * 64 * 4 * 2;
 
 				sprintf(fName,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
 				int linearityDataFile = open(fName, O_RDONLY);
@@ -378,14 +381,14 @@ int main(int argc, char *argv[])
 				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
 				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
 				
-				float *leakagePhasePoint = new float[nTAC];
+				float *leakagePhasePoint = new float[gidEnd - gidStart];
 				sprintf(fName,"%s_%d_leakage_phase.tmp", tableFileNamePrefix, fileID);
 				FILE *leakagePhaseFile = fopen(fName, "r");
 				if(leakagePhaseFile == NULL) 
 					exit(1);
 				
-				for(int i = asicStart * 64 * 4 * 2; i < asicEnd * 64 * 4 * 2; i++) {
-					assert(fscanf(leakagePhaseFile, "%f\n", &leakagePhasePoint[i]) == 1);
+				for(int gid = gidStart; gid < gidEnd; gid++) {
+					assert(fscanf(leakagePhaseFile, "%f\n", &leakagePhasePoint[gid-gidStart]) == 1);
 				}
 
 				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2((asicEnd - asicStart) * 64);
@@ -907,6 +910,7 @@ int calibrate(	int asicStart, int asicEnd,
 				fprintf(stderr, "WARNING: NO FIT! Skipping TAC. (B: %4d %2d %d %c)\n",
 					asic, channel, tac, isT  ? 'T' : 'E'
 				);
+				delete pl1;
 				continue;
 			}
 			float chi2 = fit->GetChisquare();
@@ -926,6 +930,8 @@ int calibrate(	int asicStart, int asicEnd,
 			sprintf(hName, isT ? "C%03d_%02d_%d_B_T_control_E" : "C%03d_%02d_%d_B_E_control_E", 
 					asic, channel, tac);
 			ti.pB_ControlE = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
+			
+			delete pl1;
 		}
 	
 	}
@@ -1088,7 +1094,16 @@ void qualityControl(
 	float *localT0 = new float[nTAC];
 	for(unsigned i = 0; i < nTAC; i++) localT0[i] = 0.0;
 	for(int iter = 0; iter < 2; iter++) {
-		
+		for(int gid = gidStart; gid < gidEnd; gid++) {
+			if(tacInfo[gid].pB_ControlT == NULL) continue;
+			assert(tacInfo[gid].pB_ControlE != NULL);
+			tacInfo[gid].pB_ControlT->Reset();
+			tacInfo[gid].pB_ControlE->Reset();
+		}
+
+		for(int bid = 0; bid < nBranches; bid++) {
+			hBranchErrorB[bid]->Reset();
+		}
 		
 		int r;
 		lseek(leakageDataFile, 0, SEEK_SET);
@@ -1115,9 +1130,9 @@ void qualityControl(
 				float tEstimate = myP2.getT(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
 				float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
 				bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime,0);
-				float tError = tEstimate - leakagePhasePoint[event.gid];
+				float tError = tEstimate - leakagePhasePoint[event.gid - gidStart];
 				tError += localT0[event.gid - gidStart];
-
+				
 				if(!isNormal) continue;
 				ti.pB_ControlT->Fill(event.stage, tError);
 				if(fabs(tError) < ErrorHistogramRange) {
@@ -1438,11 +1453,14 @@ void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefi
 			exit(1);
 		}
 		
-		for(int i = n; i < n+nAsicsPerFile; i++) {
-			for(int j = 0; j < 64*4*2; j++) {
-				fprintf(f, "%f\n", leakagePhasePoint[i * nAsicsPerFile * 64 * 4 * 2 + j]);
-			}
+		int asicStart = n * nAsicsPerFile;
+		int asicEnd = (n+1) * nAsicsPerFile;
+		int gidStart = asicStart * 64 * 4 * 2;
+		int gidEnd = asicEnd * 64 * 4 * 2;
+		for(int gid = gidStart; gid < gidEnd; gid++) {
+			fprintf(f, "%f\n", leakagePhasePoint[gid]);
 		}
+		
 		fclose(f);
 		
 		fprintf(listFile, "%d %d %d\n", n, n*nAsicsPerFile, (n+1)*nAsicsPerFile);
