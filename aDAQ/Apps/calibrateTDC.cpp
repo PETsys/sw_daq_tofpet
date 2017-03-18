@@ -873,7 +873,7 @@ int calibrate(	int asicStart, int asicEnd,
 		{
 			char hName[128];
 				
-			float x = leakagePhasePoint[gid];
+			float x = leakagePhasePoint[gid-gidStart];
 			float tQ = 3 - fmod(1024.0 + x - ti.shape.tEdge, 2.0);
 			
 			TProfile *pB_Fine = pB_FineList[gid-gidStart];
@@ -1047,7 +1047,7 @@ void qualityControl(
 				float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
 				bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
 				float tError = tEstimate - event.stage;
-
+				
 				if(!isNormal) continue;
 				ti.pA_ControlT->Fill(event.stage, tError);
 				// Don't fill if out of histogram's range
