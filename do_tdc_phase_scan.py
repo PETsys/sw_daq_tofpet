@@ -13,20 +13,11 @@ import argparse
 parser = argparse.ArgumentParser(description='Acquires a set of data for several relative phases of the test pulse, either injecting it directly in the tdcs or in the front end')
 
 
-parser.add_argument('OutputFilePrefix',
-                   help='Prefix for the output files. One pair of .root and .params files will be created')
+parser.add_argument('OutputFilePrefix', help='Prefix for the output files.')
 
-parser.add_argument('hvBias', type=float,
-                   help='The voltage to be set for the HV DACs')
+parser.add_argument('--hvBias', type=float, default=5.0, help='The voltage to be set for the HV DACs')
 
-
-parser.add_argument('--asics', nargs='*', type=int, help='If set, only the selected asics will acquire data')
-
-parser.add_argument('--mode', type=str, required=True,choices=['tdca', 'fetp'], help='Defines where the test pulse is injected. Two modes are allowed: tdca and fetp ')
-
-parser.add_argument('--tpDAC', type=int, default=0, help='The amplitude of the test pulse in DAC units (Default is 32 ). When running in fetp mode, this value needs to be set')
-
-parser.add_argument('--writeAtStep', default=False, action='store_true', help='Write ROOT file at intermediate steps')
+parser.add_argument('--tpDAC', type=int, default=32, help='The amplitude of the test pulse in DAC units (default: 32).')
 
 parser.add_argument('--comments', type=str, default="", help='Any comments regarding the acquisition. These will be saved as a header in OutputFilePrefix.params')
 
@@ -36,319 +27,89 @@ args = parser.parse_args()
 
 # Parameters
 T = 6.25E-9
-nominal_m = 128
+# PLL steps per clock
+M = 392
 
-#### PLL based generator
-Generator = 1
-M = 0x348	# 80 MHz PLL, 80 MHz ASIC
-M = 392		# 160 MHz PLL, 160 MHz ASIC
-#M = 2*392	# 160 MHz PLL, 80 MHz ASIC 
-K = 19
-minEventsA = 1000    
-minEventsB = 300    
+phaseMin = 0.0
+phaseMax = 8.0
+phaseBins = 165
 
-###
+intervalMin = 16
+intervalMax = 1016
+intervalBins = 20
 
+ipMin = 2.0
+ipMax = 3.0
+ipBins = 4
 
-##### 560 MHz clean clock based generator
-#Generator = 0
-#M = 14	# 2x due to DDR
-#K = 2 	# DO NOT USE DDR for TDCA calibration, as rising/falling is not symmetrical!
-#minEvents = 1000 # Low jitter, not so many events
-#####
-
-
-
-Nmax = 8
-tpLength = 128
-
-
-rootFileName = "%s.root" % args.OutputFilePrefix
-assert isdir(dirname(rootFileName))
-
-
-if args.mode == "tdca":
-  tdcaMode = True
-  if args.hvBias == None:
-    vbias =  5
-  else:
-    vbias = args.hvBias
-  frameInterval = 0
-  pulseLow = False
-	
-
-elif args.mode == "fetp":
-  tdcaMode = False
-  if args.tpDAC==0:
-    print "Error: Please set tpDAC argument! Exiting..."
-    exit(1)
-  tpDAC = args.tpDAC
-
-  if args.hvBias == None:
-    vbias =  5
-  else:
-    vbias = args.hvBias
-  frameInterval = 16
-  pulseLow = True
-
-else:
-  print "Unkown mode!"
-  exit(1)
-
-if vbias > 50: minEventsA *= 10
-if vbias > 50: minEventsB *= 10
-
-rootFile = ROOT.TFile(rootFileName, "RECREATE");
 
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig(useBaseline=False)
 uut.initialize()
 
+f = open("%s.bins" % args.OutputFilePrefix, "w")
+f.write("%d\t%f\t%f\n" % (phaseBins, phaseMin, phaseMax))
+f.write("%d\t%f\t%f\n" % (intervalBins, intervalMin, intervalMax))
+f.write("%d\t%f\t%f\n" % (ipBins, ipMin, ipMax))
+f.close()
 
-rootData1 = DataFile( rootFile, "3")
-rootData2 = DataFile( rootFile, "3B")
+for pulse_type, scan_type in [ ("fetp", "linear"), ("fetp", "leakage"), ("tdca", "linear"), ("tdca", "leakage") ]:
 
+	uut.config.cutToT = -25E-9
+	uut.openAcquisition("%s_%s_%s" % (args.OutputFilePrefix, pulse_type, scan_type))
+		
+	if scan_type == "linear":
+		phases = [ phaseMin + (b+0.5) * (phaseMax - phaseMin) / phaseBins for b in range(phaseBins) ]
+		intervals = [ intervalMin ]
+		events = 1000
+	else:
+		phases = [ ipMin + (b+0.5) * (ipMax-ipMin)/ipBins for b in range(ipBins) ]
+		intervals = [ intervalMin + b * (intervalMax - intervalMin)/intervalBins for b in range(intervalBins) ]
+		events = 300
 
-if args.asics == None:
-  activeAsics =  uut.getActiveTOFPETAsics()
-else:
-  activeAsics= args.asics
+	for channel in range(64):
+		# Set ASIC config
+		for ac in uut.config.asicConfig:
+			if not ac: continue
+			ac.globalConfig.setValue("test_pulse_en", 1)
+			ac.globalTConfig = bitarray(atb.intToBin(args.tpDAC, 6) + '1')
+			# Reset all channel to "normal" (non-TDCA) trigger and no-FETP
+			for cc in ac.channelConfig:
+				cc[52-47:52-42+1] = bitarray("000010")
+			for n in range(64):
+				ac.channelTConfig[n] = bitarray('0')
 
-activeChannels = [ x for x in range(0,64) ]
-systemAsics = [ i for i in range(max(activeAsics) + 1) ]
+		
+		# Set the channel to trigger
+		# and select the TP polarity
+		if pulse_type == "tdca":
+			for ac in uut.config.asicConfig:
+				if not ac: continue
+				ac.channelConfig[channel][52-47:52-42+1] = bitarray("111111")
 
-minEventsA *= len(activeAsics)
-minEventsB *= len(activeAsics)
-
-hTPoint = ROOT.TH1F("hTPoint", "hTPoint", 64, 0, 64)
-
-atbConfig = loadLocalConfig(useBaseline=False)
-for c, v in enumerate(atbConfig.hvBias):
-  atbConfig.hvBias[c] = vbias
-
-uut.config = atbConfig
-uut.config.writeParams(args.OutputFilePrefix, args.comments)
-
-print "Active ASICs ID: ", activeAsics
-
-for tChannel in activeChannels:
-	atbConfig = loadLocalConfig(useBaseline=False)
-	for c, v in enumerate(atbConfig.hvBias):
-		atbConfig.hvBias[c] = vbias
-
-
-	for tAsic in activeAsics:
-		# Overwrite test channel config
-		if not atbConfig.asicConfig[tAsic]: continue
-		atbConfig.asicConfig[tAsic].globalConfig.setValue("test_pulse_en", 1)
-		if tdcaMode:
-			atbConfig.asicConfig[tAsic].channelConfig[tChannel][52-47:52-42+1] = bitarray("11" + "11" + "1" + "1") 
-
-		else:				
-			atbConfig.asicConfig[tAsic].channelTConfig[tChannel] = bitarray('1')
-			atbConfig.asicConfig[tAsic].globalTConfig = bitarray(atb.intToBin(tpDAC, 6) + '1')
-
-	uut.config = atbConfig
-	uut.uploadConfig()
-
-
-	nBins = int(Nmax * M / K)
-	binWidth = float(K) / M
-
-	print "Phase scan will be done with %d steps with a %f clock binning (%5.1f ps)" % (nBins, binWidth, binWidth * T * 1E12)
-	sumProfile = ROOT.TProfile("pAll_%02d" % tChannel, "ALL", nBins, 0, nBins*binWidth, "s")
-	hTFine = [[ ROOT.TH2F("htFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nBins, 0, nBins*binWidth, 1024, 0, 1024) for tac in range(4) ] for tAsic in systemAsics ]
-	hEFine = [[ ROOT.TH2F("heFine_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nBins, 0, nBins*binWidth, 1024, 0, 1014) for tac in range(4) ] for tAsic in systemAsics ]
-
-
-
-	step1 = 1
-	for bin in range(nBins):
-		phaseStep =  bin * K
-		step2 = float(phaseStep)/M + binWidth/2
-		step1 = 0
-
-		if Generator == 1:
-			## Internal PLL 
-			tpCoarsePhase = 0
-			tpFinePhase = phaseStep
+			pulseLow = False
 		else:
-			# External fast clean clock
-			tpCoarsePhase = phaseStep/M
-			tpFinePhase = phaseStep % M
+			for ac in uut.config.asicConfig:
+				if not ac: continue
+				ac.channelTConfig[channel] = bitarray('1')
 
-		uut.setTestPulsePLL(tpLength, frameInterval, tpFinePhase, pulseLow)
-		uut.doSync()
-		
-		print "Channel %02d acquiring %1.4f (%d)  @ %d" % (tChannel, step2, phaseStep, frameInterval)
+			pulseLow = True
 
-		
-		nReceivedEvents = 0
-		nAcceptedEvents = 0
-		nReceivedFrames = 0
-		t0 = time()
-		while nAcceptedEvents < minEventsA and (time() - t0) < 10:
-			decodedFrame = uut.getDataFrame(nonEmpty = True)
-			if decodedFrame is None: continue
+		uut.uploadConfig()
 
-			nReceivedFrames += 1			
-			for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:
-				nReceivedEvents += 1
-				#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
-				if asic not in activeAsics or channel != tChannel:
-					#print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
-					continue
+		tpLength = 128
+		for interval in intervals:
+			uut.setTestPulsePLL(tpLength, interval, 0, pulseLow)
+			acquisitionTime = 0.05 + events * (interval + 1) * (1024 * T)
+
+			for phase in phases:
+				print pulse_type, scan_type, channel, interval, phase
+				tpPhase = int(round(phase * M))
+				uut.setTestPulsePLL(tpLength, interval, tpPhase, pulseLow)
+				uut.acquire(phase, interval+1, acquisitionTime)
+
+	uut.closeAcquisition()
 				
-				nAcceptedEvents += 1				
-			
-				rootData1.addEvent(step1, step2, decodedFrame['id'], asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime)
 				
-				hTFine[asic][tac].Fill(step2, tFine)
-				hEFine[asic][tac].Fill(step2, eFine)
-				sumProfile.Fill(step2, tFine)
-				
-		print "Got %(nReceivedFrames)d frames" % locals()
-		print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
-
-	if args.writeAtStep:
-		rootData1.write()
-	
-	histograms = [ hTFine[n][tac] for n in activeAsics for tac in range(4) ]
-	if tdcaMode:
-		histograms = [ hEFine[n][tac] for n in activeAsics for tac in range(4) ]
-		
-	profiles = [ h.ProfileX(h.GetName()+"_px", 1, -1, "s") for h in histograms ]
-	
-	maxE = 2.0
-	minE = 0.1
-
-	# Build a list of profiles, excluding cases which don't have
-	# acceptable error levels to start with
-	profiles2 = []
-	for p in profiles:
-		errors =  [ p.GetBinError(j) for j in range(1, nBins) ]
-		errorOK = [ e for e in errors if e > minE and e < maxE ]
-		ratio = float(len(errorOK)) / len(errors)
-		if ratio > 0.90:
-			profiles2.append(p)
-
-	# For each phase, find the largest ADC value among all (channel,tac)
-	# among those channels with acceptable error values
-	minList = [ 1024 for j in range(0, nBins+1) ]
-	for j in range(1, nBins):
-		# Consider neighboor phase's errors too
-		errors = [ p.GetBinError(i) for p in profiles2 for i in range(j-1, j+1) ]
-		# Get max ADC value for this phase among all the considered (channel,tac)(channel,tac)(channel,tac)(channel,tac)
-		maxADC = max([p.GetBinContent(j) for p in profiles2 ])
-		if min(errors) > minE and max(errors) < maxE:
-			minList[j] = maxADC			
-
-	# Find the lowest ADC point
-	# Look into neighbour phases for safety margin too
-	minList2 = [v for v in minList]
-	for j in range(1, nBins):
-		minList2[j] = max(minList[j-1:j+1])
-		
-	minADC = min(minList2)
-	if minADC == 1024:
-		# Could not find a suitable point for any channel
-		print "Error: Could not find a suitable phase for leakage scan"
-		break
-
-	minADCJ = minList.index(minADC)
-	
-	
-	intervals = [ x for x in range(frameInterval, 1000, 40) ]
-	nIntervals = len(intervals)
-
-	hTFine = [[ ROOT.TH2F("htFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "T Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1024) for tac in range(4) ] for tAsic in systemAsics ]
-	hEFine = [[ ROOT.TH2F("heFineB_%03d_%02d_%1d" % (tAsic, tChannel, tac), "E Fine", nIntervals, frameInterval+1, frameInterval+40*nIntervals+1, 1024, 0, 1014) for tac in range(4) ] for tAsic in systemAsics ]
-	
-	
-	minADCX = profiles[0].GetBinCenter(minADCJ)
-	while minADCX > 2.0: minADCX -= 2.0
-
-	profiles = profiles[::4] # Get only profiles for TAC 0
-	for nStep, x in enumerate([minADCX]): # Old code from where we scanned multiple steps
-		j = profiles[0].FindBin(x)
-		phaseStep = (j - 1) * K
-		step2 = float(phaseStep)/M + binWidth/2
-		print "Phase selection: %5.4f clk" % (step2)
-		for i, n in enumerate(activeAsics):
-			print "ASIC %4d Channnel %d TAC 0 T ADC value is %5.1f mean %3.3f RMS" % (n, tChannel, profiles[i].GetBinContent(j), profiles[i].GetBinError(j))
-
-		if nStep == 0:
-			hTPoint.SetBinContent(tChannel+1, step2);
-
-
-		for interval in intervals:		
-			step1 = interval+1
-			expectedChannelIdleTime = 1024*step1
-			expectedTACIdleTime = 4 * expectedChannelIdleTime
-
-			if Generator == 1:
-				## Internal PLL 
-				tpCoarsePhase = 0
-				tpFinePhase = phaseStep
-			else:
-				# External fast clean clock
-				tpCoarsePhase = phaseStep/M
-				tpFinePhase = phaseStep % M
-
-			uut.setTestPulsePLL(tpLength, interval, tpFinePhase, pulseLow)
-			sleep(expectedTACIdleTime * T)
-			uut.doSync()
-			t0 = time()
-			
-			print "Channel %02d acquiring %1.4f (%d) @ %d" % (tChannel, step2, tpFinePhase, interval)
-
-			nReceivedEvents = 0
-			nAcceptedEvents = 0
-			nReceivedFrames = 0
-			t0 = time()
-			#print "Expected idle times: %8d %8d" % (1024*step1, 4*1024*step1)
-			while nAcceptedEvents < minEventsB and (time() - t0) < 15:
-				decodedFrame = uut.getDataFrame(nonEmpty = True)
-				if decodedFrame is None: continue
-
-				nReceivedFrames += 1
-
-				for asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime in decodedFrame['events']:
-						nReceivedEvents += 1
-						#print "Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
-						if asic not in activeAsics or channel != tChannel:
-							#print "WARNING 1: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
-							continue
-
-						if channelIdleTime < expectedChannelIdleTime or tacIdleTime < expectedTACIdleTime:						
-							#print "WARNING 2: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d (%8d) %8d (%8d)" \
-							#	% (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, \
-							#	channelIdleTime, (channelIdleTime-expectedChannelIdleTime), \
-							#	tacIdleTime, (tacIdleTime-expectedTACIdleTime)) 
-							continue
-
-						if tdcaMode == False and tCoarse == 0 and eCoarse == 0:
-							#print "WARNING 3: Frame %10d ASIC %3d CH %2d TAC %d (%4d %4d) (%4d %4d) %8d %8d" % (decodedFrame['id'], asic, channel, tac, tCoarse, tFine, eCoarse, eFine, channelIdleTime, tacIdleTime) 
-							continue
-
-						nAcceptedEvents += 1				
-					
-						rootData2.addEvent(step1, step2, decodedFrame['id'], asic, channel, tac, tCoarse, eCoarse, tFine, eFine, channelIdleTime, tacIdleTime)
-						
-						if nStep == 0:
-							hTFine[asic][tac].Fill(step1, tFine)
-							hEFine[asic][tac].Fill(step1, eFine)
-					
-			print "Got %(nReceivedFrames)d frames" % locals()
-			print "Got %(nReceivedEvents)d events, accepted %(nAcceptedEvents)d" % locals()
-
-
-	if args.writeAtStep:
-		rootData2.write()
-
-rootData1.close()
-rootData2.close()
-rootFile.Write()
-rootFile.Close()
 
 uut.setAllHVDAC(0)

@@ -16,7 +16,11 @@
 #include <TRandom.h>
 #include <TCanvas.h>
 #include <TStyle.h>
+#include <Core/Event.hpp>
+#include <Core/EventSourceSink.hpp>
+#include <Core/OverlappedEventHandler.hpp>
 #include <TOFPET/P2.hpp>
+#include <TOFPET/RawV3.hpp>
 #include <assert.h>
 #include <math.h>
 #include <boost/lexical_cast.hpp>
@@ -164,16 +168,17 @@ struct Event {
 	unsigned short coarse;
 	unsigned short fine;
 	long long tacIdleTime;
-	float stage;
+	float interval;
+	float phase;
 };
 static const int READ_BUFFER_SIZE = 32*1024*1024 / sizeof(Event);
 
-void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefix, int nAsicsPerFile);
+void sortData(char *inputFilePrefix, char *outputFilePrefix, int nAsicsPerFile);
 
 int calibrate(
 	int asicStart, int asicEnd,
 	int linearityDataFile, int linearityNbins, float linearityRangeMinimum, float linearityRangeMaximum,
-	int eakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum, float *leakagePhasePoint,
+	int eakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum,
 	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
 	float nominalM
 );
@@ -181,7 +186,7 @@ int calibrate(
 void qualityControl(
 	int asicStart, int asicEnd, 
 	int linearityDataFile,
-	int leakageDataFile, float *leakagePhasePoint,
+	int leakageDataFile,
 	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
 	char *plotFilePrefix
 );
@@ -281,26 +286,25 @@ int main(int argc, char *argv[])
 
 	}
 	
-	if(argc - optind < 3){
+	if(argc - optind < 2){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too few positional arguments!\n", argv[0]);
 		return(1);
 	}
-	else if(argc - optind > 3){
+	else if(argc - optind > 2){
 		displayUsage(argv[0]);
 		fprintf(stderr, "\n%s: error: too many positional arguments!\n", argv[0]);
 		return(1);
 	}
-	char *tDataFileName = argv[optind+0];
-	char *eDataFileName = argv[optind+1];
-	char *tableFileNamePrefix = argv[optind+2];
+	char *inputFilePrefix = argv[optind+0];
+	char *outputFilePrefix = argv[optind+1];
 	
 	if(doSorting) {
-		sortData(tDataFileName, eDataFileName, tableFileNamePrefix, nAsicsPerFile);
+		sortData(inputFilePrefix, outputFilePrefix, nAsicsPerFile);
 	}
 
 	char fName[1024];
-	sprintf(fName, "%s_ranges.tmp", tableFileNamePrefix);
+	sprintf(fName, "%s.bins", inputFilePrefix);
 	FILE *rangeFile = fopen(fName, "r");
 	if(rangeFile == NULL) {
 		int e = errno;
@@ -311,15 +315,14 @@ int main(int argc, char *argv[])
 	int linearityNbins = 0;
 	float linearityRangeMinimum, linearityRangeMaximum;
 	int leakageNbins;
-	float leakageRangeMinimum, leakageRangeMaximum;	
+	float leakageRangeMinimum, leakageRangeMaximum;
 	
 	assert(fscanf(rangeFile, "%d %f %f\n", &linearityNbins, &linearityRangeMinimum, &linearityRangeMaximum) == 3);
 	assert(fscanf(rangeFile, "%d %f %f\n", &leakageNbins, &leakageRangeMinimum, &leakageRangeMaximum) == 3);
-	
 	fclose(rangeFile);
 	
 	
-	sprintf(fName, "%s_list.tmp", tableFileNamePrefix);
+	sprintf(fName, "%s_list.tmp", outputFilePrefix);
 	FILE *listFile = fopen(fName, "r");
 	if(listFile == NULL) {
 		int e = errno;
@@ -368,35 +371,25 @@ int main(int argc, char *argv[])
 				int gidStart = asicStart * 64 * 4 * 2;
 				int gidEnd = asicEnd * 64 * 4 * 2;
 
-				sprintf(fName,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
+				sprintf(fName,"%s_%d_linearity.tmp", outputFilePrefix, fileID);
 				int linearityDataFile = open(fName, O_RDONLY);
 				if(linearityDataFile == -1) 
 					exit(1);
 
-				sprintf(fName,"%s_%d_leakage.tmp", tableFileNamePrefix, fileID);
+				sprintf(fName,"%s_%d_leakage.tmp", outputFilePrefix, fileID);
 				int leakageDataFile = open(fName, O_RDONLY);
 				if(leakageDataFile == -1) 
 					exit(1);
 				
 				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
 				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
-				
-				float *leakagePhasePoint = new float[gidEnd - gidStart];
-				sprintf(fName,"%s_%d_leakage_phase.tmp", tableFileNamePrefix, fileID);
-				FILE *leakagePhaseFile = fopen(fName, "r");
-				if(leakagePhaseFile == NULL) 
-					exit(1);
-				
-				for(int gid = gidStart; gid < gidEnd; gid++) {
-					assert(fscanf(leakagePhaseFile, "%f\n", &leakagePhasePoint[gid-gidStart]) == 1);
-				}
 
 				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2((asicEnd - asicStart) * 64);
 				
-				sprintf(fName,"%s_asics%02d-%02d.tdc.root", tableFileNamePrefix, asicStart, asicEnd-1);
+				sprintf(fName,"%s_asics%02d-%02d.tdc.root", outputFilePrefix, asicStart, asicEnd-1);
 				
 				char plotFilePrefix[1024];
-				sprintf(plotFilePrefix, "%s_asics%02d-%02d", tableFileNamePrefix, asicStart, asicEnd-1);
+				sprintf(plotFilePrefix, "%s_asics%02d-%02d", outputFilePrefix, asicStart, asicEnd-1);
 				
 				TFile * resumeFile = new TFile(fName, "RECREATE", "", 1);
 				// Create a un-used canvas, just to avoid the fits automatically creating one and printing a warning
@@ -405,7 +398,7 @@ int main(int argc, char *argv[])
 				int hasData = calibrate(
 							asicStart, asicEnd,
 							linearityDataFile, linearityNbins, linearityRangeMinimum, linearityRangeMaximum,
-							leakageDataFile, leakageNbins, leakageRangeMinimum, leakageRangeMaximum, leakagePhasePoint,
+							leakageDataFile, leakageNbins, leakageRangeMinimum, leakageRangeMaximum,
 							tacInfo, *myP2, nominalM
 						);
 
@@ -418,7 +411,7 @@ int main(int argc, char *argv[])
 					qualityControl(
 						asicStart, asicEnd, 
 						linearityDataFile,
-						leakageDataFile, leakagePhasePoint,
+						leakageDataFile,
 						tacInfo, *myP2,
 						plotFilePrefix
 					);
@@ -515,7 +508,7 @@ int main(int argc, char *argv[])
 		char tableFileName[1024];
 		int asicStart = n * nAsicsPerFile;
 		int asicEnd = asicStart + nAsicsPerFile;
-		sprintf(tableFileName, "%s_asics%02u-%02u.tdc.cal", tableFileNamePrefix, asicStart, asicEnd-1);
+		sprintf(tableFileName, "%s_asics%02u-%02u.tdc.cal", outputFilePrefix, asicStart, asicEnd-1);
 		myP2.storeFile(  64*nAsicsPerFile*n, 64*nAsicsPerFile*(n+1), tableFileName);
 	}
 	
@@ -523,18 +516,18 @@ int main(int argc, char *argv[])
 		// Remove temporary files
 		for(unsigned n = 0; n < list.size(); n++) {
 			int fileID = list[n].get<0>();
-			sprintf(fName,"%s_%d_linearity.tmp", tableFileNamePrefix, fileID);
+			sprintf(fName,"%s_%d_linearity.tmp", outputFilePrefix, fileID);
 			unlink(fName);
-			sprintf(fName,"%s_%d_leakage.tmp", tableFileNamePrefix, fileID);
+			sprintf(fName,"%s_%d_leakage.tmp", outputFilePrefix, fileID);
 			unlink(fName);
-			sprintf(fName, "%s_%d_leakage_phase.tmp", tableFileNamePrefix, n);
+			sprintf(fName, "%s_%d_leakage_phase.tmp", outputFilePrefix, n);
 			unlink(fName);
 		}
 		
-		sprintf(fName, "%s_list.tmp", tableFileNamePrefix);
+		sprintf(fName, "%s_list.tmp", outputFilePrefix);
 		unlink(fName);
 
-		sprintf(fName, "%s_ranges.tmp", tableFileNamePrefix);
+		sprintf(fName, "%s_ranges.tmp", outputFilePrefix);
 		unlink(fName);
 	}
 	
@@ -543,7 +536,7 @@ int main(int argc, char *argv[])
 
 int calibrate(	int asicStart, int asicEnd,
 		int linearityDataFile, int linearityNbins, float linearityRangeMinimum, float linearityRangeMaximum,
-		int leakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum, float *leakagePhasePoint,
+		int leakageDataFile, int leakageNbins, float leakageRangeMinimum, float leakageRangeMaximum,
 		TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
 		float nominalM
 )
@@ -582,8 +575,6 @@ int calibrate(	int asicStart, int asicEnd,
 			asic, channel, tac);
 		pB_FineList[gid-gidStart] = new TProfile(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum);
 	}
-	struct timespec t0;
-	clock_gettime(CLOCK_REALTIME, &t0);
 
 	Event *eventBuffer = new Event[READ_BUFFER_SIZE];
 	int r;
@@ -594,29 +585,11 @@ int calibrate(	int asicStart, int asicEnd,
 			Event &event = eventBuffer[i];
 			assert(hA_Fine2List[event.gid-gidStart] != NULL);
 			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
-			hA_Fine2List[event.gid-gidStart]->Fill(event.stage, event.fine);
+			hA_Fine2List[event.gid-gidStart]->Fill(event.phase, event.fine);
 			unsigned asic = event.gid >> 9;
 			asicPresent[asic-asicStart] = true;
 		}
 	}
-	
-	lseek(leakageDataFile, 0, SEEK_SET);
-	while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
-		int nEvents = r / sizeof(Event);
-		for(int i = 0; i < nEvents; i++) {
-			Event &event = eventBuffer[i];
-			assert(event.gid >= gidStart);
-			assert(event.gid < gidEnd);
-			assert(pB_FineList[event.gid-gidStart] != NULL);
-			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
-			pB_FineList[event.gid-gidStart]->Fill(event.stage, event.fine);
-			unsigned asic = event.gid >> 9;
-			asicPresent[asic-asicStart] = true;
-		}
-	}
-	delete [] eventBuffer;
-	struct timespec t1;
-	clock_gettime(CLOCK_REALTIME, &t1);
 	
 	boost::mt19937 generator;
 
@@ -869,12 +842,57 @@ int calibrate(	int asicStart, int asicEnd,
 			delete pf;
 			delete pf2;
 		}
+	}
+	
+	lseek(leakageDataFile, 0, SEEK_SET);
+	while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+		int nEvents = r / sizeof(Event);
+		for(int i = 0; i < nEvents; i++) {
+			Event &event = eventBuffer[i];
+			assert(event.gid >= gidStart);
+			assert(event.gid < gidEnd);
+			assert(pB_FineList[event.gid-gidStart] != NULL);
+			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
+			
+			TacInfo &ti = tacInfo[event.gid];
+			TProfile *pA_Fine = ti.pA_Fine;
+			if(pA_Fine == NULL) continue;
+			
+			int b = pA_Fine->FindBin(event.phase);
+			float e = pA_Fine->GetBinError(b);
+			float v = pA_Fine->GetBinContent(b);
+			if(e < 0.1 || e > 5.0) continue;
+			
+			pB_FineList[event.gid-gidStart]->Fill(event.interval, event.fine - v);
+			unsigned asic = event.gid >> 9;
+			asicPresent[asic-asicStart] = true;
+		}
+	}
+	delete [] eventBuffer;
+
+	for(unsigned gid = gidStart; gid < gidEnd; gid++) {
+		unsigned tac = gid & 0x3;
+		bool isT = ((gid >> 2) & 0x1) == 0;
+		unsigned channel = (gid >> 3) & 63;
+		unsigned asic = gid >> 9;
+		TacInfo &ti = tacInfo[gid];
+		
+		// We had _no_ data for this ASIC, we assume it's not present in the system
+		// Let's just move on without further ado
+		if(!asicPresent[asic-asicStart])
+			continue;
 		
 		{
 			char hName[128];
-				
-			float x = leakagePhasePoint[gid-gidStart];
+
+			TProfile *pA_Fine = ti.pA_Fine;
+			if(pA_Fine == NULL) continue;
+			TF1 * pf2 = pA_Fine->GetFunction("periodicF2");
+			if(pf2 == NULL) continue;
+
+			float x = ti.shape.tEdge + 1.9;
 			float tQ = 3 - fmod(1024.0 + x - ti.shape.tEdge, 2.0);
+			float a00 = pf2->Eval(x);
 			
 			TProfile *pB_Fine = pB_FineList[gid-gidStart];
 			assert(pB_Fine != NULL);
@@ -883,20 +901,25 @@ int calibrate(	int asicStart, int asicEnd,
 			}
 				
 			int nBinsX = pB_Fine->GetXaxis()->GetNbins();
-			float xMin = pB_Fine->GetXaxis()->GetXmin() + pB_Fine->GetXaxis()->GetBinWidth(1);
+			float xMin = pB_Fine->GetXaxis()->GetXmin();
 			float xMax = pB_Fine->GetXaxis()->GetXmax();
+
+			float yMin = pB_Fine->GetBinContent(1);
+			float yMax = pB_Fine->GetBinContent(nBinsX);
+			float slope = (yMax - yMin)/(xMax - xMin);
+
 			
-			TF1 *pl1 = new TF1("pl1", "[0]+[1]*x", xMin, xMax);		
-			pl1->SetParameter(0, 200);
-			pl1->SetParameter(1, 0.01);
-			pl1->SetParLimits(0, 0, 1024);
-			pl1->SetParLimits(1, -1.0, 1.0);
-			pl1->SetNpx(nBinsX);
+//			TF1 *pl1 = new TF1("pl1", "[0]+[1]*x", xMin, xMax);		
+//			pl1->SetParameter(0, yMin);
+//			pl1->SetParameter(1, slope);
+//			pl1->SetParLimits(0, -20, 20);
+//			pl1->SetParLimits(1, -1.0, 1.0);
+//			pl1->SetNpx(nBinsX);
 			
 			int nTry = 0;
 			while(nTry < 10){
-				pB_Fine->Fit("pl1", "Q", "", xMin, xMax);
-				TF1 *fit = pB_Fine->GetFunction("pl1");
+				pB_Fine->Fit("pol1", "Q", "", xMin, xMax);
+				TF1 *fit = pB_Fine->GetFunction("pol1");
 				if(fit == NULL) break;
 				float chi2 = fit->GetChisquare();
 				float ndf = fit->GetNDF();
@@ -905,18 +928,18 @@ int calibrate(	int asicStart, int asicEnd,
 			}
 			
 			
-			TF1 *fit = pB_Fine->GetFunction("pl1");
+			TF1 *fit = pB_Fine->GetFunction("pol1");
 			if(fit == NULL) {
 				fprintf(stderr, "WARNING: NO FIT! Skipping TAC. (B: %4d %2d %d %c)\n",
 					asic, channel, tac, isT  ? 'T' : 'E'
 				);
-				delete pl1;
+//				delete pl1;
 				continue;
 			}
 			float chi2 = fit->GetChisquare();
 			float ndf = fit->GetNDF();
 			ti.leakage.tQ = tQ;
-			ti.leakage.a0 = fit->GetParameter(0);
+			ti.leakage.a0 = a00;//fit->GetParameter(0) + a00;
 			ti.leakage.a1 = fit->GetParameter(1) / (1024 * 4);
 			ti.leakage.a2 = 0;//fit->GetParameter(2) / ((1024 * 4)*(1024*4));
 			
@@ -931,7 +954,7 @@ int calibrate(	int asicStart, int asicEnd,
 					asic, channel, tac);
 			ti.pB_ControlE = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
 			
-			delete pl1;
+//			delete pl1;
 		}
 	
 	}
@@ -969,7 +992,7 @@ int calibrate(	int asicStart, int asicEnd,
 void qualityControl(
 	int asicStart, int asicEnd, 
 	int linearityDataFile,
-	int leakageDataFile, float *leakagePhasePoint,
+	int leakageDataFile,
 	TacInfo *tacInfo, DAQ::TOFPET::P2 &myP2,
 	char *plotFilePrefix
 )
@@ -1038,7 +1061,7 @@ void qualityControl(
 				if (ti.pA_ControlT == NULL) continue;
 				assert(ti.pA_ControlE != NULL);
 
-				float t = event.stage;
+				float t = event.phase;
 				float t_ = fmod(1024.0 + t - ti.shape.tEdge, 2.0);
 				float adcEstimate = aperiodicF2(t_, 0, ti.shape.tB, ti.shape.m, ti.shape.p2);
 				float adcError = event.fine - adcEstimate;
@@ -1046,10 +1069,10 @@ void qualityControl(
 				float tEstimate = myP2.getT(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
 				float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
 				bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
-				float tError = tEstimate - event.stage;
+				float tError = tEstimate - event.phase;
 				
 				if(!isNormal) continue;
-				ti.pA_ControlT->Fill(event.stage, tError);
+				ti.pA_ControlT->Fill(event.phase, tError);
 				// Don't fill if out of histogram's range
 				if(fabs(tError) < ErrorHistogramRange) {
 					ti.pA_ControlE->Fill(tError);
@@ -1130,11 +1153,11 @@ void qualityControl(
 				float tEstimate = myP2.getT(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime, 0);
 				float qEstimate = myP2.getQ(channel-channelStart, tac, isT, event.fine, event.tacIdleTime,0);
 				bool isNormal = myP2.isNormal(channel-channelStart, tac, isT, event.fine, event.coarse, event.tacIdleTime,0);
-				float tError = tEstimate - leakagePhasePoint[event.gid - gidStart];
+				float tError = tEstimate - event.phase;
 				tError += localT0[event.gid - gidStart];
 				
 				if(!isNormal) continue;
-				ti.pB_ControlT->Fill(event.stage, tError);
+				ti.pB_ControlT->Fill(event.interval, tError);
 				if(fabs(tError) < ErrorHistogramRange) {
 					ti.pB_ControlE->Fill(tError);
 					hBranchErrorB[bid]->Fill(tError);
@@ -1247,223 +1270,182 @@ void qualityControl(
 	delete [] eventBuffer;
 }
 
-void sortData(char *tDataFileName, char *eDataFileName, char *tableFileNamePrefix, int nAsicsPerFile)
-{
-	printf("Sorting data into temporary files...\n");
-	
-	int nOutputFiles = int(ceil(float(MAX_N_ASIC)/nAsicsPerFile));
-	int nTAC = MAX_N_ASIC * 64 * 2 * 4;
+using namespace DAQ::Core;
 
-	char **linearityDataFilesNames = new char *[nOutputFiles];
-	char **leakageDataFilesNames = new char *[nOutputFiles];
-	FILE **linearityDataFiles = new FILE *[nOutputFiles];
-	FILE **leakageDataFiles = new FILE *[nOutputFiles];
-	for(int n = 0; n < nOutputFiles; n++)
+class EventWriter {
+private:
+	char *outputFilePrefix;
+	int nAsicsPerFile;
+	char **linearityDataFilesNames;
+	FILE **linearityDataFiles;
+	char **leakageDataFilesNames;
+	FILE **leakageDataFiles;
+	FILE *tmpListFile;
+	
+public:
+	EventWriter(char *outputFilePrefix, int nAsicsPerFile)
 	{
-		linearityDataFilesNames[n] = NULL;
-		leakageDataFilesNames[n] = NULL;
+		this->outputFilePrefix = outputFilePrefix;
+		this->nAsicsPerFile = nAsicsPerFile;
+		linearityDataFilesNames = new char *[MAX_N_ASIC/nAsicsPerFile];
+		linearityDataFiles = new FILE *[MAX_N_ASIC/nAsicsPerFile];
+		leakageDataFilesNames = new char *[MAX_N_ASIC/nAsicsPerFile];
+		leakageDataFiles = new FILE *[MAX_N_ASIC/nAsicsPerFile];
+		for(int n = 0; n < MAX_N_ASIC/nAsicsPerFile; n++)
+		{
+			linearityDataFilesNames[n] = NULL;
+			linearityDataFiles[n] = NULL;
+			leakageDataFilesNames[n] = NULL;
+			leakageDataFiles[n] = NULL;
+		}
 		
-		linearityDataFiles[n] = NULL;
-		leakageDataFiles[n] = NULL;
-	}
-	
-
-	// Histogram parameters which we need to get from the histograms in the ROOT files
-	int linearityNbins = 0;
-	float linearityRangeMinimum = INFINITY;
-	float linearityRangeMaximum = -INFINITY;
-	
-	int leakageNbins = 0;
-	float leakageRangeMinimum = INFINITY;
-	float leakageRangeMaximum = -INFINITY;
-	
-	// We also need to get the phase point for TAC leakage from the data
-	float *leakagePhasePoint = new float[nTAC];
-	for(int n = 0; n < nTAC; n++) {
-		leakagePhasePoint[n] = 0;
-	}
-	
-	int asicEnd = 0;
-	for(int tOrE = 0; tOrE < 2; tOrE++) {
-		bool isT = (tOrE == 0);
-
-		TFile * hFile = new TFile(isT ? tDataFileName : eDataFileName, "READ");
-
-		for(int linearityOrLeakage = 0; linearityOrLeakage < 2; linearityOrLeakage++) {
-			bool isLinearity = (linearityOrLeakage == 0);
-			printf("Stage: %d of %d %s branch, %s\n",
-				2*tOrE + linearityOrLeakage + 1, 4,
-				isT ? "T" : "E", isLinearity ? "linearity" : "leakage");
-			
-			TTree *data = (TTree *)hFile->Get(isLinearity ? "data3" : "data3B");
-
-			Float_t fStep1;		data->SetBranchAddress("step1", &fStep1);
-			Float_t fStep2;		data->SetBranchAddress("step2", &fStep2);
-			Int_t asic;		data->SetBranchAddress("asic", &asic);
-			Int_t channel;		data->SetBranchAddress("channel", &channel);
-			Int_t tac;		data->SetBranchAddress("tac", &tac);
-			Int_t tCoarse;		data->SetBranchAddress("tcoarse", &tCoarse);
-			Int_t eCoarse;		data->SetBranchAddress("ecoarse", &eCoarse);
-			Int_t tFine;		data->SetBranchAddress("tfine", &tFine);
-			Int_t eFine;		data->SetBranchAddress("efine", &eFine);
-			Long64_t tacIdleTime;	data->SetBranchAddress("tacIdleTime", &tacIdleTime);
-			int nEvents = data->GetEntries();
-
-			for(int i = 0; i < nEvents; i+=1) {
-				if(i % 10000 == 0) {
-					float fraction = float(i) / nEvents * 100;
-					printf("%8d of %8d (%5.1f%%) done\r", i, nEvents, fraction); fflush(stdout);
-				}
-				data->GetEntry(i);
-				
-				if(isT && (tCoarse == 0) && (eCoarse == 0)) continue; // Patch for bad events
-				int fCoarse = isT ? tCoarse : eCoarse;
-				int fFine = isT ? tFine : eFine;
-				
-				unsigned gid = ((64*asic + channel) << 3) | (tOrE << 2) | (tac & 0x3);
-				
-				Event event;
-				event.gid = gid;
-				event.coarse = fCoarse;
-				event.fine = fFine;
-				event.tacIdleTime = tacIdleTime;
-				event.stage = isLinearity ? fStep2 : fStep1;
-
-				asicEnd = asicEnd > asic ? asicEnd : asic;
-				
-				if(!isLinearity) leakagePhasePoint[gid] = fStep2;
-	
-				int fileID = asic / nAsicsPerFile;
-
-				FILE **ff = isLinearity ? linearityDataFiles : leakageDataFiles;
-				char **nn = isLinearity ? linearityDataFilesNames : leakageDataFilesNames;
-				FILE *f = ff[fileID];
-				if(f == NULL) {
-
-					char *fName = new char[1024];
-					sprintf(fName, "%s_%d_%s.tmp", tableFileNamePrefix, fileID, isLinearity ? "linearity" : "leakage");
-					f = fopen(fName, "wb");
-					if(f == NULL) {
-						int e = errno;
-						fprintf(stderr, "Could not open '%s' for writing : %d %s\n", fName, e, strerror(e));
-						exit(1);
-					}
-					
-					nn[fileID] = fName;
-					ff[fileID] = f;
-				}
-				int r = fwrite(&event, sizeof(event), 1, f);
-				if( r != 1) {
-					int e = errno;
-					fprintf(stderr, "Error writing to '%s' : %d %s\n", 
-						nn[fileID], e, strerror(e));
-					exit(1);
-				}
-			}
-			printf("\n");
-			
-			
-			// Find histogram bin size from histograms in ROOT file
-			// We use the E branch histograms for the simple reason that due to Python's referernce
-			// counting and do_tdc_phase_scan.py's organization, the T branch histograms may not be 
-			// in the ROOT file.
-			if(isLinearity) {
-				char hName[128];
-				sprintf(hName, "heFine_%03d_%02d_%d", asic, channel, tac);
-				TH2 *h = (TH2 *)hFile->Get(hName);
-				if(h != NULL) {
-					linearityNbins = h->GetXaxis()->GetNbins();
-					linearityRangeMinimum = h->GetXaxis()->GetXmin();
-					linearityRangeMaximum = h->GetXaxis()->GetXmax();
-				}
-			}
-			else {
-				char hName[128];
-				sprintf(hName, "heFineB_%03d_%02d_%d", asic, channel, tac);
-				TH2 *h = (TH2 *)hFile->Get(hName);
-				if(h != NULL) {
-					leakageNbins = h->GetXaxis()->GetNbins();
-					leakageRangeMinimum = h->GetXaxis()->GetXmin();
-					leakageRangeMaximum = h->GetXaxis()->GetXmax();
-				}
-			}
-		}		
-		hFile->Close();
-	}
-	
-	assert(linearityNbins != 0);
-	assert(leakageNbins != 0);
-
-	for(int n = 0; n < nOutputFiles; n++)
-	{
-		if(linearityDataFiles[n] != NULL) {
-			fclose(linearityDataFiles[n]);
-		}
-		linearityDataFiles[n] = NULL;
-		
-		if(linearityDataFilesNames[n] != NULL) {
-			delete [] linearityDataFilesNames[n];
-		}
-		linearityDataFilesNames[n]= NULL;
-	
-		if(leakageDataFiles[n] != NULL) {
-			fclose(leakageDataFiles[n]);
-		}
-		leakageDataFiles[n] = NULL;
-
-		if(leakageDataFilesNames[n] != NULL) {
-			delete [] leakageDataFilesNames[n];
-		}		
-		leakageDataFilesNames[n] = NULL;
-	}
-	
-	delete [] leakageDataFilesNames;
-	delete [] leakageDataFiles;
-	delete [] linearityDataFilesNames;
-	delete [] linearityDataFiles;
-	
-	nOutputFiles = ceil(float(asicEnd+1) / nAsicsPerFile);
-	
-	
-        char fName[1024];
-	sprintf(fName, "%s_ranges.tmp", tableFileNamePrefix);
-	FILE *rangeFileSize = fopen(fName, "w");
-	if(rangeFileSize == NULL) {
-		int e = errno;
-		fprintf(stderr, "Could not open '%s' for writing : %d %s\n", fName, e, strerror(e));
-		exit(1);
-	}
-	fprintf(rangeFileSize, "%d %f %f\n", linearityNbins, linearityRangeMinimum, linearityRangeMaximum);
-	fprintf(rangeFileSize, "%d %f %f\n", leakageNbins, leakageRangeMinimum, leakageRangeMaximum);
-	fclose(rangeFileSize);
-
-	sprintf(fName, "%s_list.tmp", tableFileNamePrefix);
-	FILE *listFile = fopen(fName, "w");
-	if(listFile == NULL) {
-		int e = errno;
-		fprintf(stderr, "Could not open '%s' for writing : %d %s\n", fName, e, strerror(e));
-		exit(1);
-	}
-        for(int n = 0; n < nOutputFiles; n++) {
-		sprintf(fName, "%s_%d_leakage_phase.tmp", tableFileNamePrefix, n);
-		FILE *f = fopen(fName, "w");
-		if(f == NULL) {
-			int e = errno;
-			fprintf(stderr, "Could not open '%s' for writing : %d %s\n", fName, e, strerror(e));
+		// Create the temporary list file
+		char fName[1024];
+		sprintf(fName, "%s_list.tmp", outputFilePrefix);
+		tmpListFile = fopen(fName, "w");
+		if(tmpListFile == NULL) {
+			fprintf(stderr, "Could not open '%s' for writing: %s\n", fName, strerror(errno));
 			exit(1);
 		}
+	};
+	
+	void handleEvents(bool isT, bool isLinearity, float step1, float step2, EventBuffer<RawHit> *buffer)
+	{
+		int tOrE = isT ? 0 : 1;
 		
-		int asicStart = n * nAsicsPerFile;
-		int asicEnd = (n+1) * nAsicsPerFile;
-		int gidStart = asicStart * 64 * 4 * 2;
-		int gidEnd = asicEnd * 64 * 4 * 2;
-		for(int gid = gidStart; gid < gidEnd; gid++) {
-			fprintf(f, "%f\n", leakagePhasePoint[gid]);
+		int N = buffer->getSize();
+		for (int i = 0; i < N; i++) {
+			RawHit &hit = buffer->get(i);
+			if(hit.time < 0) continue;
+			
+			if(isT && (hit.d.tofpet.tcoarse == 0) && (hit.d.tofpet.ecoarse == 0)) continue; // Patch for bad events
+
+			unsigned gid = (hit.channelID << 3) | (tOrE << 2) | (hit.d.tofpet.tac & 0x3);
+			
+			Event event;
+			event.gid = gid;
+			event.coarse = isT ? hit.d.tofpet.tcoarse : hit.d.tofpet.ecoarse;
+			event.fine = isT ? hit.d.tofpet.tfine : hit.d.tofpet.efine;
+			event.tacIdleTime = hit.d.tofpet.tacIdleTime;
+			event.phase = step1;
+			event.interval = step2;
+
+			int fileID = (hit.channelID / 64) / nAsicsPerFile;
+			
+			if(linearityDataFiles[fileID] == NULL) {
+				char *fName = new char[1024];
+				sprintf(fName, "%s_%d_linearity.tmp", outputFilePrefix, fileID);
+				FILE *f = fopen(fName, "wb");
+				if(f == NULL) {
+					int e = errno;
+					fprintf(stderr, "Could not open '%s' for writing : %d %s\n", fName, e, strerror(e));
+					exit(1);
+				}
+				
+				linearityDataFilesNames[fileID] = fName;
+				linearityDataFiles[fileID] = f;
+			}
+
+			if(leakageDataFiles[fileID] == NULL) {
+				char *fName = new char[1024];
+				sprintf(fName, "%s_%d_leakage.tmp", outputFilePrefix, fileID);
+				FILE *f = fopen(fName, "wb");
+				if(f == NULL) {
+					int e = errno;
+					fprintf(stderr, "Could not open '%s' for writing : %d %s\n", fName, e, strerror(e));
+					exit(1);
+				}
+				
+				leakageDataFilesNames[fileID] = fName;
+				leakageDataFiles[fileID] = f;
+			}
+
+			FILE **ff = isLinearity ? linearityDataFiles : leakageDataFiles;
+			char **nn = isLinearity ? linearityDataFilesNames : leakageDataFilesNames;
+			FILE *f = ff[fileID];
+			assert(f != NULL);
+
+			int r = fwrite(&event, sizeof(event), 1, f);
+			if( r != 1) {
+				int e = errno;
+				fprintf(stderr, "Error writing to '%s' : %d %s\n", 
+					nn[fileID], e, strerror(e));
+				exit(1);
+			}
 		}
+	};
+	
+	void close()
+	{
+		for(unsigned long fileID = 0; fileID <= (MAX_N_ASIC/nAsicsPerFile); fileID++) {
+			if(linearityDataFiles[fileID] != NULL) {
+				fprintf(tmpListFile, "%d %d %d\n", fileID, fileID*nAsicsPerFile, (fileID+1)*nAsicsPerFile);
+
+				fclose(linearityDataFiles[fileID]);
+				fclose(leakageDataFiles[fileID]);
+			}
+			linearityDataFiles[fileID] = NULL;
+			leakageDataFiles[fileID] = NULL;
+			
+			delete [] linearityDataFilesNames[fileID];
+			delete [] leakageDataFilesNames[fileID];
+		}
+		fclose(tmpListFile);
+	};
+};
+
+class WriteHelper : public OverlappedEventHandler<RawHit, RawHit> {
+private: 
+	EventWriter *eventWriter;
+	bool isT, isLinearity;
+	float step1, step2;
+public:
+	WriteHelper(EventWriter *eventWriter, bool isT, bool isLinearity, float step1, float step2, EventSink<RawHit> *sink) :
+		OverlappedEventHandler<RawHit, RawHit>(sink, true),
+		isT(isT), isLinearity(isLinearity), step1(step1), step2(step2),
+		eventWriter(eventWriter)
+	{
+	};
+	
+	EventBuffer<RawHit> * handleEvents(EventBuffer<RawHit> *buffer) {
+		eventWriter->handleEvents(isT, isLinearity, step1, step2, buffer);
+		return buffer;
+	};
+};
+
+void sortData(char *inputFilePrefix, char *outputFilePrefix, int nAsicsPerFile)
+{
+	EventWriter * eventWriter = new EventWriter(outputFilePrefix, nAsicsPerFile);
+	
+	char prefix[1024];
+	for(int i1 = 0; i1 < 2; i1++) {
+		for(int i2 = 0; i2 < 2; i2++) {
+			bool isT = (i1 == 0);
+			bool isLinearity = (i2 == 0);
 		
-		fclose(f);
-		
-		fprintf(listFile, "%d %d %d\n", n, n*nAsicsPerFile, (n+1)*nAsicsPerFile);
-        }
-        fclose(listFile);
+			sprintf(prefix, "%s_%s_%s", inputFilePrefix, isT ? "fetp" : "tdca", isLinearity ? "linear" : "leakage");
+			DAQ::TOFPET::RawScanner *scanner = new DAQ::TOFPET::RawScannerV3(prefix);
+			printf("Sorting from %s\n", prefix);
+			
+			for(int step = 0; step < scanner->getNSteps(); step++) {
+				unsigned long long eventsBegin;
+				unsigned long long eventsEnd;
+				float step1;
+				float step2;
+				scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
+				
+				DAQ::TOFPET::RawReader *reader = new DAQ::TOFPET::RawReaderV3(
+					prefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , 0, false,
+					new WriteHelper(eventWriter, isT, isLinearity, step1, step2,
+					new NullSink<RawHit>()
+				));
+				reader->wait();
+				delete reader;
+			}
+		}
+	}
+	
+	eventWriter->close();
+	delete eventWriter;
+	
 }
