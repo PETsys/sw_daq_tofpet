@@ -1487,6 +1487,12 @@ class ATB:
 			]
 		self.__acquisitionPipe = Popen(cmd, bufsize=1, stdin=PIPE, stdout=PIPE, close_fds=True)
 
+	def closeAcquisition(self):
+		self.__acquisitionPipe.terminate()
+		sleep(0.5)
+		self.__acquisitionPipe.kill()
+		self.__acquisitionPipe = None
+
         ## Acquires data and decodes it, while writting through the acquisition pipeline 
         # @param step1 Tag to a given variable specific to this acquisition 
         # @param step2 Tag to a given variable specific to this acquisition
