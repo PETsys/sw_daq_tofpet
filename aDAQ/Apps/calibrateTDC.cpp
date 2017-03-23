@@ -1434,6 +1434,8 @@ void sortData(char *inputFilePrefix, char *outputFilePrefix, int nAsicsPerFile)
 				float step2;
 				scanner->getStep(step, step1, step2, eventsBegin, eventsEnd);
 				
+				if(eventsBegin == eventsEnd) continue;
+				
 				DAQ::TOFPET::RawReader *reader = new DAQ::TOFPET::RawReaderV3(
 					prefix, SYSTEM_PERIOD,  eventsBegin, eventsEnd , 0, false,
 					new WriteHelper(eventWriter, isT, isLinearity, step1, step2,
