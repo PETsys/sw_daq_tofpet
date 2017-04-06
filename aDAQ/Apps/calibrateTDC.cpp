@@ -193,7 +193,7 @@ void qualityControl(
 
 void displayHelp(char * program)
 {
-	fprintf(stderr, "usage: %s [--int-factor=INT_FACTOR] [--asics_per_file=ASICS_PER_FILE] t_branch_data_file e_branch_data_file"
+	fprintf(stderr, "usage: %s [--int-factor=INT_FACTOR] [--asics_per_file=ASICS_PER_FILE] tdc_data_file_prefix"
 			" tdc_calibration_prefix"
 			"\n", program);
 	fprintf(stderr, "\noptional arguments:\n");
@@ -202,14 +202,13 @@ void displayHelp(char * program)
 	fprintf(stderr, "  --asics_per_file [=ASICS_PER_FILE] \t Number of asics to be stored per calibration file (Default is 2). If set to ALL, only one file will be created with calibration for all ASICS with valid data.\n");
 	fprintf(stderr, "  --no-sorting \t\t\t Assumes the temporary data file have already been created and skips the sorting stage.\n");
 	fprintf(stderr, "\npositional arguments:\n");
-	fprintf(stderr, "  t_branch_data_file \t\t\t Data to be used for T branch calibration\n");
-	fprintf(stderr, "  E_branch_data_file \t\t\t Data to be used for E branch calibration\n");
-	fprintf(stderr, "  tdc_calibration_prefix \t\t Prefix for output calibration files\n");
+	fprintf(stderr, "  tdc_data_file_prefix \t\t\t Prefix of data files to be used for TDC calibration\n");
+	fprintf(stderr, "  tdc_calibration_prefix \t\t Prefix of the output calibration files and plots\n");
 };
 
 void displayUsage( char * program)
 {
-	fprintf(stderr, "usage: %s [--int-factor=INT_FACTOR] [--asics_per_file=ASICS_PER_FILE] t_branch_data_file e_branch_data_file"
+	fprintf(stderr, "usage: %s [--int-factor=INT_FACTOR] [--asics_per_file=ASICS_PER_FILE] tdc_data_file_prefix"
 			" tdc_calibration_prefix"
 			"\n", program);
 };
