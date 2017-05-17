@@ -46,6 +46,7 @@ ipBins = 4
 uut = atb.ATB("/tmp/d.sock", False, F=1/T)
 uut.config = loadLocalConfig(useBaseline=False)
 uut.initialize()
+uut.setAllHVDAC(args.hvBias)
 
 f = open("%s.bins" % args.OutputFilePrefix, "w")
 f.write("%d\t%f\t%f\n" % (phaseBins, phaseMin, phaseMax))
