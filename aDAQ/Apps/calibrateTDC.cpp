@@ -50,6 +50,9 @@ struct TacInfo {
 	TProfile *pA_ControlT;
 	TH1* pA_ControlE;
 	
+	int adcMin;
+	int adcMax;
+	
 	TProfile *pB_ControlT;
 	TH1* pB_ControlE;
 	
@@ -171,7 +174,7 @@ struct Event {
 	float interval;
 	float phase;
 };
-static const int READ_BUFFER_SIZE = 32*1024*1024 / sizeof(Event);
+static const int READ_BUFFER_SIZE = 128*1024 / sizeof(Event);
 
 void sortData(char *inputFilePrefix, char *outputFilePrefix, int nAsicsPerFile);
 
@@ -225,11 +228,11 @@ int main(int argc, char *argv[])
         bool doSorting = true;
 
 	// Choose the default number of workers based on CPU and RAM
-	// Assume we need 4 GiB of system RAM per worker for good performance
+	// Assume we need 3 GiB of system RAM per worker for good performance
 	int nCPU = sysconf(_SC_NPROCESSORS_ONLN);
 	struct sysinfo si;
 	sysinfo(&si);
-	int maxMemWorkers = si.totalram * si.mem_unit / (4LL * 1024*1024*1024);
+	int maxMemWorkers = si.totalram * si.mem_unit / (3LL * 1024*1024*1024);
 	int maxWorkers = nCPU < maxMemWorkers ? nCPU : maxMemWorkers;
 	
 	static struct option longOptions[] = {
@@ -380,8 +383,8 @@ int main(int argc, char *argv[])
 				if(leakageDataFile == -1) 
 					exit(1);
 				
-				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
-				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
+				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
 
 				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2((asicEnd - asicStart) * 64);
 				
@@ -549,10 +552,14 @@ int calibrate(	int asicStart, int asicEnd,
 
 	// Build the histograms
 	TH2S **hA_Fine2List = new TH2S *[nTAC];
-	TProfile **pB_FineList = new TProfile *[nTAC];
+	TH2S **hA_Coarse2List = new TH2S *[nTAC];
+	TH2S **hB_FineList = new TH2S *[nTAC];
+	TH2S **hB_Coarse2List = new TH2S *[nTAC];
 	for(int n = 0; n < nTAC; n++) {
 		hA_Fine2List[n] = NULL;
-		pB_FineList[n] = NULL;
+		hA_Coarse2List[n] = NULL;
+		hB_FineList[n] = NULL;
+		hB_Coarse2List[n] = NULL;
 	}
 
 	bool asicPresent[nASIC];
@@ -566,25 +573,36 @@ int calibrate(	int asicStart, int asicEnd,
 		unsigned asic = gid >> 9;
 		char hName[128];
 		
-		sprintf(hName, isT ? "C%03d_%02d_%d_A_T_hFine2" : "C%03d_%02d_%d_A_E_hFine2",
+		sprintf(hName, isT ? "C%03d_%02d_%d_T_A_hFine2" : "C%03d_%02d_%d_E_A_hFine2",
 			asic, channel, tac);
 		hA_Fine2List[gid-gidStart] = new TH2S(hName, hName, linearityNbins, linearityRangeMinimum, linearityRangeMaximum, 1024, 0, 1024);
-
-		sprintf(hName, isT ? "C%03d_%02d_%d_B_T_pFine_X" : "C%03d_%02d_%d_B_E_pFine_X",
+		
+		sprintf(hName, isT ? "C%03d_%02d_%d_T_A_hCoarse2" : "C%03d_%02d_%d_E_A_hCoarse2",
 			asic, channel, tac);
-		pB_FineList[gid-gidStart] = new TProfile(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum);
+		hA_Coarse2List[gid-gidStart] = new TH2S(hName, hName, linearityNbins, linearityRangeMinimum, linearityRangeMaximum, 1024, 0, 1024);
+
+		sprintf(hName, isT ? "C%03d_%02d_%d_T_B_hFine2" : "C%03d_%02d_%d_E_B_hFine2",
+			asic, channel, tac);
+		hB_FineList[gid-gidStart] = new TH2S(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum, 1024, 0, 1024);
+
+		sprintf(hName, isT ? "C%03d_%02d_%d_T_B_hCoarse2" : "C%03d_%02d_%d_E_B_hCoarse2",
+			asic, channel, tac);
+		hB_Coarse2List[gid-gidStart] = new TH2S(hName, hName, linearityNbins, linearityRangeMinimum, linearityRangeMaximum, 1024, 0, 1024);
+
 	}
 
 	Event *eventBuffer = new Event[READ_BUFFER_SIZE];
 	int r;
 	lseek(linearityDataFile, 0, SEEK_SET);
 	while((r = read(linearityDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+		readahead(linearityDataFile, lseek(linearityDataFile, 0, SEEK_CUR),  sizeof(Event)*READ_BUFFER_SIZE);
 		int nEvents = r / sizeof(Event);
 		for(int i = 0; i < nEvents; i++) {
 			Event &event = eventBuffer[i];
 			assert(hA_Fine2List[event.gid-gidStart] != NULL);
-			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
+//			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
 			hA_Fine2List[event.gid-gidStart]->Fill(event.phase, event.fine);
+			hA_Coarse2List[event.gid-gidStart]->Fill(event.phase, event.coarse);
 			unsigned asic = event.gid >> 9;
 			asicPresent[asic-asicStart] = true;
 		}
@@ -623,7 +641,7 @@ int calibrate(	int asicStart, int asicEnd,
 			char hName[128];
 		
 			// Obtain a rough estimate of the TDC range
-			sprintf(hName, isT ? "C%03d_%02d_%d_A_T_hFine" : "C%03d_%02d_%d_A_E_hFine",
+			sprintf(hName, isT ? "C%03d_%02d_%d_T_A_hFine" : "C%03d_%02d_%d_E_A_hFine",
 				asic, channel, tac);
 			TH1D *hA_Fine = hA_Fine2->ProjectionY(hName);
 			hA_Fine->Rebin(8);
@@ -633,24 +651,26 @@ int calibrate(	int asicStart, int asicEnd,
 			int adcMeanCount = hA_Fine->GetBinContent(adcMeanBin);
 			
 			int adcMinBin = adcMeanBin;
-			while(hA_Fine->GetBinContent(adcMinBin) > 0.20 * adcMeanCount)
+			while(hA_Fine->GetBinContent(adcMinBin) > 0.50 * adcMeanCount)
 				adcMinBin--;
 			
 			int adcMaxBin = adcMeanBin;
-			while(hA_Fine->GetBinContent(adcMaxBin) > 0.20 * adcMeanCount)
+			while(hA_Fine->GetBinContent(adcMaxBin) > 0.50 * adcMeanCount)
 				adcMaxBin++;
 			
-			float adcMin = hA_Fine->GetBinCenter(adcMinBin);
-			float adcMax = hA_Fine->GetBinCenter(adcMaxBin);
+			ti.adcMin = hA_Fine->GetBinCenter(adcMinBin);
+			ti.adcMax = hA_Fine->GetBinCenter(adcMaxBin);
 			
 			
-			// Set limits on ADC range to exclude spurious things.
-			hA_Fine2->GetYaxis()->SetRangeUser(
-				adcMin - 32 > 0.5 * nominalM ? adcMin - 32 : 0.5 * nominalM,
-				adcMax + 32 < 4.0 * nominalM ? adcMax + 32 : 4.0 * nominalM
-				);
+// 			// Set limits on ADC range to exclude spurious things.
+// 			hA_Fine2->GetYaxis()->SetRangeUser(
+// 				adcMin - 32 > 0.5 * nominalM ? adcMin - 32 : 0.5 * nominalM,
+// 				adcMax + 32 < 4.0 * nominalM ? adcMax + 32 : 4.0 * nominalM
+// 				);
+			
+			hA_Fine2->GetYaxis()->SetRangeUser(ti.adcMin - 32, ti.adcMax + 32);
 				
-			sprintf(hName, isT ? "C%03d_%02d_%d_A_T_pFine_X" : "C%03d_%02d_%d_A_E_pFine_X",
+			sprintf(hName, isT ? "C%03d_%02d_%d_T_A_pFine_X" : "C%03d_%02d_%d_E_A_pFine_X",
 				asic, channel, tac);
 			TProfile *pA_Fine = ti.pA_Fine = hA_Fine2->ProfileX(hName, 1, -1, "s");
 			
@@ -665,7 +685,7 @@ int calibrate(	int asicStart, int asicEnd,
 			float lowerT0 = 0.0;
 			float upperT0 = 0.0;
 			float maxDeltaADC = 0;
-			adcMin = 1024.0;
+			float adcMin = 1024.0;
 			for(int n = 10; n >= 1; n--) {
 				for(int j = 1; j < (nBinsX - 1 - n); j++) {
 					float v1 = pA_Fine->GetBinContent(j);
@@ -830,11 +850,11 @@ int calibrate(	int asicStart, int asicEnd,
 			myP2.setT0((64*asic+channel)-channelStart, tac, isT, tEdge);
 
 			// Allocate the control histograms
-			sprintf(hName, isT ? "C%03d_%02d_%d_A_T_control_T" : "C%03d_%02d_%d_A_E_control_T", 
+			sprintf(hName, isT ? "C%03d_%02d_%d_T_A_control_T" : "C%03d_%02d_%d_E_A_control_T", 
 					asic, channel, tac);
 			ti.pA_ControlT = new TProfile(hName, hName, linearityNbins, linearityRangeMinimum, linearityRangeMaximum, "s");
 
-			sprintf(hName, isT ? "C%03d_%02d_%d_A_T_control_E" : "C%03d_%02d_%d_A_E_control_E", 
+			sprintf(hName, isT ? "C%03d_%02d_%d_T_A_control_E" : "C%03d_%02d_%d_E_A_control_E", 
 					asic, channel, tac);
 			ti.pA_ControlE = new TH1F(hName, hName, 512, -ErrorHistogramRange, ErrorHistogramRange);
 			
@@ -845,24 +865,30 @@ int calibrate(	int asicStart, int asicEnd,
 	
 	lseek(leakageDataFile, 0, SEEK_SET);
 	while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+		readahead(leakageDataFile, lseek(leakageDataFile, 0, SEEK_CUR),  sizeof(Event)*READ_BUFFER_SIZE);
 		int nEvents = r / sizeof(Event);
 		for(int i = 0; i < nEvents; i++) {
 			Event &event = eventBuffer[i];
 			assert(event.gid >= gidStart);
 			assert(event.gid < gidEnd);
-			assert(pB_FineList[event.gid-gidStart] != NULL);
-			if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
+			assert(hB_FineList[event.gid-gidStart] != NULL);
+			//if(event.fine < 0.5 * nominalM || event.fine > 4 * nominalM) continue;
 			
 			TacInfo &ti = tacInfo[event.gid];
 			TProfile *pA_Fine = ti.pA_Fine;
 			if(pA_Fine == NULL) continue;
+			
+			// Reject events too close to edge
+			if(fabs(fmod(event.phase, 2.0) - fmod(ti.shape.tEdge, 2.0)) < 0.1) continue;
 			
 			int b = pA_Fine->FindBin(event.phase);
 			float e = pA_Fine->GetBinError(b);
 			float v = pA_Fine->GetBinContent(b);
 			if(e < 0.1 || e > 5.0) continue;
 			
-			pB_FineList[event.gid-gidStart]->Fill(event.interval, event.fine - v);
+			hB_FineList[event.gid-gidStart]->Fill(event.interval, event.fine - v);
+			hB_Coarse2List[event.gid-gidStart]->Fill(event.interval, event.coarse);
+
 			unsigned asic = event.gid >> 9;
 			asicPresent[asic-asicStart] = true;
 		}
@@ -893,11 +919,16 @@ int calibrate(	int asicStart, int asicEnd,
 			float tQ = 3 - fmod(1024.0 + x - ti.shape.tEdge, 2.0);
 			float a00 = pf2->Eval(x);
 			
-			TProfile *pB_Fine = pB_FineList[gid-gidStart];
-			assert(pB_Fine != NULL);
-			if(pB_Fine->GetEntries() < 200) {
+			TH2S *hB_Fine2 = hB_FineList[gid-gidStart];
+			assert(hB_Fine2 != NULL);
+			if(hB_Fine2->GetEntries() < 200) {
 				continue;
 			}
+			
+			sprintf(hName, isT ? "C%03d_%02d_%d_T_B_pFine_X" : "C%03d_%02d_%d_E_B_pFine_X",
+				asic, channel, tac);
+			
+			TProfile *pB_Fine = hB_Fine2->ProfileX(hName, 1, -1, "s");
 				
 			int nBinsX = pB_Fine->GetXaxis()->GetNbins();
 			float xMin = pB_Fine->GetXaxis()->GetXmin();
@@ -945,11 +976,11 @@ int calibrate(	int asicStart, int asicEnd,
 			myP2.setLeakageParameters((64 * asic + channel)-channelStart, tac, isT, ti.leakage.tQ, ti.leakage.a0, ti.leakage.a1, ti.leakage.a2);
 			
 
-			sprintf(hName, isT ? "C%03d_%02d_%d_B_T_control_T" : "C%03d_%02d_%d_B_E_control_T", 
+			sprintf(hName, isT ? "C%03d_%02d_%d_T_B_control_T" : "C%03d_%02d_%d_E_B_control_T", 
 					asic, channel, tac);
 			ti.pB_ControlT = new TProfile(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum, "s");
 		
-			sprintf(hName, isT ? "C%03d_%02d_%d_B_T_control_E" : "C%03d_%02d_%d_B_E_control_E", 
+			sprintf(hName, isT ? "C%03d_%02d_%d_T_B_control_E" : "C%03d_%02d_%d_E_B_control_E", 
 					asic, channel, tac);
 			ti.pB_ControlE = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
 			
@@ -1019,10 +1050,10 @@ void qualityControl(
 
 		char hName[128];
 
-		sprintf(hName, "C%03u_%02u_A_%c_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
+		sprintf(hName, "C%03u_%02u_%c_A_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
 		hBranchErrorA[bid] = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
 
-		sprintf(hName, "C%03u_%02u_B_%c_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
+		sprintf(hName, "C%03u_%02u_%c_B_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
 		hBranchErrorB[bid] = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
 		
 	}
@@ -1043,6 +1074,7 @@ void qualityControl(
 		lseek(linearityDataFile, 0, SEEK_SET);
 		int r;
 		while((r = read(linearityDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+			readahead(linearityDataFile, lseek(linearityDataFile, 0, SEEK_CUR),  sizeof(Event)*READ_BUFFER_SIZE);
 			int nEvents = r / sizeof(Event);
 			for (int i = 0; i < nEvents; i++) {
 				Event &event = eventBuffer[i];
@@ -1115,7 +1147,7 @@ void qualityControl(
 	// We will cut remove it, just for the purpose of making the error histogram
 	float *localT0 = new float[nTAC];
 	for(unsigned i = 0; i < nTAC; i++) localT0[i] = 0.0;
-	for(int iter = 0; iter < 2; iter++) {
+	for(int iter = 0; iter < nIterations; iter++) {
 		for(int gid = gidStart; gid < gidEnd; gid++) {
 			if(tacInfo[gid].pB_ControlT == NULL) continue;
 			assert(tacInfo[gid].pB_ControlE != NULL);
@@ -1130,6 +1162,7 @@ void qualityControl(
 		int r;
 		lseek(leakageDataFile, 0, SEEK_SET);
 		while((r = read(leakageDataFile, eventBuffer, sizeof(Event)*READ_BUFFER_SIZE)) > 0) {
+			readahead(leakageDataFile, lseek(leakageDataFile, 0, SEEK_CUR),  sizeof(Event)*READ_BUFFER_SIZE);
 			int nEvents = r / sizeof(Event);
 			for(int i = 0; i < nEvents; i++) {
 				Event &event = eventBuffer[i];
@@ -1163,6 +1196,8 @@ void qualityControl(
 				}
 			}
 		}
+		
+		if(iter >= nIterations) continue;
 		
 		for(int gid = gidStart; gid < gidEnd; gid++) {
 			TacInfo &ti = tacInfo[gid];
@@ -1318,6 +1353,10 @@ public:
 			if(hit.time < 0) continue;
 			
 			if(isT && (hit.d.tofpet.tcoarse == 0) && (hit.d.tofpet.ecoarse == 0)) continue; // Patch for bad events
+			
+			// Patch for bad events: test pulse generation is setup such that we avoid tcoarse == 0 and ecoarse == 0
+			// which often correspond to bad events
+			if((hit.d.tofpet.tcoarse == 0) || (hit.d.tofpet.ecoarse == 0)) continue;	// Patch for bad events
 
 			unsigned gid = (hit.channelID << 3) | (tOrE << 2) | (hit.d.tofpet.tac & 0x3);
 			
@@ -1374,13 +1413,32 @@ public:
 		}
 	};
 	
+	
+	void flush()
+	{
+		for(unsigned long fileID = 0; fileID <= (MAX_N_ASIC/nAsicsPerFile); fileID++) {
+			if(linearityDataFiles[fileID] != NULL) {
+				fflush(leakageDataFiles[fileID]);
+				posix_fadvise(fileno(leakageDataFiles[fileID]), 0, 0, POSIX_FADV_DONTNEED);
+			}
+
+			if(leakageDataFiles[fileID] != NULL) {
+				fflush(linearityDataFiles[fileID]);
+				posix_fadvise(fileno(linearityDataFiles[fileID]), 0, 0, POSIX_FADV_DONTNEED);
+			}
+			
+		}
+	};
+	
 	void close()
 	{
 		for(unsigned long fileID = 0; fileID <= (MAX_N_ASIC/nAsicsPerFile); fileID++) {
 			if(linearityDataFiles[fileID] != NULL) {
 				fprintf(tmpListFile, "%d %d %d\n", fileID, fileID*nAsicsPerFile, (fileID+1)*nAsicsPerFile);
 
+				posix_fadvise(fileno(linearityDataFiles[fileID]), 0, 0, POSIX_FADV_DONTNEED);
 				fclose(linearityDataFiles[fileID]);
+				posix_fadvise(fileno(leakageDataFiles[fileID]), 0, 0, POSIX_FADV_DONTNEED);
 				fclose(leakageDataFiles[fileID]);
 			}
 			linearityDataFiles[fileID] = NULL;
@@ -1404,6 +1462,12 @@ public:
 		isT(isT), isLinearity(isLinearity), step1(step1), step2(step2),
 		eventWriter(eventWriter)
 	{
+	};
+	
+	
+	~WriteHelper()
+	{
+		eventWriter->flush();
 	};
 	
 	EventBuffer<RawHit> * handleEvents(EventBuffer<RawHit> *buffer) {
