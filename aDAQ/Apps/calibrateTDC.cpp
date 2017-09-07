@@ -42,7 +42,7 @@
 #include <sys/stat.h>
 
 static const int MAX_N_ASIC = DAQ::Common::SYSTEM_NCHANNELS / 64;
-static const float ErrorHistogramRange = 0.5;
+static const float ErrorHistogramRange = 0.3;
 
 
 struct TacInfo {
@@ -383,8 +383,8 @@ int main(int argc, char *argv[])
 				if(leakageDataFile == -1) 
 					exit(1);
 				
-				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
-				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_WILLNEED);
+				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
+				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
 
 				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2((asicEnd - asicStart) * 64);
 				
@@ -856,7 +856,9 @@ int calibrate(	int asicStart, int asicEnd,
 
 			sprintf(hName, isT ? "C%03d_%02d_%d_T_A_control_E" : "C%03d_%02d_%d_E_A_control_E", 
 					asic, channel, tac);
-			ti.pA_ControlE = new TH1F(hName, hName, 512, -ErrorHistogramRange, ErrorHistogramRange);
+
+			int errorHistogramNbins = ceil(2 * ErrorHistogramRange * ti.shape.m);
+			ti.pA_ControlE = new TH1F(hName, hName, errorHistogramNbins, -ErrorHistogramRange, ErrorHistogramRange);
 			
 			delete pf;
 			delete pf2;
@@ -982,7 +984,9 @@ int calibrate(	int asicStart, int asicEnd,
 		
 			sprintf(hName, isT ? "C%03d_%02d_%d_T_B_control_E" : "C%03d_%02d_%d_E_B_control_E", 
 					asic, channel, tac);
-			ti.pB_ControlE = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
+
+			int errorHistogramNbins = ceil(2 * ErrorHistogramRange * ti.shape.m);
+			ti.pB_ControlE = new TH1F(hName, hName, errorHistogramNbins, -ErrorHistogramRange, ErrorHistogramRange);
 			
 //			delete pl1;
 		}
@@ -1048,13 +1052,20 @@ void qualityControl(
 		unsigned channel = (bid >> 1) & 63;
 		unsigned asic = bid >> 7;
 
-		char hName[128];
+		// Choose TAC with largest interpolation factor to determinte histogram Nbins
+		float m = 128;
+		for(unsigned tac = 0; tac < 4; tac++) {
+			unsigned gid = ((64*asic + channel) << 3) | (tOrE << 2) | (tac & 0x3);
+			m = fmaxf(m, tacInfo[gid].shape.m);
+		}
+		int errorHistogramNbins = ceil(2 * ErrorHistogramRange * m);
 
+		char hName[128];
 		sprintf(hName, "C%03u_%02u_%c_A_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
-		hBranchErrorA[bid] = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
+		hBranchErrorA[bid] = new TH1F(hName, hName, errorHistogramNbins, -ErrorHistogramRange, ErrorHistogramRange);
 
 		sprintf(hName, "C%03u_%02u_%c_B_control_E", asic+asicStart, channel, tOrE ? 'T' : 'E');
-		hBranchErrorB[bid] = new TH1F(hName, hName, 256, -ErrorHistogramRange, ErrorHistogramRange);
+		hBranchErrorB[bid] = new TH1F(hName, hName, errorHistogramNbins, -ErrorHistogramRange, ErrorHistogramRange);
 		
 	}
 
@@ -1125,9 +1136,13 @@ void qualityControl(
 			
 			float offset = ti.pA_ControlT->GetMean(2);
 			
-			// Try and get a better offset by fitting the error histogram
+			// Try and get a better offset:
+			// (a) use the error histogram mean
+			// (b) fit a gaussian to the the error histogram
 			int nEntries = ti.pA_ControlE->GetEntries();
 			if (nEntries > 1000) {
+				offset = ti.pA_ControlE->GetMean();
+
 				TF1 *f = NULL;
 				ti.pA_ControlE->Fit("gaus", "Q");
 				f = ti.pA_ControlE->GetFunction("gaus");
@@ -1147,7 +1162,7 @@ void qualityControl(
 	// We will cut remove it, just for the purpose of making the error histogram
 	float *localT0 = new float[nTAC];
 	for(unsigned i = 0; i < nTAC; i++) localT0[i] = 0.0;
-	for(int iter = 0; iter < nIterations; iter++) {
+	for(int iter = 0; iter <= nIterations; iter++) {
 		for(int gid = gidStart; gid < gidEnd; gid++) {
 			if(tacInfo[gid].pB_ControlT == NULL) continue;
 			assert(tacInfo[gid].pB_ControlE != NULL);
