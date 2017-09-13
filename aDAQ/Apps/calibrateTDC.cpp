@@ -41,6 +41,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+
 static const int MAX_N_ASIC = DAQ::Common::SYSTEM_NCHANNELS / 64;
 static const float ErrorHistogramRange = 0.3;
 
@@ -230,10 +231,7 @@ int main(int argc, char *argv[])
 	// Choose the default number of workers based on CPU and RAM
 	// Assume we need 3 GiB of system RAM per worker for good performance
 	int nCPU = sysconf(_SC_NPROCESSORS_ONLN);
-	struct sysinfo si;
-	sysinfo(&si);
-	int maxMemWorkers = si.totalram * si.mem_unit / (3LL * 1024*1024*1024);
-	int maxWorkers = nCPU < maxMemWorkers ? nCPU : maxMemWorkers;
+	int maxWorkers = nCPU + 1;
 	
 	static struct option longOptions[] = {
 		{ "asics_per_file", required_argument, 0, 0 },
@@ -350,96 +348,90 @@ int main(int argc, char *argv[])
 		tacInfo[tac] = TacInfo();
 	
 	
-	
+	int nWorkers = 0;
+	for(unsigned n = 0; n < list.size(); n++) {
+		if (nWorkers >= maxWorkers) {
+			wait(NULL);
+			nWorkers -= 1;
+		}
 
-	maxWorkers = maxWorkers > 1 ? maxWorkers : 1;
-	for(unsigned n = 0; n < list.size();) {
-		int nWorkers = list.size() - n;
-		nWorkers = nWorkers < maxWorkers ? nWorkers : maxWorkers;
-
-		printf("Calibrating ASICs %4d to %4d (%d workers)...\n",
-		       list[n].get<1>(), list[n + nWorkers - 1].get<2>() - 1,
-		       nWorkers
+		nWorkers += 1;
+		printf("Calibrating ASICs %4d to %4d...\n",
+		       list[n].get<1>(), list[n].get<2>() - 1
 		);
 
-		pid_t children[nWorkers];
-		for(int worker = 0; worker < nWorkers; worker++, n++) {
-			pid_t pid = fork();
-			if (pid == 0) {
-				int fileID = list[n].get<0>();
-				int asicStart = list[n].get<1>();
-				int asicEnd = list[n].get<2>();
-				
-				int gidStart = asicStart * 64 * 4 * 2;
-				int gidEnd = asicEnd * 64 * 4 * 2;
+		pid_t pid = fork();
+		if (pid == 0) {
+			int fileID = list[n].get<0>();
+			int asicStart = list[n].get<1>();
+			int asicEnd = list[n].get<2>();
+			
+			int gidStart = asicStart * 64 * 4 * 2;
+			int gidEnd = asicEnd * 64 * 4 * 2;
 
-				sprintf(fName,"%s_%d_linearity.tmp", outputFilePrefix, fileID);
-				int linearityDataFile = open(fName, O_RDONLY);
-				if(linearityDataFile == -1) 
-					exit(1);
+			sprintf(fName,"%s_%d_linearity.tmp", outputFilePrefix, fileID);
+			int linearityDataFile = open(fName, O_RDONLY);
+			if(linearityDataFile == -1) 
+				exit(1);
 
-				sprintf(fName,"%s_%d_leakage.tmp", outputFilePrefix, fileID);
-				int leakageDataFile = open(fName, O_RDONLY);
-				if(leakageDataFile == -1) 
-					exit(1);
-				
-				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
-				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
+			sprintf(fName,"%s_%d_leakage.tmp", outputFilePrefix, fileID);
+			int leakageDataFile = open(fName, O_RDONLY);
+			if(leakageDataFile == -1) 
+				exit(1);
+			
+			posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
+			posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_SEQUENTIAL);
 
-				DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2((asicEnd - asicStart) * 64);
-				
-				sprintf(fName,"%s_asics%02d-%02d.tdc.root", outputFilePrefix, asicStart, asicEnd-1);
-				
-				char plotFilePrefix[1024];
-				sprintf(plotFilePrefix, "%s_asics%02d-%02d", outputFilePrefix, asicStart, asicEnd-1);
-				
-				TFile * resumeFile = new TFile(fName, "RECREATE", "", 1);
-				// Create a un-used canvas, just to avoid the fits automatically creating one and printing a warning
-				TCanvas *blank = new TCanvas();
-				
-				int hasData = calibrate(
-							asicStart, asicEnd,
-							linearityDataFile, linearityNbins, linearityRangeMinimum, linearityRangeMaximum,
-							leakageDataFile, leakageNbins, leakageRangeMinimum, leakageRangeMaximum,
-							tacInfo, *myP2, nominalM
-						);
-
-				if(hasData == 0){
-					resumeFile->Close();
-					remove(fName);
-					exit(0);
-				}
-				else{	
-					qualityControl(
-						asicStart, asicEnd, 
-						linearityDataFile,
-						leakageDataFile,
-						tacInfo, *myP2,
-						plotFilePrefix
+			DAQ::TOFPET::P2 *myP2 = new DAQ::TOFPET::P2((asicEnd - asicStart) * 64);
+			
+			sprintf(fName,"%s_asics%02d-%02d.tdc.root", outputFilePrefix, asicStart, asicEnd-1);
+			
+			char plotFilePrefix[1024];
+			sprintf(plotFilePrefix, "%s_asics%02d-%02d", outputFilePrefix, asicStart, asicEnd-1);
+			
+			TFile * resumeFile = new TFile(fName, "RECREATE", "", 1);
+			// Create a un-used canvas, just to avoid the fits automatically creating one and printing a warning
+			TCanvas *blank = new TCanvas();
+			
+			int hasData = calibrate(
+						asicStart, asicEnd,
+						linearityDataFile, linearityNbins, linearityRangeMinimum, linearityRangeMaximum,
+						leakageDataFile, leakageNbins, leakageRangeMinimum, leakageRangeMaximum,
+						tacInfo, *myP2, nominalM
 					);
-					resumeFile->Write();
-					resumeFile->Close();
-					
-				}
-				delete myP2;
-				
-				posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_DONTNEED);
-				close(linearityDataFile);
-				posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_DONTNEED);
-				close(leakageDataFile);
-				
+
+			if(hasData == 0){
+				resumeFile->Close();
+				remove(fName);
 				exit(0);
-			} 
-			else {
-				children[worker] = pid;
-				
-			}			
+			}
+			else{
+				qualityControl(
+					asicStart, asicEnd,
+					linearityDataFile,
+					leakageDataFile,
+					tacInfo, *myP2,
+					plotFilePrefix
+				);
+				resumeFile->Write();
+				resumeFile->Close();
+
+			}
+			delete myP2;
+
+			posix_fadvise(linearityDataFile, 0, 0, POSIX_FADV_DONTNEED);
+			close(linearityDataFile);
+			posix_fadvise(leakageDataFile, 0, 0, POSIX_FADV_DONTNEED);
+			close(leakageDataFile);
+
+			exit(0);
 		}
-		for(int worker = 0; worker < nWorkers; worker++) {
- 			waitpid(children[worker], NULL, 0);
-		} 	
 	}
 	
+	while(nWorkers > 0) {
+		wait(NULL);
+		nWorkers -= 1;
+	}
 
 
 	// Copy parameters from shared memory to global P2 
