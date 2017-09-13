@@ -583,7 +583,7 @@ int calibrate(	int asicStart, int asicEnd,
 
 		sprintf(hName, isT ? "C%03d_%02d_%d_T_B_hFine2" : "C%03d_%02d_%d_E_B_hFine2",
 			asic, channel, tac);
-		hB_FineList[gid-gidStart] = new TH2S(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum, 1024, 0, 1024);
+		hB_FineList[gid-gidStart] = new TH2S(hName, hName, leakageNbins, leakageRangeMinimum, leakageRangeMaximum, 1024, -512, 512);
 
 		sprintf(hName, isT ? "C%03d_%02d_%d_T_B_hCoarse2" : "C%03d_%02d_%d_E_B_hCoarse2",
 			asic, channel, tac);
@@ -924,6 +924,9 @@ int calibrate(	int asicStart, int asicEnd,
 			TH2S *hB_Fine2 = hB_FineList[gid-gidStart];
 			assert(hB_Fine2 != NULL);
 			if(hB_Fine2->GetEntries() < 200) {
+				fprintf(stderr, "WARNING: Not enough events! Skipping TAC. (B: %4d %2d %d %c)\n",
+					asic, channel, tac, isT  ? 'T' : 'E'
+				);
 				continue;
 			}
 			
